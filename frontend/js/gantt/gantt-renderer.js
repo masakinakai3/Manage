@@ -88,6 +88,11 @@ function setupControls() {
         allThemes.forEach(t => collapsedThemes.add(t.theme_id));
         refreshGantt();
     });
+
+    // CSV Export
+    document.getElementById('gantt-export-csv').addEventListener('click', () => {
+        handleExportCSV();
+    });
 }
 
 function render(months) {
@@ -458,4 +463,127 @@ function showPeriodEditor(pElement, themeId) {
     };
 
     setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
+}
+
+/**
+ * Handle CSV Export - sends CSV data to server endpoint for proper file download
+ */
+async function handleExportCSV() {
+    try {
+        const months = getVisibleMonths(startMonth, visibleCount, scale);
+
+        // CSV Header Labels
+        const getCSVHeaderLabel = (m, s) => {
+            const [y, mm] = m.split('-').map(Number);
+            const shortY = String(y).slice(2);
+            if (s === 1) return `${shortY}-${String(mm).padStart(2, '0')}`;
+            if (s === 3) return `${shortY}-Q${Math.ceil(mm / 3)}`;
+            if (s === 6) return `${shortY}-${mm <= 6 ? 'H1' : 'H2'}`;
+            return `${y}`;
+        };
+
+        const escape = (val) => {
+            const str = String(val || '');
+            if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+        };
+
+        // CSV Header Row
+        const headers = ['\u30c6\u30fc\u30de', '\u5185\u8a33', '\u30b9\u30c6\u30fc\u30bf\u30b9'];
+        months.forEach(m => headers.push(getCSVHeaderLabel(m, scale)));
+        const csvRows = [headers.map(escape).join(',')];
+
+        // Allocation lookup
+        const allocMap = {};
+        allAllocations.forEach(a => {
+            const key = `${a.theme_id}-${a.member_id}`;
+            if (!allocMap[key]) allocMap[key] = {};
+            allocMap[key][a.month] = a.allocation_rate;
+        });
+
+        allThemes.forEach(theme => {
+            const statusLabel = { planning: '\u8a08\u753b\u4e2d', active: '\u9032\u884c\u4e2d', completed: '\u5b8c\u4e86', cancelled: '\u4e2d\u6b62' }[theme.status] || theme.status;
+
+            const assignedIds = new Set(theme.member_ids || []);
+            const themeMemberRates = {};
+            const themeMembers = [];
+
+            allMembers.forEach(member => {
+                const key = `${theme.theme_id}-${member.member_id}`;
+                if (allocMap[key]) {
+                    assignedIds.add(member.member_id);
+                    themeMemberRates[member.member_id] = allocMap[key];
+                }
+            });
+
+            assignedIds.forEach(mid => {
+                const member = allMembers.find(m => m.member_id === mid);
+                if (member) {
+                    themeMembers.push(member);
+                    if (!themeMemberRates[mid]) themeMemberRates[mid] = allocMap[`${theme.theme_id}-${mid}`] || {};
+                }
+            });
+
+            const summaryRow = [theme.name, '\u5408\u7b97', statusLabel];
+            months.forEach(m => {
+                let total = 0;
+                themeMembers.forEach(member => {
+                    total += aggregateRate(themeMemberRates[member.member_id] || {}, m, scale);
+                });
+                summaryRow.push(total > 0 ? `${total}%` : '');
+            });
+            csvRows.push(summaryRow.map(escape).join(','));
+
+            themeMembers.forEach(member => {
+                const memberRow = ['', member.display_name, ''];
+                months.forEach(m => {
+                    const rate = aggregateRate(themeMemberRates[member.member_id] || {}, m, scale);
+                    memberRow.push(rate > 0 ? `${rate}%` : '');
+                });
+                csvRows.push(memberRow.map(escape).join(','));
+            });
+        });
+
+        // Use hidden form POST so browser natively handles Content-Disposition filename
+        const csvContent = csvRows.join('\r\n');
+        const fileName = `gantt_export_${currentMonth().replace('-', '')}.csv`;
+
+        // Create a hidden iframe as the form target
+        let iframe = document.getElementById('csv-download-frame');
+        if (!iframe) {
+            iframe = document.createElement('iframe');
+            iframe.id = 'csv-download-frame';
+            iframe.name = 'csv-download-frame';
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+        }
+
+        // Create and submit a hidden form
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/api/export/csv';
+        form.target = 'csv-download-frame';
+        form.style.display = 'none';
+
+        const contentInput = document.createElement('input');
+        contentInput.type = 'hidden';
+        contentInput.name = 'content';
+        contentInput.value = csvContent;
+        form.appendChild(contentInput);
+
+        const filenameInput = document.createElement('input');
+        filenameInput.type = 'hidden';
+        filenameInput.name = 'filename';
+        filenameInput.value = fileName;
+        form.appendChild(filenameInput);
+
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+    } catch (err) {
+        console.error('CSV Export Error:', err);
+        alert('CSV\u51fa\u529b\u4e2d\u306b\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f: ' + err.message);
+    }
 }

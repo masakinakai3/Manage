@@ -37,11 +37,14 @@ def create_app():
     from routes.themes import themes_bp
     from routes.members import members_bp
     from routes.allocations import allocations_bp
+    from routes.export import export_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(themes_bp, url_prefix='/api/themes')
     app.register_blueprint(members_bp, url_prefix='/api/members')
     app.register_blueprint(allocations_bp, url_prefix='/api/allocations')
+    app.register_blueprint(export_bp, url_prefix='/api/export')
+
 
     # Initialize database
     with app.app_context():
