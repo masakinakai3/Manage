@@ -6,7 +6,8 @@
 
 import { allocations, themes as themesApi, members as membersApi } from '../api.js';
 import {
-    currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate
+    currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate,
+    shortenMonth
 } from '../utils/date-utils.js';
 import { openCellEditor } from './gantt-editor.js';
 
@@ -154,6 +155,12 @@ function renderBody(months) {
         html += `<span class="theme-toggle-icon ${isCollapsed ? '' : 'expanded'}">▶</span>`;
         html += `<span class="theme-color-bar" style="background:${theme.color}"></span>`;
         html += `<span class="theme-name">${theme.name}</span></span>`;
+
+        const periodText = (theme.start_month && theme.end_month)
+            ? `${shortenMonth(theme.start_month)} 〜 ${shortenMonth(theme.end_month)}`
+            : '期間未設定';
+        html += `<span class="theme-period ${theme.start_month ? '' : 'empty'}" data-theme-id="${theme.theme_id}">${periodText}</span>`;
+
         html += `<span class="theme-status status-${theme.status}" data-theme-id="${theme.theme_id}" data-status="${theme.status}">${statusLabel}</span>`;
         html += `<button class="btn-assign-member" data-theme-id="${theme.theme_id}" title="メンバーを追加">＋</button>`;
         html += `</div></td>`;
@@ -213,6 +220,14 @@ function renderBody(months) {
             e.stopPropagation();
             const themeId = parseInt(badge.dataset.themeId);
             showStatusDropdown(badge, themeId, badge.dataset.status);
+        });
+    });
+
+    tbody.querySelectorAll('.theme-period').forEach(period => {
+        period.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const themeId = parseInt(period.dataset.themeId);
+            showPeriodEditor(period, themeId);
         });
     });
 
@@ -392,4 +407,55 @@ function showStatusDropdown(badge, themeId, currentStatus) {
         }
     };
     setTimeout(() => document.addEventListener('click', closeHandler), 0);
+}
+
+function showPeriodEditor(pElement, themeId) {
+    // Remove any existing editor
+    document.querySelector('.period-editor')?.remove();
+
+    const theme = allThemes.find(t => t.theme_id === themeId);
+    if (!theme) return;
+
+    const editor = document.createElement('div');
+    editor.className = 'period-editor';
+    editor.innerHTML = `
+        <div class="period-editor-fields">
+            <input type="month" id="period-start" value="${theme.start_month || ''}">
+            <span>〜</span>
+            <input type="month" id="period-end" value="${theme.end_month || ''}">
+        </div>
+        <div class="period-editor-actions">
+            <button class="btn btn-primary btn-sm" id="period-save">保存</button>
+            <button class="btn btn-ghost btn-sm" id="period-cancel">キャンセル</button>
+        </div>
+    `;
+
+    const rect = pElement.getBoundingClientRect();
+    editor.style.left = `${rect.left}px`;
+    editor.style.top = `${rect.bottom + 4}px`;
+    document.body.appendChild(editor);
+
+    const closeEditor = () => {
+        editor.remove();
+        document.removeEventListener('mousedown', onOutsideClick);
+    };
+
+    const onOutsideClick = (e) => {
+        if (!editor.contains(e.target)) closeEditor();
+    };
+
+    editor.querySelector('#period-cancel').onclick = closeEditor;
+    editor.querySelector('#period-save').onclick = async () => {
+        const start = editor.querySelector('#period-start').value;
+        const end = editor.querySelector('#period-end').value;
+        try {
+            await themesApi.update(themeId, { start_month: start, end_month: end });
+            closeEditor();
+            refreshGantt();
+        } catch (err) {
+            alert('保存に失敗しました: ' + err.message);
+        }
+    };
+
+    setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
 }

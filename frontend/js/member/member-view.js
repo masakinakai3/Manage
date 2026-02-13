@@ -5,7 +5,8 @@
 
 import { allocations, members as membersApi, themes as themesApi } from '../api.js';
 import {
-    currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate
+    currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate,
+    shortenMonth
 } from '../utils/date-utils.js';
 
 let allMembers = [];
@@ -160,7 +161,7 @@ function showDetailPopup(e, member, month, details) {
     const total = details.reduce((sum, d) => sum + d.rate, 0);
     const isOver = total > member.capacity;
 
-    let html = `<h4>${member.display_name} — ${month}</h4>`;
+    let html = `<h4>${member.display_name} — ${shortenMonth(month)}</h4>`;
     details.forEach(d => {
         html += `<div class="detail-row">
             <span class="theme-name">

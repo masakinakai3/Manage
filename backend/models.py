@@ -70,6 +70,8 @@ class Theme(db.Model):
     category = db.Column(db.String(100), default='')
     status = db.Column(db.String(20), nullable=False, default='planning')
     color = db.Column(db.String(7), default='#6366f1')
+    start_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
+    end_month = db.Column(db.String(7), nullable=True)    # 'YYYY-MM'
 
     allocations = db.relationship('Allocation', backref='theme', lazy='dynamic',
                                   cascade='all, delete-orphan')
@@ -82,6 +84,8 @@ class Theme(db.Model):
             'category': self.category,
             'status': self.status,
             'color': self.color,
+            'start_month': self.start_month,
+            'end_month': self.end_month,
             'member_ids': [m.member_id for m in self.members]
         }
 

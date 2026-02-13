@@ -328,6 +328,64 @@
     opacity: 1;
 }
 
+/* Theme Period */
+.theme-period {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+
+.theme-period:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-text);
+}
+
+.theme-period.empty {
+    color: var(--color-text-muted);
+    font-style: italic;
+}
+
+/* Period Editor Popover */
+.period-editor {
+    position: fixed;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.period-editor-fields {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.period-editor input {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    padding: 4px 8px;
+    font-family: inherit;
+    font-size: 0.85rem;
+}
+
+.period-editor-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
 .btn-assign-member:hover {
     color: var(--color-primary);
 }

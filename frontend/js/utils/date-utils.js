@@ -11,6 +11,14 @@ export function currentMonth() {
 }
 
 /**
+ * Shorten 'YYYY-MM' to 'YY-MM'.
+ */
+export function shortenMonth(monthStr) {
+    if (!monthStr || monthStr.length < 7) return monthStr;
+    return monthStr.slice(2);
+}
+
+/**
  * Generate array of month strings from start to end (inclusive).
  */
 export function monthRange(start, end) {

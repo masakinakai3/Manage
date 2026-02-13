@@ -25,10 +25,11 @@ def list_themes():
         alloc_ids = set(a.member_id for a in allocs.all())
         all_member_ids = assigned_ids | alloc_ids
         
-        td['start_month'] = min(months) if months else None
-        td['end_month'] = max(months) if months else None
+        # Use stored dates or calculated fallback
+        td['start_month'] = t.start_month or (min(months) if months else None)
+        td['end_month'] = t.end_month or (max(months) if months else None)
         td['member_count'] = len(all_member_ids)
-        td['member_ids'] = list(all_member_ids) # Ensure consistent name
+        td['member_ids'] = list(all_member_ids)
         result.append(td)
     return jsonify(result)
 
@@ -42,6 +43,8 @@ def create_theme():
         category=data.get('category', ''),
         status=data.get('status', 'planning'),
         color=data.get('color', '#6366f1'),
+        start_month=data.get('start_month'),
+        end_month=data.get('end_month'),
     )
     db.session.add(theme)
     db.session.commit()
@@ -55,7 +58,7 @@ def update_theme(theme_id):
     if not theme:
         return jsonify({'error': 'Not found'}), 404
     data = request.get_json()
-    for field in ('name', 'category', 'status', 'color'):
+    for field in ('name', 'category', 'status', 'color', 'start_month', 'end_month'):
         if field in data:
             setattr(theme, field, data[field])
     
