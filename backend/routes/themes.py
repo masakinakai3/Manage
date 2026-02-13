@@ -1,0 +1,112 @@
+"""Theme CRUD routes."""
+
+from flask import Blueprint, request, jsonify
+from flask_login import login_required
+from models import db, Theme, Allocation, Member
+from sqlalchemy import func
+
+themes_bp = Blueprint('themes', __name__)
+
+
+@themes_bp.route('', methods=['GET'])
+@login_required
+def list_themes():
+    themes = Theme.query.order_by(Theme.theme_id).all()
+    result = []
+    for t in themes:
+        td = t.to_dict()
+        # Add summary info
+        allocs = Allocation.query.filter_by(theme_id=t.theme_id).filter(
+            Allocation.allocation_rate > 0
+        )
+        months = [a.month for a in allocs.all()]
+        # Currently assigned members (via association) or those with allocations
+        assigned_ids = set(m.member_id for m in t.members)
+        alloc_ids = set(a.member_id for a in allocs.all())
+        all_member_ids = assigned_ids | alloc_ids
+        
+        td['start_month'] = min(months) if months else None
+        td['end_month'] = max(months) if months else None
+        td['member_count'] = len(all_member_ids)
+        td['member_ids'] = list(all_member_ids) # Ensure consistent name
+        result.append(td)
+    return jsonify(result)
+
+
+@themes_bp.route('', methods=['POST'])
+@login_required
+def create_theme():
+    data = request.get_json()
+    theme = Theme(
+        name=data['name'],
+        category=data.get('category', ''),
+        status=data.get('status', 'planning'),
+        color=data.get('color', '#6366f1'),
+    )
+    db.session.add(theme)
+    db.session.commit()
+    return jsonify(theme.to_dict()), 201
+
+
+@themes_bp.route('/<int:theme_id>', methods=['PUT'])
+@login_required
+def update_theme(theme_id):
+    theme = db.session.get(Theme, theme_id)
+    if not theme:
+        return jsonify({'error': 'Not found'}), 404
+    data = request.get_json()
+    for field in ('name', 'category', 'status', 'color'):
+        if field in data:
+            setattr(theme, field, data[field])
+    
+    # Optional: Bulk update member assignments if provided
+    if 'member_ids' in data:
+        theme.members = [db.session.get(Member, mid) for mid in data['member_ids'] if db.session.get(Member, mid)]
+        
+    db.session.commit()
+    return jsonify(theme.to_dict())
+
+
+@themes_bp.route('/<int:theme_id>', methods=['DELETE'])
+@login_required
+def delete_theme(theme_id):
+    theme = db.session.get(Theme, theme_id)
+    if not theme:
+        return jsonify({'error': 'Not found'}), 404
+    db.session.delete(theme)
+    db.session.commit()
+    return jsonify({'message': 'Deleted'})
+
+
+@themes_bp.route('/<int:theme_id>/members', methods=['POST'])
+@login_required
+def assign_member(theme_id):
+    theme = db.session.get(Theme, theme_id)
+    if not theme:
+        return jsonify({'error': 'Theme not found'}), 404
+    data = request.get_json()
+    member_id = data.get('member_id')
+    member = db.session.get(Member, member_id)
+    if not member:
+        return jsonify({'error': 'Member not found'}), 404
+    
+    if member not in theme.members:
+        theme.members.append(member)
+        db.session.commit()
+    return jsonify(theme.to_dict())
+
+
+@themes_bp.route('/<int:theme_id>/members/<int:member_id>', methods=['DELETE'])
+@login_required
+def unassign_member(theme_id, member_id):
+    theme = db.session.get(Theme, theme_id)
+    if not theme:
+        return jsonify({'error': 'Theme not found'}), 404
+    member = db.session.get(Member, member_id)
+    if not member:
+        return jsonify({'error': 'Member not found'}), 404
+    
+    if member in theme.members:
+        theme.members.remove(member)
+        db.session.commit()
+    return jsonify(theme.to_dict())
