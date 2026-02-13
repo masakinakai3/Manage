@@ -48,14 +48,33 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     // Clean up previous listeners
     const saveBtn = document.getElementById('cell-editor-save');
     const cancelBtn = document.getElementById('cell-editor-cancel');
+    const clearBtn = document.getElementById('cell-editor-clear');
 
     const newSaveBtn = saveBtn.cloneNode(true);
     const newCancelBtn = cancelBtn.cloneNode(true);
+    const newClearBtn = clearBtn.cloneNode(true);
     saveBtn.parentNode.replaceChild(newSaveBtn, saveBtn);
     cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    clearBtn.parentNode.replaceChild(newClearBtn, clearBtn);
+
+    const clearRate = async () => {
+        try {
+            await allocations.updateSingle({
+                theme_id: themeId,
+                member_id: memberId,
+                month: month,
+                allocation_rate: 0,
+            });
+            closeCellEditor();
+            onSave();
+        } catch (err) {
+            console.error('Failed to clear:', err);
+        }
+    };
 
     newSaveBtn.addEventListener('click', save);
     newCancelBtn.addEventListener('click', cancel);
+    newClearBtn.addEventListener('click', clearRate);
     input.addEventListener('keydown', handleKeydown);
 
     activeEditor = { cleanup: () => input.removeEventListener('keydown', handleKeydown) };
