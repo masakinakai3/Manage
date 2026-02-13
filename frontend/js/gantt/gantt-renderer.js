@@ -177,7 +177,8 @@ function renderBody(months) {
             });
             const cls = getCellClass(total, false);
             const isCurrent = m === cur;
-            html += `<td class="${isCurrent ? 'month-current' : ''}">`;
+            const isPeriod = theme.start_month && theme.end_month && m >= theme.start_month && m <= theme.end_month;
+            html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
             html += `<div class="gantt-cell">${total > 0 ? total + '%' : ''}</div>`;
             html += `</td>`;
         });
@@ -198,8 +199,9 @@ function renderBody(months) {
                 const hasWarning = warningsMap[warnKey];
                 const cls = getCellClass(rate, !!hasWarning);
                 const isCurrent = m === cur;
+                const isPeriod = theme.start_month && theme.end_month && m >= theme.start_month && m <= theme.end_month;
 
-                html += `<td class="${isCurrent ? 'month-current' : ''}">`;
+                html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
                 html += `<div class="gantt-cell ${cls}" data-rate="${rate}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${m}">`;
                 if (rate > 0) html += `${rate}%`;
                 if (hasWarning) html += `<span class="warning-icon">⚠</span>`;
