@@ -6,6 +6,7 @@
 import { allocations } from '../api.js';
 
 let activeEditor = null;
+let saving = false;
 
 export function openCellEditor(cellEl, themeId, memberId, month, currentRate, onSave) {
     closeCellEditor();
@@ -22,6 +23,8 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     input.select();
 
     const save = async () => {
+        if (saving) return;
+        saving = true;
         const newRate = parseInt(input.value) || 0;
         const clampedRate = Math.max(0, Math.min(100, newRate));
         try {
@@ -35,6 +38,8 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
             onSave();
         } catch (err) {
             console.error('Failed to save:', err);
+        } finally {
+            saving = false;
         }
     };
 
@@ -58,6 +63,8 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     clearBtn.parentNode.replaceChild(newClearBtn, clearBtn);
 
     const clearRate = async () => {
+        if (saving) return;
+        saving = true;
         try {
             await allocations.updateSingle({
                 theme_id: themeId,
@@ -69,6 +76,8 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
             onSave();
         } catch (err) {
             console.error('Failed to clear:', err);
+        } finally {
+            saving = false;
         }
     };
 

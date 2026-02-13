@@ -294,21 +294,154 @@ function renderBody(months) {
     setupDragAndDrop(tbody, () => { isDragging = true; });
 }
 
+// Module-level drag state
+let _dragState = null;
+let _dragCells = [];
+let _dragOnStart = null;
+let _saving = false;
+
 function setupDragAndDrop(tbody, onDragStart) {
     if (scale !== 1) return; // Only allow D&D at 1M scale
 
-    const DRAG_THRESHOLD = 5; // px before drag starts
-    let dragState = null;
+    const DRAG_THRESHOLD = 5;
+    _dragCells = Array.from(tbody.querySelectorAll('.gantt-row-member .gantt-cell'));
+    _dragOnStart = onDragStart;
 
-    const allMemberCells = Array.from(tbody.querySelectorAll('.gantt-row-member .gantt-cell'));
+    // handlers (defined per scope to access closure if needed, but here we use module state)
+    const onMouseMove = (e) => {
+        if (!_dragState) return;
 
-    allMemberCells.forEach(cell => {
+        const dx = e.clientX - _dragState.startX;
+        const dy = e.clientY - _dragState.startY;
+
+        if (!_dragState.started) {
+            if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+            _dragState.started = true;
+            if (_dragOnStart) _dragOnStart();
+            _dragState.srcCell.classList.add('dragging');
+
+            const ghost = document.createElement('div');
+            ghost.className = 'drag-ghost';
+            ghost.textContent = `${_dragState.rate}%`;
+            ghost.style.cssText = `
+                position: fixed; z-index: 9999;
+                padding: 4px 14px; background: #6366f1; color: #fff;
+                border-radius: 6px; font-size: 13px; font-weight: 600;
+                pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                transform: translate(-50%, -50%);
+            `;
+            document.body.appendChild(ghost);
+            _dragState.ghost = ghost;
+        }
+
+        if (_dragState.ghost) {
+            _dragState.ghost.style.left = `${e.clientX}px`;
+            _dragState.ghost.style.top = `${e.clientY}px`;
+        }
+
+        // Highlight valid drop targets:
+        // - Same theme, different member (transfer)
+        // - Same theme, same member, different month (period move)
+        _dragCells.forEach(c => {
+            c.classList.remove('drag-over');
+            if (c.dataset.theme !== _dragState.themeId) return;
+            // Skip the exact source cell
+            if (c === _dragState.srcCell) return;
+
+            const rect = c.getBoundingClientRect();
+            if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                c.classList.add('drag-over');
+            }
+        });
+    };
+
+    const onMouseUp = async (e) => {
+        // Cleanup listeners immediately
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        if (!_dragState) return;
+        const state = _dragState;
+        _dragState = null;
+
+        // Cleanup visuals
+        state.srcCell.classList.remove('dragging');
+        if (state.ghost && state.ghost.parentNode) {
+            document.body.removeChild(state.ghost);
+        }
+        _dragCells.forEach(c => c.classList.remove('drag-over'));
+
+        if (!state.started) return;
+        if (_saving) return; // Prevent double-submit
+
+        // Find drop target (same theme, but not the exact source cell)
+        const target = _dragCells.find(c => {
+            if (c === state.srcCell) return false;
+            if (c.dataset.theme !== state.themeId) return false;
+            const rect = c.getBoundingClientRect();
+            return e.clientX >= rect.left && e.clientX <= rect.right &&
+                e.clientY >= rect.top && e.clientY <= rect.bottom;
+        });
+
+        if (!target) return;
+
+        const isSameMember = target.dataset.member === state.memberId;
+        const targetRate = parseInt(target.dataset.rate) || 0;
+
+        _saving = true;
+        try {
+            if (isSameMember) {
+                // Period move: move allocation to different month
+                await allocations.bulkUpdate([
+                    {
+                        theme_id: parseInt(state.themeId),
+                        member_id: parseInt(state.memberId),
+                        month: state.month,
+                        allocation_rate: 0,
+                    },
+                    {
+                        theme_id: parseInt(state.themeId),
+                        member_id: parseInt(state.memberId),
+                        month: target.dataset.month,
+                        allocation_rate: state.rate,
+                    },
+                ]);
+            } else {
+                // Transfer: move allocation to different member
+                const newTargetRate = Math.min(100, targetRate + state.rate);
+                await allocations.bulkUpdate([
+                    {
+                        theme_id: parseInt(state.themeId),
+                        member_id: parseInt(state.memberId),
+                        month: state.month,
+                        allocation_rate: 0,
+                    },
+                    {
+                        theme_id: parseInt(target.dataset.theme),
+                        member_id: parseInt(target.dataset.member),
+                        month: target.dataset.month,
+                        allocation_rate: newTargetRate,
+                    },
+                ]);
+            }
+            refreshGantt();
+        } catch (err) {
+            console.error('Drag transfer failed:', err);
+            alert('負荷率の移動に失敗しました: ' + err.message);
+        } finally {
+            _saving = false;
+        }
+    };
+
+    // Attach mousedown
+    _dragCells.forEach(cell => {
         cell.addEventListener('mousedown', (e) => {
             const rate = parseInt(cell.dataset.rate) || 0;
             if (rate === 0) return;
-            if (e.button !== 0) return; // left click only
+            if (e.button !== 0) return;
 
-            dragState = {
+            _dragState = {
                 srcCell: cell,
                 themeId: cell.dataset.theme,
                 memberId: cell.dataset.member,
@@ -319,109 +452,12 @@ function setupDragAndDrop(tbody, onDragStart) {
                 started: false,
                 ghost: null,
             };
+            e.preventDefault();
 
-            e.preventDefault(); // prevent text selection
+            // Attach dynamic listeners
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
         });
-    });
-
-    document.addEventListener('mousemove', (e) => {
-        if (!dragState) return;
-
-        const dx = e.clientX - dragState.startX;
-        const dy = e.clientY - dragState.startY;
-
-        // Start drag only after threshold
-        if (!dragState.started) {
-            if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
-            dragState.started = true;
-            if (onDragStart) onDragStart();
-            dragState.srcCell.classList.add('dragging');
-
-            // Create floating ghost
-            const ghost = document.createElement('div');
-            ghost.className = 'drag-ghost';
-            ghost.textContent = `${dragState.rate}%`;
-            ghost.style.cssText = `
-                position: fixed; z-index: 9999;
-                padding: 4px 14px; background: #6366f1; color: #fff;
-                border-radius: 6px; font-size: 13px; font-weight: 600;
-                pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                transform: translate(-50%, -50%);
-            `;
-            document.body.appendChild(ghost);
-            dragState.ghost = ghost;
-        }
-
-        // Move ghost
-        if (dragState.ghost) {
-            dragState.ghost.style.left = `${e.clientX}px`;
-            dragState.ghost.style.top = `${e.clientY}px`;
-        }
-
-        // Highlight valid drop targets
-        allMemberCells.forEach(c => {
-            c.classList.remove('drag-over');
-            if (c === dragState.srcCell) return;
-            if (c.dataset.theme !== dragState.themeId) return;
-            if (c.dataset.month !== dragState.month) return;
-
-            const rect = c.getBoundingClientRect();
-            if (e.clientX >= rect.left && e.clientX <= rect.right &&
-                e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                c.classList.add('drag-over');
-            }
-        });
-    });
-
-    document.addEventListener('mouseup', async (e) => {
-        if (!dragState) return;
-        const state = dragState;
-        dragState = null;
-
-        // Cleanup visuals
-        state.srcCell.classList.remove('dragging');
-        if (state.ghost) {
-            document.body.removeChild(state.ghost);
-        }
-        allMemberCells.forEach(c => c.classList.remove('drag-over'));
-
-        if (!state.started) return; // Was just a click, not a drag
-
-        // Find drop target
-        const target = allMemberCells.find(c => {
-            if (c === state.srcCell) return false;
-            if (c.dataset.theme !== state.themeId) return false;
-            if (c.dataset.month !== state.month) return false;
-            const rect = c.getBoundingClientRect();
-            return e.clientX >= rect.left && e.clientX <= rect.right &&
-                e.clientY >= rect.top && e.clientY <= rect.bottom;
-        });
-
-        if (!target) return; // No valid drop target
-
-        const targetRate = parseInt(target.dataset.rate) || 0;
-        const newTargetRate = Math.min(100, targetRate + state.rate);
-
-        try {
-            await allocations.bulkUpdate([
-                {
-                    theme_id: parseInt(state.themeId),
-                    member_id: parseInt(state.memberId),
-                    month: state.month,
-                    allocation_rate: 0,
-                },
-                {
-                    theme_id: parseInt(target.dataset.theme),
-                    member_id: parseInt(target.dataset.member),
-                    month: target.dataset.month,
-                    allocation_rate: newTargetRate,
-                },
-            ]);
-            refreshGantt();
-        } catch (err) {
-            console.error('Drag transfer failed:', err);
-            alert('負荷率の移動に失敗しました: ' + err.message);
-        }
     });
 }
 

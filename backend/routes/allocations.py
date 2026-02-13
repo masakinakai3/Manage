@@ -1,11 +1,53 @@
 """Allocation CRUD routes with bulk update and load calculation."""
 
+from datetime import datetime, timezone
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from models import db, Allocation, Member
 from services.allocation_service import get_member_loads, get_theme_loads, get_warnings
 
 allocations_bp = Blueprint('allocations', __name__)
+
+
+def _upsert_allocation(theme_id, member_id, month, rate, memo=None):
+    """Atomic UPSERT using SQLite's INSERT ... ON CONFLICT ... DO UPDATE.
+
+    This eliminates the TOCTOU race condition where two concurrent requests
+    could both see 'no existing record' and both INSERT, creating duplicates.
+    """
+    if rate == 0:
+        # Delete allocation when rate is 0
+        Allocation.query.filter_by(
+            theme_id=theme_id, member_id=member_id, month=month
+        ).delete()
+        return None
+
+    stmt = sqlite_insert(Allocation).values(
+        theme_id=theme_id,
+        member_id=member_id,
+        month=month,
+        allocation_rate=rate,
+        memo=memo or '',
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    # On conflict with the unique constraint (theme_id, member_id, month),
+    # update the existing row instead of inserting a duplicate.
+    update_values = {
+        'allocation_rate': stmt.excluded.allocation_rate,
+        'updated_at': stmt.excluded.updated_at,
+    }
+    if memo is not None:
+        update_values['memo'] = stmt.excluded.memo
+
+    stmt = stmt.on_conflict_do_update(
+        index_elements=['theme_id', 'member_id', 'month'],
+        set_=update_values,
+    )
+
+    db.session.execute(stmt)
+    return True
 
 
 @allocations_bp.route('', methods=['GET'])
@@ -41,38 +83,20 @@ def bulk_update():
     if not isinstance(data, list):
         return jsonify({'error': 'Expected array'}), 400
 
-    results = []
+    count = 0
     for item in data:
-        theme_id = item['theme_id']
-        member_id = item['member_id']
-        month = item['month']
-        rate = item['allocation_rate']
-
-        existing = Allocation.query.filter_by(
-            theme_id=theme_id, member_id=member_id, month=month
-        ).first()
-
-        if rate == 0:
-            # Delete allocation when rate is 0
-            if existing:
-                db.session.delete(existing)
-        elif existing:
-            existing.allocation_rate = rate
-            existing.memo = item.get('memo', existing.memo)
-            results.append(existing)
-        else:
-            alloc = Allocation(
-                theme_id=theme_id,
-                member_id=member_id,
-                month=month,
-                allocation_rate=rate,
-                memo=item.get('memo', ''),
-            )
-            db.session.add(alloc)
-            results.append(alloc)
+        result = _upsert_allocation(
+            theme_id=item['theme_id'],
+            member_id=item['member_id'],
+            month=item['month'],
+            rate=item['allocation_rate'],
+            memo=item.get('memo'),
+        )
+        if result:
+            count += 1
 
     db.session.commit()
-    return jsonify({'updated': len(results)})
+    return jsonify({'updated': count})
 
 
 @allocations_bp.route('/single', methods=['PUT'])
@@ -85,29 +109,22 @@ def update_single():
     month = data['month']
     rate = data['allocation_rate']
 
-    existing = Allocation.query.filter_by(
-        theme_id=theme_id, member_id=member_id, month=month
-    ).first()
+    _upsert_allocation(
+        theme_id=theme_id,
+        member_id=member_id,
+        month=month,
+        rate=rate,
+        memo=data.get('memo'),
+    )
+    db.session.commit()
 
     if rate == 0:
-        if existing:
-            db.session.delete(existing)
-            db.session.commit()
         return jsonify({'message': 'Deleted'})
 
-    if existing:
-        existing.allocation_rate = rate
-        existing.memo = data.get('memo', existing.memo)
-    else:
-        existing = Allocation(
-            theme_id=theme_id, member_id=member_id,
-            month=month, allocation_rate=rate,
-            memo=data.get('memo', ''),
-        )
-        db.session.add(existing)
-
-    db.session.commit()
-    return jsonify(existing.to_dict())
+    alloc = Allocation.query.filter_by(
+        theme_id=theme_id, member_id=member_id, month=month
+    ).first()
+    return jsonify(alloc.to_dict() if alloc else {'message': 'Updated'})
 
 
 @allocations_bp.route('/load/themes', methods=['GET'])

@@ -5,7 +5,6 @@
 
 import { auth, themes as themesApi, members as membersApi } from './api.js';
 import { initGantt, refreshGantt } from './gantt/gantt-renderer.js';
-import { initGanttDnD } from './gantt/gantt-dnd.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 
 // State
@@ -80,7 +79,6 @@ async function showApp() {
 
     // Initialize views
     await initGantt();
-    initGanttDnD(refreshGantt);
     await initMemberView();
 
     // Initialize management views

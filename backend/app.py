@@ -49,9 +49,51 @@ def create_app():
     # Initialize database
     with app.app_context():
         db.create_all()
+        _migrate_allocations_unique_index()
         _seed_admin(app)
 
     return app
+
+
+def _migrate_allocations_unique_index():
+    """Ensure the UNIQUE INDEX on allocations(theme_id, member_id, month) exists.
+
+    If the DB was created before the UniqueConstraint was added, the index
+    won't exist and ON CONFLICT won't work. This migration:
+    1. Removes duplicate rows (keeps the one with highest id = most recent)
+    2. Creates the unique index if missing
+    """
+    from sqlalchemy import text
+
+    # Check if the unique index already exists
+    result = db.session.execute(
+        text("SELECT name FROM sqlite_master WHERE type='index' AND name='uq_allocation'")
+    ).fetchone()
+
+    if result:
+        return  # Index already exists
+
+    # Clean up duplicates: keep the row with the highest id for each (theme_id, member_id, month)
+    db.session.execute(text("""
+        DELETE FROM allocations
+        WHERE id NOT IN (
+            SELECT MAX(id)
+            FROM allocations
+            GROUP BY theme_id, member_id, month
+        )
+    """))
+    db.session.commit()
+
+    # Create the unique index
+    try:
+        db.session.execute(text(
+            "CREATE UNIQUE INDEX uq_allocation ON allocations(theme_id, member_id, month)"
+        ))
+        db.session.commit()
+        print("[Migration] Created UNIQUE INDEX uq_allocation on allocations table.")
+    except Exception as e:
+        db.session.rollback()
+        print(f"[Migration] UNIQUE INDEX may already exist: {e}")
 
 
 def _seed_admin(app):
