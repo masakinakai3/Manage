@@ -77,6 +77,16 @@ function setupControls() {
         startMonth = addMonths(currentMonth(), -1);
         refreshGantt();
     });
+
+    // Expand / Collapse all
+    document.getElementById('gantt-expand-all').addEventListener('click', () => {
+        collapsedThemes.clear();
+        refreshGantt();
+    });
+    document.getElementById('gantt-collapse-all').addEventListener('click', () => {
+        allThemes.forEach(t => collapsedThemes.add(t.theme_id));
+        refreshGantt();
+    });
 }
 
 function render(months) {
@@ -154,7 +164,7 @@ function renderBody(months) {
             const cls = getCellClass(total, false);
             const isCurrent = m === cur;
             html += `<td class="${isCurrent ? 'month-current' : ''}">`;
-            html += `<div class="gantt-cell ${cls}">${total > 0 ? total + '%' : ''}</div>`;
+            html += `<div class="gantt-cell">${total > 0 ? total + '%' : ''}</div>`;
             html += `</td>`;
         });
         html += '</tr>';
