@@ -147,12 +147,14 @@ function renderBody(months) {
         themeMembers.sort((a, b) => a.display_name.localeCompare(b.display_name, 'ja'));
 
         // Summary row (theme total)
+        const statusLabel = { planning: '計画中', active: '進行中', completed: '完了', cancelled: '中止' }[theme.status] || theme.status;
         html += `<tr class="gantt-row-summary" data-theme-id="${theme.theme_id}">`;
         html += `<td><div class="theme-label-cell">`;
         html += `<span class="theme-toggle" data-theme-id="${theme.theme_id}">`;
         html += `<span class="theme-toggle-icon ${isCollapsed ? '' : 'expanded'}">▶</span>`;
         html += `<span class="theme-color-bar" style="background:${theme.color}"></span>`;
         html += `<span class="theme-name">${theme.name}</span></span>`;
+        html += `<span class="theme-status status-${theme.status}" data-theme-id="${theme.theme_id}" data-status="${theme.status}">${statusLabel}</span>`;
         html += `<button class="btn-assign-member" data-theme-id="${theme.theme_id}" title="メンバーを追加">＋</button>`;
         html += `</div></td>`;
 
@@ -203,6 +205,14 @@ function renderBody(months) {
             e.stopPropagation();
             const themeId = parseInt(btn.dataset.themeId);
             showAssignMemberModal(themeId);
+        });
+    });
+
+    tbody.querySelectorAll('.theme-status').forEach(badge => {
+        badge.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const themeId = parseInt(badge.dataset.themeId);
+            showStatusDropdown(badge, themeId, badge.dataset.status);
         });
     });
 
@@ -333,4 +343,53 @@ async function showAssignMemberModal(themeId) {
     const cancelBtn = document.getElementById('modal-cancel');
     if (cancelBtn) cancelBtn.onclick = () => { modalOverlay.hidden = true; };
     modalOverlay.hidden = false;
+}
+
+const STATUS_OPTIONS = [
+    { value: 'planning', label: '計画中' },
+    { value: 'active', label: '進行中' },
+    { value: 'completed', label: '完了' },
+    { value: 'cancelled', label: '中止' },
+];
+
+function showStatusDropdown(badge, themeId, currentStatus) {
+    // Remove any existing dropdown
+    document.querySelector('.status-dropdown')?.remove();
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'status-dropdown';
+
+    STATUS_OPTIONS.forEach(opt => {
+        const item = document.createElement('div');
+        item.className = `status-dropdown-item status-${opt.value}${opt.value === currentStatus ? ' current' : ''}`;
+        item.textContent = opt.label;
+        item.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            dropdown.remove();
+            if (opt.value === currentStatus) return;
+            try {
+                await themesApi.update(themeId, { status: opt.value });
+                refreshGantt();
+            } catch (err) {
+                alert('ステータス変更に失敗しました: ' + err.message);
+            }
+        });
+        dropdown.appendChild(item);
+    });
+
+    // Position below the badge
+    const rect = badge.getBoundingClientRect();
+    dropdown.style.position = 'fixed';
+    dropdown.style.left = `${rect.left}px`;
+    dropdown.style.top = `${rect.bottom + 4}px`;
+    document.body.appendChild(dropdown);
+
+    // Close on outside click
+    const closeHandler = (e) => {
+        if (!dropdown.contains(e.target)) {
+            dropdown.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeHandler), 0);
 }
