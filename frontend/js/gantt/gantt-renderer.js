@@ -263,9 +263,11 @@ function renderBody(months) {
         });
     });
 
-    // Cell click → edit
+    // Cell click → edit (suppress if drag occurred)
+    let isDragging = false;
     tbody.querySelectorAll('.gantt-row-member .gantt-cell').forEach(cell => {
         cell.addEventListener('click', (e) => {
+            if (isDragging) { isDragging = false; return; }
             const themeId = parseInt(cell.dataset.theme);
             const memberId = parseInt(cell.dataset.member);
             const month = cell.dataset.month;
@@ -286,6 +288,140 @@ function renderBody(months) {
             }
         });
         cell.addEventListener('mouseleave', hideTooltip);
+    });
+
+    // Drag & drop for allocation transfer
+    setupDragAndDrop(tbody, () => { isDragging = true; });
+}
+
+function setupDragAndDrop(tbody, onDragStart) {
+    if (scale !== 1) return; // Only allow D&D at 1M scale
+
+    const DRAG_THRESHOLD = 5; // px before drag starts
+    let dragState = null;
+
+    const allMemberCells = Array.from(tbody.querySelectorAll('.gantt-row-member .gantt-cell'));
+
+    allMemberCells.forEach(cell => {
+        cell.addEventListener('mousedown', (e) => {
+            const rate = parseInt(cell.dataset.rate) || 0;
+            if (rate === 0) return;
+            if (e.button !== 0) return; // left click only
+
+            dragState = {
+                srcCell: cell,
+                themeId: cell.dataset.theme,
+                memberId: cell.dataset.member,
+                month: cell.dataset.month,
+                rate: rate,
+                startX: e.clientX,
+                startY: e.clientY,
+                started: false,
+                ghost: null,
+            };
+
+            e.preventDefault(); // prevent text selection
+        });
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!dragState) return;
+
+        const dx = e.clientX - dragState.startX;
+        const dy = e.clientY - dragState.startY;
+
+        // Start drag only after threshold
+        if (!dragState.started) {
+            if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+            dragState.started = true;
+            if (onDragStart) onDragStart();
+            dragState.srcCell.classList.add('dragging');
+
+            // Create floating ghost
+            const ghost = document.createElement('div');
+            ghost.className = 'drag-ghost';
+            ghost.textContent = `${dragState.rate}%`;
+            ghost.style.cssText = `
+                position: fixed; z-index: 9999;
+                padding: 4px 14px; background: #6366f1; color: #fff;
+                border-radius: 6px; font-size: 13px; font-weight: 600;
+                pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                transform: translate(-50%, -50%);
+            `;
+            document.body.appendChild(ghost);
+            dragState.ghost = ghost;
+        }
+
+        // Move ghost
+        if (dragState.ghost) {
+            dragState.ghost.style.left = `${e.clientX}px`;
+            dragState.ghost.style.top = `${e.clientY}px`;
+        }
+
+        // Highlight valid drop targets
+        allMemberCells.forEach(c => {
+            c.classList.remove('drag-over');
+            if (c === dragState.srcCell) return;
+            if (c.dataset.theme !== dragState.themeId) return;
+            if (c.dataset.month !== dragState.month) return;
+
+            const rect = c.getBoundingClientRect();
+            if (e.clientX >= rect.left && e.clientX <= rect.right &&
+                e.clientY >= rect.top && e.clientY <= rect.bottom) {
+                c.classList.add('drag-over');
+            }
+        });
+    });
+
+    document.addEventListener('mouseup', async (e) => {
+        if (!dragState) return;
+        const state = dragState;
+        dragState = null;
+
+        // Cleanup visuals
+        state.srcCell.classList.remove('dragging');
+        if (state.ghost) {
+            document.body.removeChild(state.ghost);
+        }
+        allMemberCells.forEach(c => c.classList.remove('drag-over'));
+
+        if (!state.started) return; // Was just a click, not a drag
+
+        // Find drop target
+        const target = allMemberCells.find(c => {
+            if (c === state.srcCell) return false;
+            if (c.dataset.theme !== state.themeId) return false;
+            if (c.dataset.month !== state.month) return false;
+            const rect = c.getBoundingClientRect();
+            return e.clientX >= rect.left && e.clientX <= rect.right &&
+                e.clientY >= rect.top && e.clientY <= rect.bottom;
+        });
+
+        if (!target) return; // No valid drop target
+
+        const targetRate = parseInt(target.dataset.rate) || 0;
+        const newTargetRate = Math.min(100, targetRate + state.rate);
+
+        try {
+            await allocations.bulkUpdate([
+                {
+                    theme_id: parseInt(state.themeId),
+                    member_id: parseInt(state.memberId),
+                    month: state.month,
+                    allocation_rate: 0,
+                },
+                {
+                    theme_id: parseInt(target.dataset.theme),
+                    member_id: parseInt(target.dataset.member),
+                    month: target.dataset.month,
+                    allocation_rate: newTargetRate,
+                },
+            ]);
+            refreshGantt();
+        } catch (err) {
+            console.error('Drag transfer failed:', err);
+            alert('負荷率の移動に失敗しました: ' + err.message);
+        }
     });
 }
 
