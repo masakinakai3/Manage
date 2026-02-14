@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Masaki Nakai (https://github.com/masakinakai3)
+ * Released under the MIT license
+ * https://opensource.org/licenses/mit-license.php
+ */
+
 import { describe, it, expect } from 'vitest';
 import { shortenMonth, monthRange, addMonths, formatMonth, aggregateRate } from '../js/utils/date-utils.js';
 
