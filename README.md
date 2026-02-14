@@ -102,6 +102,18 @@ Manage/
 └── build_exe.py            # PyInstaller Build Script
 ```
 
+## 関連ドキュメント
+
+本プロジェクトには以下のドキュメントが含まれています。
+
+| ファイル名 | 説明 |
+|---|---|
+| [Requirement.md](Requirement.md) | **要件定義書**: アプリケーションの機能要件、非機能要件、制約事項。 |
+| [SoftwareDesign.md](SoftwareDesign.md) | **ソフトウェア設計書**: アーキテクチャ、DBスキーマ、API設計、画面フロー詳細。 |
+| [UserManual.md](UserManual.md) | **ユーザーマニュアル**: アプリケーションの操作方法、仕様説明。 |
+| [UnitTestSpecification.md](UnitTestSpecification.md) | **単体テスト仕様書**: バックエンド単体テストの計画、テストケース一覧。 |
+| [tests/README.md](tests/README.md) | **テスト実行手順**: 単体テスト環境の構築と実行コマンド。 |
+
 ## ライセンス
 
 Private
