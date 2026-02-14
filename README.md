@@ -2,27 +2,44 @@
 
 開発テーマごとの人員配置（誰が・いつ・何割）を可視化し、リソース計画の調整を支援する WEB アプリケーションです。
 
+## アプリケーションへのアクセス
+
+起動後、以下のURLにアクセスしてアプリを使用します。
+
+- **通常起動 (Backendのみ)**: [http://127.0.0.1:5000](http://127.0.0.1:5000)
+- **開発モード (Frontend Dev)**: [http://localhost:5173](http://localhost:5173)
+
 ## 主な機能
 
-- **テーマ視点ガントチャート** — テーマ × メンバー × 月の割当を表形式で可視化
-- **メンバー負荷表** — メンバーごとの月次負荷率を集計・表示
-- **メンバーアサイン** — テーマへのメンバー追加/解除をワンクリックで操作
-- **セル編集 & D&D** — 割当率の直接入力、ドラッグ＆ドロップによる期間移動
-- **超過警告** — 月次負荷率が容量を超えた場合の視覚的な警告
-- **スケール切替** — 1ヶ月 / 3ヶ月 / 6ヶ月 / 1年の表示粒度
-- **テーマ・メンバー管理** — CRUD 操作（カラー・ステータス・容量設定）
-- **認証** — Admin / User ロールベースのアクセス制御
+- **テーマ視点ガントチャート**: テーマ × メンバー × 月の割当を表形式で可視化。期間のハイライト、カテゴリ表示、進捗ステータス管理機能付き。
+- **メンバー負荷表**: メンバーごとの月次負荷率を集計・表示し、リソースの過不足を一目で特定。
+- **直感的な操作**:
+  - ドラッグ＆ドロップによるメンバーアサイン移動・期間変更。
+  - スピンボタンによる正確な期間設定 (YY-MM)。
+  - セルクリックによる稼働率編集。
+- **視覚的フィードバック**:
+  - 負荷オーバー時の警告アラート。
+  - テーマ期間（開始〜終了）の可視化。
+  - 折りたたみ時のメンバー別負荷内訳ツールチップ。
+- **状態保存**: ガントチャートの展開/折りたたみ状態をブラウザに自動保存。
+- **管理機能**: テーマ・メンバーの追加・編集・削除、スキル設定、CSVエクスポート。
+- **簡単導入**: 認証不要（自動管理者ログイン）、単一EXEファイルでの配布が可能。
 
 ## 技術スタック
 
 | レイヤー | 技術 |
 |---|---|
-| フロントエンド | Vite + Vanilla JS |
-| バックエンド | Flask (Python) |
-| データベース | SQLite |
-| 認証 | Flask-Login |
+| フロントエンド | HTML5, CSS3, Vanilla JS (Vite) |
+| バックエンド | Python 3.10+, Flask |
+| データベース | SQLite (SQLAlchemy) |
+| 配布 | PyInstaller (Single EXE) |
 
-## セットアップ
+## 動作環境
+
+- Windows 10/11
+- 最新のWebブラウザ (Chrome, Edge, Firefox等)
+
+## 開発環境セットアップ
 
 ### 前提条件
 
@@ -32,107 +49,58 @@
 ### インストール
 
 ```bash
-# バックエンド
+# バックエンド依存関係
 cd backend
 pip install -r requirements.txt
 
-# フロントエンド
+# フロントエンド依存関係
 cd frontend
 npm install
 ```
 
-### 起動
+### 開発サーバー起動
 
 ```bash
-# ターミナル1: バックエンド (port 5001)
+# ターミナル1: バックエンド (http://localhost:5001)
 cd backend
 python app.py
 
-# ターミナル2: フロントエンド (port 5173)
+# ターミナル2: フロントエンド (http://localhost:5173)
 cd frontend
 npm run dev
 ```
 
-ブラウザで http://localhost:5173/ を開いてください。
+## EXEファイルのビルド
 
-### 初期アカウント
+フロントエンドとバックエンドを1つの実行ファイル (`manage_app.exe`) にまとめます。
 
-| ユーザー名 | パスワード | 権限 |
-|---|---|---|
-| `admin` | `admin` | 管理者 |
+```bash
+# プロジェクトルートで実行
+python build_exe.py
+```
+
+生成された `dist/manage_app.exe` を配布することで、PythonやNode.jsがインストールされていない環境でも動作します。
 
 ## プロジェクト構成
 
 ```
 Manage/
-├── backend/
-│   ├── app.py                  # Flask アプリ初期化
-│   ├── models.py               # SQLAlchemy モデル
-│   ├── requirements.txt
-│   ├── routes/
-│   │   ├── auth.py             # 認証 API
-│   │   ├── themes.py           # テーマ CRUD + アサイン API
-│   │   ├── members.py          # メンバー CRUD API
-│   │   └── allocations.py      # 割当 CRUD + 負荷集計 API
-│   └── services/
-│       └── allocation_service.py   # 負荷計算・警告判定
-├── frontend/
-│   ├── index.html              # SPA エントリ
-│   ├── vite.config.js
-│   ├── css/
-│   │   ├── index.css           # デザインシステム
-│   │   ├── gantt.css           # ガントチャート
-│   │   └── member-view.css     # メンバー負荷表
-│   └── js/
-│       ├── app.js              # ルーティング・認証
-│       ├── api.js              # REST クライアント
-│       ├── gantt/
-│       │   ├── gantt-renderer.js   # ガント描画
-│       │   ├── gantt-editor.js     # セル編集
-│       │   └── gantt-dnd.js        # ドラッグ＆ドロップ
-│       ├── member/
-│       │   └── member-view.js      # メンバー負荷表示
-│       └── utils/
-│           └── date-utils.js       # 日付ユーティリティ
-└── doc/
-    └── UserManual.md           # ユーザーマニュアル
+├── backend/                # Flask Backend
+│   ├── app.py              # Entry point & Config
+│   ├── models.py           # DB Models
+│   ├── routes/             # API Endpoints
+│   └── services/           # Business Logic
+├── frontend/               # Vite Frontend
+│   ├── index.html          # SPA Entry
+│   ├── css/                # Styling
+│   └── js/                 # Application Logic
+│       ├── gantt/          # Gantt Chart Components
+│       └── member/         # Member View Components
+├── doc/                    # Documentation
+│   └── UserManual.md       # ユーザーマニュアル
+├── Requirement.md          # 要件定義
+└── build_exe.py            # PyInstaller Build Script
 ```
-
-## データモデル
-
-```mermaid
-erDiagram
-    Theme ||--o{ Allocation : has
-    Member ||--o{ Allocation : has
-    Theme }o--o{ Member : assigned_to
-
-    Theme {
-        int theme_id PK
-        string name
-        string category
-        string status
-        string color
-    }
-    Member {
-        int member_id PK
-        string display_name
-        string department
-        int capacity
-        bool is_active
-    }
-    Allocation {
-        int id PK
-        int theme_id FK
-        int member_id FK
-        string month
-        int allocation_rate
-    }
-```
-
-## ドキュメント
-
-- [ユーザーマニュアル](doc/UserManual.md) — 操作方法の詳細
-- [要件定義書](Requirement.md) — 元の要件仕様
 
 ## ライセンス
 
