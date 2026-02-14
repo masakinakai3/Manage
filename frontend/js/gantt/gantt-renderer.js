@@ -23,6 +23,20 @@ let scale = 1;
 
 export async function initGantt() {
     setupControls();
+
+    // Load collapsed state
+    const saved = localStorage.getItem('gantt_collapsed');
+    if (saved) {
+        try {
+            const ids = JSON.parse(saved);
+            if (Array.isArray(ids)) {
+                collapsedThemes = new Set(ids);
+            }
+        } catch (e) {
+            console.warn('Failed to parse collapsed state', e);
+        }
+    }
+
     await refreshGantt();
 }
 
@@ -54,6 +68,10 @@ export async function refreshGantt() {
     }
 }
 
+function saveCollapsedState() {
+    localStorage.setItem('gantt_collapsed', JSON.stringify([...collapsedThemes]));
+}
+
 function setupControls() {
     // Scale switcher
     document.querySelectorAll('#scale-switcher .scale-btn').forEach(btn => {
@@ -82,10 +100,12 @@ function setupControls() {
     // Expand / Collapse all
     document.getElementById('gantt-expand-all').addEventListener('click', () => {
         collapsedThemes.clear();
+        saveCollapsedState();
         refreshGantt();
     });
     document.getElementById('gantt-collapse-all').addEventListener('click', () => {
         allThemes.forEach(t => collapsedThemes.add(t.theme_id));
+        saveCollapsedState();
         refreshGantt();
     });
 
@@ -270,6 +290,7 @@ function renderBody(months) {
             } else {
                 collapsedThemes.add(themeId);
             }
+            saveCollapsedState();
             refreshGantt();
         });
     });
