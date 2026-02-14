@@ -167,6 +167,9 @@ function renderBody(months) {
         html += `<span class="theme-period ${theme.start_month ? '' : 'empty'}" data-theme-id="${theme.theme_id}">${periodText}</span>`;
 
         html += `<span class="theme-status status-${theme.status}" data-theme-id="${theme.theme_id}" data-status="${theme.status}">${statusLabel}</span>`;
+        if (theme.category) {
+            html += `<span class="theme-category">${theme.category}</span>`;
+        }
         html += `<button class="btn-assign-member" data-theme-id="${theme.theme_id}" title="メンバーを追加">＋</button>`;
         html += `</div></td>`;
 
@@ -595,13 +598,35 @@ function showPeriodEditor(pElement, themeId) {
     const theme = allThemes.find(t => t.theme_id === themeId);
     if (!theme) return;
 
+    // Parse start/end dates
+    const parseYM = (ym) => {
+        if (!ym) {
+            const now = new Date();
+            return { y: now.getFullYear() % 100, m: now.getMonth() + 1 };
+        }
+        const [y, m] = ym.split('-');
+        return { y: parseInt(y) % 100, m: parseInt(m) };
+    };
+    const start = parseYM(theme.start_month);
+    const end = parseYM(theme.end_month);
+
     const editor = document.createElement('div');
     editor.className = 'period-editor';
     editor.innerHTML = `
         <div class="period-editor-fields">
-            <input type="month" id="period-start" value="${theme.start_month || ''}">
-            <span>〜</span>
-            <input type="month" id="period-end" value="${theme.end_month || ''}">
+            <div class="period-group">
+                <input type="number" id="period-start-y" class="period-input-year" value="${start.y}" min="0" max="99">
+                <span>年</span>
+                <input type="number" id="period-start-m" class="period-input-month" value="${start.m}" min="1" max="12">
+                <span>月</span>
+            </div>
+            <span class="period-separator">〜</span>
+            <div class="period-group">
+                <input type="number" id="period-end-y" class="period-input-year" value="${end.y}" min="0" max="99">
+                <span>年</span>
+                <input type="number" id="period-end-m" class="period-input-month" value="${end.m}" min="1" max="12">
+                <span>月</span>
+            </div>
         </div>
         <div class="period-editor-actions">
             <button class="btn btn-primary btn-sm" id="period-save">保存</button>
@@ -625,10 +650,23 @@ function showPeriodEditor(pElement, themeId) {
 
     editor.querySelector('#period-cancel').onclick = closeEditor;
     editor.querySelector('#period-save').onclick = async () => {
-        const start = editor.querySelector('#period-start').value;
-        const end = editor.querySelector('#period-end').value;
+        const startY = editor.querySelector('#period-start-y').value;
+        const startM = editor.querySelector('#period-start-m').value;
+        const endY = editor.querySelector('#period-end-y').value;
+        const endM = editor.querySelector('#period-end-m').value;
+
+        // Simple validation
+        if (startM < 1 || startM > 12 || endM < 1 || endM > 12) {
+            alert('月は1〜12の間で入力してください');
+            return;
+        }
+
+        const fmt = (y, m) => `20${y.toString().padStart(2, '0')}-${m.toString().padStart(2, '0')}`;
+        const startStr = fmt(startY, startM);
+        const endStr = fmt(endY, endM);
+
         try {
-            await themesApi.update(themeId, { start_month: start, end_month: end });
+            await themesApi.update(themeId, { start_month: startStr, end_month: endStr });
             closeEditor();
             refreshGantt();
         } catch (err) {

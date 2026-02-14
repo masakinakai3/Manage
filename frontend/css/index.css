@@ -1007,3 +1007,51 @@ td.out-period {
     position: relative;
     z-index: 1;
 }
+
+/* Spin button period editor styles */
+.period-editor-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.period-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.period-separator {
+    text-align: center;
+    color: var(--color-text-muted);
+    font-size: 0.9em;
+}
+
+.period-input-year {
+    width: 55px;
+    padding: 4px 12px 4px 4px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    text-align: center;
+}
+
+.period-input-month {
+    width: 55px;
+    padding: 4px 12px 4px 4px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    text-align: center;
+}
+
+
+/* Theme category badge */
+.theme-category {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    background: var(--color-bg-hover);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 8px;
+    white-space: nowrap;
+}
