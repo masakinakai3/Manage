@@ -8,7 +8,7 @@ from flask_login import LoginManager
 from models import db, User
 
 
-def create_app():
+def create_app(test_config=None):
     # Determine paths
     if getattr(sys, 'frozen', False):
         # Running as PyInstaller bundle
@@ -31,6 +31,9 @@ def create_app():
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+    if test_config:
+        app.config.update(test_config)
 
     # Extensions
     CORS(app, supports_credentials=True)

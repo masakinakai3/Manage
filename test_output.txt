@@ -1,0 +1,9 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
+rootdir: C:\Users\galax\Desktop\Manage
+collected 8 items
+
+tests\test_api.py ....                                                   [ 50%]
+tests\test_models.py ....                                                [100%]
+
+============================== 8 passed in 2.16s ==============================
