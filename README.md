@@ -1,3 +1,8 @@
+<!--
+  Copyright (c) 2026 Masaki Nakai (https://github.com/masakinakai3)
+  Released under the MIT license
+  https://opensource.org/licenses/mit-license.php
+-->
 # リソース管理ツール
 
 開発テーマごとの人員配置（誰が・いつ・何割）を可視化し、リソース計画の調整を支援する WEB アプリケーションです。
