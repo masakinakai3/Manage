@@ -75,6 +75,14 @@ def create_app():
         _migrate_allocations_unique_index()
         _seed_admin(app)
 
+    @app.before_request
+    def auto_login():
+        from flask_login import current_user, login_user
+        if not current_user.is_authenticated:
+            user = db.session.query(User).filter_by(username='admin').first()
+            if user:
+                login_user(user)
+
     return app
 
 

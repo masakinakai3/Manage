@@ -16,45 +16,8 @@
 </head>
 
 <body>
-    <!-- Login Screen -->
-    <div id="login-screen" class="screen">
-        <div class="login-container">
-            <div class="login-card">
-                <div class="login-header">
-                    <div class="login-logo">
-                        <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
-                            <rect width="40" height="40" rx="10" fill="url(#logo-grad)" />
-                            <path d="M12 14h16v3H12zm0 5h12v3H12zm0 5h8v3H12z" fill="white" opacity="0.9" />
-                            <defs>
-                                <linearGradient id="logo-grad" x1="0" y1="0" x2="40" y2="40">
-                                    <stop stop-color="#6366f1" />
-                                    <stop offset="1" stop-color="#8b5cf6" />
-                                </linearGradient>
-                            </defs>
-                        </svg>
-                    </div>
-                    <h1>リソース管理ツール</h1>
-                    <p class="login-subtitle">開発テーマの人員配置を可視化</p>
-                </div>
-                <form id="login-form">
-                    <div class="form-field">
-                        <label for="login-username">ユーザー名</label>
-                        <input type="text" id="login-username" placeholder="admin" autocomplete="username" required>
-                    </div>
-                    <div class="form-field">
-                        <label for="login-password">パスワード</label>
-                        <input type="password" id="login-password" placeholder="••••••" autocomplete="current-password"
-                            required>
-                    </div>
-                    <div id="login-error" class="error-message" hidden></div>
-                    <button type="submit" class="btn btn-primary btn-block">ログイン</button>
-                </form>
-            </div>
-        </div>
-    </div>
-
     <!-- Main App -->
-    <div id="app-screen" class="screen" hidden>
+    <div id="app-screen" class="screen">
         <!-- Sidebar -->
         <nav id="sidebar">
             <div class="sidebar-header">

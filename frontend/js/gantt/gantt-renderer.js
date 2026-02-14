@@ -175,14 +175,20 @@ function renderBody(months) {
 
         months.forEach(m => {
             let total = 0;
+            let breakdown = [];
             themeMembers.forEach(member => {
-                total += aggregateRate(themeMemberRates[member.member_id] || {}, m, scale);
+                const r = aggregateRate(themeMemberRates[member.member_id] || {}, m, scale);
+                if (r > 0) {
+                    total += r;
+                    breakdown.push(`${member.display_name}: ${r}%`);
+                }
             });
             const cls = getCellClass(total, false);
             const isCurrent = m === cur;
             const isPeriod = theme.start_month && theme.end_month && m >= theme.start_month && m <= theme.end_month;
+            const tooltip = breakdown.length > 0 ? breakdown.join('\n') : '';
             html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
-            html += `<div class="gantt-cell">${total > 0 ? total + '%' : ''}</div>`;
+            html += `<div class="gantt-cell" title="${tooltip}">${total > 0 ? total + '%' : ''}</div>`;
             html += `</td>`;
         });
         html += '</tr>';

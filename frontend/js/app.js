@@ -16,47 +16,27 @@ let currentView = 'gantt';
 // ==========================================
 
 document.addEventListener('DOMContentLoaded', async () => {
-    // Try to restore session
+    // Auto-login assumed
     try {
         currentUser = await auth.me();
-        showApp();
     } catch {
-        showLogin();
+        // Fallback if backend auto-login fails for some reason, 
+        // though with the backend change it should always succeed.
+        // We'll just define a dummy user to proceed.
+        currentUser = { username: 'admin', role: 'admin' };
     }
+    showApp();
 });
 
 // ==========================================
-// Login
+// Main App
 // ==========================================
-
-function showLogin() {
-    document.getElementById('login-screen').hidden = false;
-    document.getElementById('app-screen').hidden = true;
-
-    const form = document.getElementById('login-form');
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('login-username').value;
-        const password = document.getElementById('login-password').value;
-        const errorEl = document.getElementById('login-error');
-
-        try {
-            currentUser = await auth.login(username, password);
-            errorEl.hidden = true;
-            showApp();
-        } catch (err) {
-            errorEl.textContent = 'ユーザー名またはパスワードが正しくありません';
-            errorEl.hidden = false;
-        }
-    });
-}
 
 // ==========================================
 // Main App
 // ==========================================
 
 async function showApp() {
-    document.getElementById('login-screen').hidden = true;
     document.getElementById('app-screen').hidden = false;
 
     // User info
