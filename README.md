@@ -116,4 +116,4 @@ Manage/
 
 ## ライセンス
 
-Private
+[MIT License](LICENSE)
