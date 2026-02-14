@@ -1,3 +1,8 @@
+<!--
+  Copyright (c) 2026 Masaki Nakai (https://github.com/masakinakai3)
+  Released under the MIT license
+  https://opensource.org/licenses/mit-license.php
+-->
 # ソフトウェア詳細設計書 (SoftwareDesign.md)
 
 ## 1. システム概要
