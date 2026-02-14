@@ -1,19 +1,35 @@
 """Flask application factory and initialization."""
 
 import os
-from flask import Flask
+import sys
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager
 from models import db, User
 
 
 def create_app():
-    app = Flask(__name__)
+    # Determine paths
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        bundle_dir = sys._MEIPASS
+        dist_folder = os.path.join(bundle_dir, 'dist')
+    else:
+        # Running dev
+        dist_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
+
+    app = Flask(__name__, static_folder=dist_folder, static_url_path='', template_folder=dist_folder)
 
     # Configuration
     base_dir = os.path.abspath(os.path.dirname(__file__))
+    if getattr(sys, 'frozen', False):
+        # DB in the same folder as the exe
+        db_path = os.path.join(os.path.dirname(sys.executable), 'database.db')
+    else:
+        db_path = os.path.join(base_dir, 'database.db')
+    
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(base_dir, "database.db")}'
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
     # Extensions
@@ -45,6 +61,13 @@ def create_app():
     app.register_blueprint(allocations_bp, url_prefix='/api/allocations')
     app.register_blueprint(export_bp, url_prefix='/api/export')
 
+    # Serve React App
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve(path):
+        if path and os.path.exists(os.path.join(app.static_folder, path)):
+            return app.send_static_file(path)
+        return send_from_directory(app.template_folder, 'index.html')
 
     # Initialize database
     with app.app_context():
