@@ -184,3 +184,58 @@
 .detail-total.over {
     color: var(--color-danger);
 }
+
+/* ==========================================
+   Member Detail Row Styles
+   ========================================== */
+
+.member-row-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.toggle-btn {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-fast), transform var(--transition-fast);
+    color: var(--color-text-muted);
+}
+
+.toggle-btn:hover {
+    background: var(--color-bg-hover);
+    color: var(--color-text-primary);
+}
+
+.toggle-btn.expanded {
+    transform: rotate(90deg);
+}
+
+.theme-row td {
+    background: var(--color-bg-subtle) !important;
+    border-bottom: 1px dashed var(--color-border-light) !important;
+    font-size: var(--text-xs) !important;
+    height: 32px !important;
+}
+
+.theme-row-content {
+    padding-left: 36px !important;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.theme-row-load {
+    color: var(--color-text-secondary);
+}
+
+/* Hide by default */
+.theme-row.hidden {
+    display: none;
+}

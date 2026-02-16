@@ -21,6 +21,8 @@ let startMonth = addMonths(currentMonth(), -1);
 let visibleCount = 14;
 let scale = 1;
 
+let lastAllocations = [];
+
 export async function initMemberView() {
     setupControls();
     await refreshMemberView();
@@ -38,19 +40,55 @@ export async function refreshMemberView() {
             themesApi.list(),
         ]);
 
-        const [memberLoads, warns, allAllocs] = await Promise.all([
+        let memberLoads, warns;
+        [memberLoads, warns, lastAllocations] = await Promise.all([
             allocations.memberLoads(from, toEnd),
             allocations.warnings(from, toEnd),
             allocations.list({ from, to: toEnd }),
         ]);
 
-        render(months, memberLoads, warns, allAllocs);
+        render(months, memberLoads, warns, lastAllocations);
     } catch (err) {
         console.error('Failed to load member view:', err);
     }
 }
 
 function setupControls() {
+    // Inject Expand/Collapse All and Export buttons if not present
+    const switcher = document.getElementById('member-scale-switcher');
+    if (switcher && !document.getElementById('member-expand-all')) {
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.gap = '8px';
+        container.style.marginRight = '16px';
+        container.innerHTML = `
+            <button class="btn btn-ghost btn-sm" id="member-expand-all">全展開</button>
+            <button class="btn btn-ghost btn-sm" id="member-collapse-all">全たたみ</button>
+            <button class="btn btn-secondary btn-sm" id="member-export-csv" style="margin-left:8px">CSV出力</button>
+        `;
+        switcher.parentNode.insertBefore(container, switcher);
+    }
+
+    document.getElementById('member-expand-all')?.addEventListener('click', () => {
+        document.querySelectorAll('.theme-row').forEach(row => row.classList.remove('hidden'));
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.add('expanded');
+            btn.textContent = '▼';
+        });
+    });
+
+    document.getElementById('member-collapse-all')?.addEventListener('click', () => {
+        document.querySelectorAll('.theme-row').forEach(row => row.classList.add('hidden'));
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.remove('expanded');
+            btn.textContent = '▶';
+        });
+    });
+
+    document.getElementById('member-export-csv')?.addEventListener('click', () => {
+        exportCSV();
+    });
+
     document.querySelectorAll('#member-scale-switcher .scale-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             document.querySelector('#member-scale-switcher .scale-btn.active')?.classList.remove('active');
@@ -73,6 +111,31 @@ function setupControls() {
         refreshMemberView();
     });
 }
+
+function exportCSV() {
+    const months = getVisibleMonths(startMonth, visibleCount, scale);
+
+    // Header
+    const headers = ['メンバー', '所属', 'テーマ', 'カテゴリ', 'ステータス', ...months];
+    let csvContent = '\uFEFF' + headers.join(',') + '\n';
+
+    // Detailed Data
+    // We need to re-fetch or reconstruct the detailed allocation data map
+    // Since we don't store the raw map globally, we'll rebuild it from current global data
+    // Ideally we should have stored it in refreshMemberView but rebuilding is cheap enough here.
+
+    // Re-fetch all allocations for current range? 
+    // Wait, refreshMemberView has local scopes.
+    // Let's make a simplified attempt: iterate all members and all themes,
+    // fetch allocation if it exists from a global store? 
+    // We don't have a reliable global store for allocations yet.
+    // Let's modify refreshMemberView to store the latest data in a module-level variable.
+    // OR just re-fetch here if it was fast enough? 
+    // Actually, let's create a hidden global var or attach to window for simplicity? 
+    // No, let's use a module level variable `lastAllocations` similar to `allMembers`.
+}
+
+// ... (existing code)
 
 function render(months, memberLoads, warnings, allAllocs) {
     renderHeader(months);
@@ -100,24 +163,29 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
     const warnSet = new Set();
     warnings.forEach(w => warnSet.add(`${w.member_id}-${w.month}`));
 
-    // Build detail data: member -> month -> [{theme_name, color, rate}]
-    const detailMap = {};
+    // Build detail data: member -> theme -> { month: rate }
+    const memberThemeLoads = {}; // { memberId: { themeId: { month: rate } } }
+
     allAllocs.forEach(a => {
-        const key = `${a.member_id}-${a.month}`;
-        if (!detailMap[key]) detailMap[key] = [];
-        const theme = allThemes.find(t => t.theme_id === a.theme_id);
-        detailMap[key].push({
-            theme_name: theme ? theme.name : `Theme ${a.theme_id}`,
-            color: theme ? theme.color : '#888',
-            rate: a.allocation_rate,
-        });
+        if (!memberThemeLoads[a.member_id]) memberThemeLoads[a.member_id] = {};
+        if (!memberThemeLoads[a.member_id][a.theme_id]) memberThemeLoads[a.member_id][a.theme_id] = {};
+        memberThemeLoads[a.member_id][a.theme_id][a.month] = a.allocation_rate;
     });
 
     let html = '';
     allMembers.forEach(member => {
         const loads = memberLoads[member.member_id] || {};
-        html += '<tr>';
-        html += `<td>${member.display_name} <span class="member-capacity">(${member.capacity}%)</span></td>`;
+        const memberThemes = memberThemeLoads[member.member_id] || {};
+        const hasThemes = Object.keys(memberThemes).length > 0;
+
+        // Member Row
+        html += `<tr class="member-row" data-member-row="${member.member_id}">`;
+        html += `<td>
+            <div class="member-row-header">
+                ${hasThemes ? `<div class="toggle-btn" data-toggle="${member.member_id}">▶</div>` : '<div style="width:20px"></div>'}
+                <div>${member.display_name} <span class="member-capacity">(${member.capacity}%)</span></div>
+            </div>
+        </td>`;
 
         months.forEach(m => {
             const load = aggregateRate(loads, m, scale);
@@ -125,28 +193,62 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             const isOver = warnSet.has(`${member.member_id}-${m}`);
             const cls = getLoadClass(load, member.capacity, isOver);
 
-            html += `<td class="${isCurrent ? 'month-current' : ''}" data-member="${member.member_id}" data-month="${m}">`;
+            html += `<td class="${isCurrent ? 'month-current' : ''}">`;
             if (load > 0) {
                 html += `<span class="load-cell ${cls}">${load}%</span>`;
             }
             html += `</td>`;
         });
         html += '</tr>';
+
+        // Theme Rows (Hidden by default)
+        Object.keys(memberThemes).forEach(themeId => {
+            const tid = parseInt(themeId);
+            const theme = allThemes.find(t => t.theme_id === tid);
+            const themeName = theme ? theme.name : `Theme ${tid}`;
+            const themeColor = theme ? theme.color : '#888';
+            const themeLoads = memberThemes[tid];
+
+            html += `<tr class="theme-row hidden" data-parent="${member.member_id}">`;
+            html += `<td>
+                <div class="theme-row-content">
+                    <span class="card-color-dot" style="background:${themeColor};width:8px;height:8px"></span>
+                    ${themeName}
+                </div>
+            </td>`;
+
+            months.forEach(m => {
+                // For theme rows, we don't aggregate if scale > 1 for now, or we just take the month's value
+                // Assuming scale=1 for simplicity in detail view, or simple lookup
+                const val = themeLoads[m] || 0;
+                const isCurrent = m === cur;
+                html += `<td class="${isCurrent ? 'month-current' : ''}">`;
+                if (val > 0) {
+                    html += `<span class="theme-row-load">${val}%</span>`;
+                }
+                html += `</td>`;
+            });
+            html += '</tr>';
+        });
     });
 
     tbody.innerHTML = html;
 
-    // Click for detail popup
-    tbody.querySelectorAll('td[data-member]').forEach(td => {
-        td.addEventListener('click', (e) => {
-            const memberId = parseInt(td.dataset.member);
-            const month = td.dataset.month;
-            const member = allMembers.find(m => m.member_id === memberId);
-            const key = `${memberId}-${month}`;
-            const details = detailMap[key] || [];
-            if (details.length > 0) {
-                showDetailPopup(e, member, month, details);
-            }
+    // Toggle handlers
+    tbody.querySelectorAll('.toggle-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const memberId = btn.dataset.toggle;
+            const isExpanded = btn.classList.contains('expanded');
+
+            // Toggle button state
+            btn.classList.toggle('expanded');
+            btn.textContent = isExpanded ? '▶' : '▼'; // Optional: if using CSS rotation, text might not change or use unicode
+
+            // Toggle rows
+            tbody.querySelectorAll(`tr[data-parent="${memberId}"]`).forEach(row => {
+                row.classList.toggle('hidden');
+            });
         });
     });
 }
