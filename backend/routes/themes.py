@@ -49,6 +49,7 @@ def create_theme():
         category=data.get('category', ''),
         status=data.get('status', 'planning'),
         color=data.get('color', '#6366f1'),
+        priority=data.get('priority', 0),
         start_month=data.get('start_month'),
         end_month=data.get('end_month'),
     )
@@ -64,7 +65,7 @@ def update_theme(theme_id):
     if not theme:
         return jsonify({'error': 'Not found'}), 404
     data = request.get_json()
-    for field in ('name', 'category', 'status', 'color', 'start_month', 'end_month'):
+    for field in ('name', 'category', 'status', 'color', 'priority', 'start_month', 'end_month'):
         if field in data:
             setattr(theme, field, data[field])
     

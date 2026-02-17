@@ -14,7 +14,7 @@ import { allocations } from '../api.js';
 let activeEditor = null;
 let saving = false;
 
-export function openCellEditor(cellEl, themeId, memberId, month, currentRate, onSave) {
+export function openCellEditor(cellEl, themeId, memberId, month, currentRate, onSave, onNavigate) {
     closeCellEditor();
 
     const editor = document.getElementById('cell-editor');
@@ -28,25 +28,30 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     input.focus();
     input.select();
 
-    const save = async () => {
+    const save = () => {
         if (saving) return;
         saving = true;
         const newRate = parseInt(input.value) || 0;
         const clampedRate = Math.max(0, Math.min(100, newRate));
-        try {
-            await allocations.updateSingle({
-                theme_id: themeId,
-                member_id: memberId,
-                month: month,
-                allocation_rate: clampedRate,
-            });
-            closeCellEditor();
-            onSave();
-        } catch (err) {
+
+        // Optimistic: Update UI immediately via callback
+        if (onSave) onSave(clampedRate);
+
+        // Background save
+        allocations.updateSingle({
+            theme_id: themeId,
+            member_id: memberId,
+            month: month,
+            allocation_rate: clampedRate,
+        }).catch(err => {
             console.error('Failed to save:', err);
-        } finally {
+            // Optionally notify user
+        }).finally(() => {
             saving = false;
-        }
+        });
+
+        // Do NOT close editor to allow continued navigation/viewing
+        // closeCellEditor(); 
     };
 
     const cancel = () => closeCellEditor();
@@ -54,6 +59,13 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const handleKeydown = (e) => {
         if (e.key === 'Enter') { e.preventDefault(); save(); }
         if (e.key === 'Escape') { cancel(); }
+        if (onNavigate && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+            // Check if saving is needed
+            const newRate = parseInt(input.value) || 0;
+            const hasChanged = newRate !== currentRate;
+            onNavigate(e.key, hasChanged, newRate);
+        }
     };
 
     // Clean up previous listeners

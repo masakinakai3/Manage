@@ -22,7 +22,9 @@ let allMembers = [];
 let allAllocations = [];
 let warningsMap = {};
 let memberLoadsMap = {};
+
 let collapsedThemes = new Set();
+let nextFocus = null; // { themeId, memberId, month }
 let startMonth = addMonths(currentMonth(), -1);
 let visibleCount = 14;
 let scale = 1;
@@ -184,6 +186,7 @@ function renderBody(months) {
         html += `<td><div class="theme-label-cell">`;
         html += `<span class="theme-toggle" data-theme-id="${theme.theme_id}">`;
         html += `<span class="theme-toggle-icon ${isCollapsed ? '' : 'expanded'}">▶</span>`;
+        html += `<span class="theme-priority" data-theme-id="${theme.theme_id}" title="優先度 (クリックで編集)">${theme.priority}</span>`;
         html += `<span class="theme-color-bar" style="background:${theme.color}"></span>`;
         html += `<span class="theme-name">${theme.name}</span></span>`;
 
@@ -248,6 +251,22 @@ function renderBody(months) {
 
     tbody.innerHTML = html;
 
+    // Restore focus if set
+    if (nextFocus) {
+        const selector = `.gantt-cell[data-theme="${nextFocus.themeId}"][data-member="${nextFocus.memberId}"][data-month="${nextFocus.month}"]`;
+        const cell = tbody.querySelector(selector);
+        if (cell) {
+            // Slight delay to ensure DOM is ready and previous event loop finished
+            setTimeout(() => {
+                const rate = parseInt(cell.dataset.rate) || 0;
+                openCellEditor(cell, nextFocus.themeId, nextFocus.memberId, nextFocus.month, rate, refreshGantt, (dir, changed, newRate) => {
+                    handleCellNavigation(cell, dir, changed, newRate, nextFocus.themeId, nextFocus.memberId, nextFocus.month);
+                });
+            }, 0);
+        }
+        nextFocus = null;
+    }
+
     // Bind events
     tbody.querySelectorAll('.btn-assign-member').forEach(btn => {
         btn.addEventListener('click', (e) => {
@@ -289,7 +308,10 @@ function renderBody(months) {
     });
 
     tbody.querySelectorAll('.theme-toggle').forEach(toggle => {
-        toggle.addEventListener('click', () => {
+        toggle.addEventListener('click', (e) => {
+            // Prevent toggling if clicking on priority
+            if (e.target.classList.contains('theme-priority')) return;
+
             const themeId = parseInt(toggle.dataset.themeId);
             if (collapsedThemes.has(themeId)) {
                 collapsedThemes.delete(themeId);
@@ -298,6 +320,14 @@ function renderBody(months) {
             }
             saveCollapsedState();
             refreshGantt();
+        });
+    });
+
+    tbody.querySelectorAll('.theme-priority').forEach(p => {
+        p.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const themeId = parseInt(p.dataset.themeId);
+            showPriorityEditor(p, themeId);
         });
     });
 
@@ -311,7 +341,11 @@ function renderBody(months) {
             const month = cell.dataset.month;
             const currentRate = parseInt(cell.dataset.rate) || 0;
             if (scale === 1) {
-                openCellEditor(e.target, themeId, memberId, month, currentRate, refreshGantt);
+                openCellEditor(e.target, themeId, memberId, month, currentRate, (newRate) => {
+                    handleCellEdit(e.target, newRate, themeId, memberId, month);
+                }, (dir, changed, newRate) => {
+                    handleCellNavigation(e.target, dir, changed, newRate, themeId, memberId, month);
+                });
             }
         });
 
@@ -337,6 +371,154 @@ let _dragState = null;
 let _dragCells = [];
 let _dragOnStart = null;
 let _saving = false;
+
+
+
+// Handle manual update (optimistic DOM + Local Data) without API call
+// API call is handled by gantt-editor's save() method
+function handleCellEdit(cell, newRate, themeId, memberId, month) {
+    // 1. Update DOM
+    cell.dataset.rate = newRate;
+    cell.textContent = newRate > 0 ? `${newRate}%` : '';
+
+    cell.classList.remove('rate-low', 'rate-mid', 'rate-high', 'rate-full', 'rate-over');
+    if (newRate > 0) {
+        if (newRate <= 30) cell.classList.add('rate-low');
+        else if (newRate <= 60) cell.classList.add('rate-mid');
+        else if (newRate < 100) cell.classList.add('rate-high');
+        else if (newRate === 100) cell.classList.add('rate-full');
+    }
+
+    // 2. Update Local Data
+    let alloc = allAllocations.find(a => a.theme_id === themeId && a.member_id === memberId && a.month === month);
+    if (alloc) {
+        alloc.allocation_rate = newRate;
+    } else {
+        allAllocations.push({
+            theme_id: themeId,
+            member_id: memberId,
+            month: month,
+            allocation_rate: newRate
+        });
+    }
+}
+
+// Navigation handler
+// Navigation handler
+function handleCellNavigation(currentCell, direction, changed, newRate, themeId, memberId, month) {
+    if (changed) {
+        // 1. Optimistic Update: Update DOM immediately
+        currentCell.dataset.rate = newRate;
+        // Update cell content and class based on new rate
+        // We need to re-evaluate the cell class logic here to keep it consistent
+        // For now, simpler update:
+        currentCell.textContent = newRate > 0 ? `${newRate}%` : '';
+
+        // Remove old rate classes and add new one
+        currentCell.classList.remove('rate-low', 'rate-mid', 'rate-high', 'rate-full', 'rate-over');
+
+        // We don't have easy access to total load to calculate 'rate-over' without full recalc,
+        // but we can at least show the rate color.
+        if (newRate > 0) {
+            if (newRate <= 30) currentCell.classList.add('rate-low');
+            else if (newRate <= 60) currentCell.classList.add('rate-mid');
+            else if (newRate < 100) currentCell.classList.add('rate-high');
+            else if (newRate === 100) currentCell.classList.add('rate-full');
+        }
+
+        // 2. Update Local Data (allAllocations)
+        // We need to find the allocation object and update it, or add a new one
+        let alloc = allAllocations.find(a => a.theme_id === themeId && a.member_id === memberId && a.month === month);
+        if (alloc) {
+            alloc.allocation_rate = newRate;
+        } else {
+            // Create new structure if it didn't exist
+            allAllocations.push({
+                theme_id: themeId,
+                member_id: memberId,
+                month: month,
+                allocation_rate: newRate
+            });
+        }
+
+        // 3. Background Save (Fire and Forget)
+        allocations.updateSingle({
+            theme_id: themeId,
+            member_id: memberId,
+            month: month,
+            allocation_rate: newRate,
+        }).catch(err => {
+            console.error('Background save failed:', err);
+            // In a real app, we might show a toast or revert the change here
+            alert('保存に失敗しました。リロードしてください。');
+        });
+    }
+
+    // 4. Move Focus
+    const next = calculateNextFocus(currentCell, direction);
+    if (next) {
+        const selector = `.gantt-cell[data-theme="${next.themeId}"][data-member="${next.memberId}"][data-month="${next.month}"]`;
+        const tbody = document.getElementById('gantt-tbody');
+        const targetCell = tbody.querySelector(selector);
+        if (targetCell) {
+            const rate = parseInt(targetCell.dataset.rate) || 0;
+            openCellEditor(targetCell, next.themeId, next.memberId, next.month, rate, (newRate) => {
+                handleCellEdit(targetCell, newRate, next.themeId, next.memberId, next.month);
+            }, (dir, ch, nr) => {
+                handleCellNavigation(targetCell, dir, ch, nr, next.themeId, next.memberId, next.month);
+            });
+        }
+    }
+}
+
+function calculateNextFocus(currentCell, direction) {
+    const row = currentCell.closest('tr');
+    if (!row) return null;
+
+    if (direction === 'ArrowLeft') {
+        const prevTd = currentCell.parentElement.previousElementSibling;
+        const target = prevTd?.querySelector('.gantt-cell[data-theme]');
+        if (target) return extractCellData(target);
+    }
+    else if (direction === 'ArrowRight') {
+        const nextTd = currentCell.parentElement.nextElementSibling;
+        const target = nextTd?.querySelector('.gantt-cell[data-theme]');
+        if (target) return extractCellData(target);
+    }
+    else if (direction === 'ArrowUp') {
+        let prevRow = row.previousElementSibling;
+        while (prevRow) {
+            if (prevRow.classList.contains('gantt-row-member') && !prevRow.classList.contains('hidden-row')) {
+                const cellIndex = currentCell.parentElement.cellIndex;
+                const target = prevRow.children[cellIndex]?.querySelector('.gantt-cell');
+                if (target) return extractCellData(target);
+                break;
+            }
+            prevRow = prevRow.previousElementSibling;
+        }
+    }
+    else if (direction === 'ArrowDown') {
+        let nextRow = row.nextElementSibling;
+        while (nextRow) {
+            if (nextRow.classList.contains('gantt-row-member') && !nextRow.classList.contains('hidden-row')) {
+                const cellIndex = currentCell.parentElement.cellIndex;
+                const target = nextRow.children[cellIndex]?.querySelector('.gantt-cell');
+                if (target) return extractCellData(target);
+                break;
+            }
+            nextRow = nextRow.nextElementSibling;
+        }
+    }
+    return null;
+}
+
+function extractCellData(cell) {
+    return {
+        themeId: parseInt(cell.dataset.theme),
+        memberId: parseInt(cell.dataset.member),
+        month: cell.dataset.month
+    };
+}
 
 function setupDragAndDrop(tbody, onDragStart) {
     if (scale !== 1) return; // Only allow D&D at 1M scale
@@ -706,6 +888,69 @@ function showPeriodEditor(pElement, themeId) {
             alert('保存に失敗しました: ' + err.message);
         }
     };
+
+    setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
+}
+
+function showPriorityEditor(pElement, themeId) {
+    // Remove any existing editor
+    document.querySelector('.priority-editor')?.remove();
+
+    const currentVal = pElement.textContent.trim();
+
+    const editor = document.createElement('div');
+    editor.className = 'priority-editor';
+    editor.innerHTML = `
+        <input type="number" id="priority-input" min="0" max="9" value="${currentVal}">
+    `;
+
+    const rect = pElement.getBoundingClientRect();
+    editor.style.left = `${rect.left}px`;
+    editor.style.top = `${rect.bottom + 4}px`; // Position below the element
+    document.body.appendChild(editor);
+
+    const input = editor.querySelector('#priority-input');
+    input.focus();
+    input.select();
+
+    const closeEditor = () => {
+        editor.remove();
+        document.removeEventListener('mousedown', onOutsideClick);
+    };
+
+    const save = async () => {
+        const val = input.value;
+        const num = parseInt(val);
+        if (isNaN(num) || num < 0 || num > 9) {
+            // Invalid input, just close or maybe show error? 
+            // For now, consistent with requester: valid 0-9
+            return;
+        }
+
+        try {
+            await themesApi.update(themeId, { priority: num });
+            closeEditor();
+            refreshGantt();
+        } catch (err) {
+            alert('保存に失敗しました: ' + err.message);
+        }
+    };
+
+    const onOutsideClick = (e) => {
+        if (!editor.contains(e.target)) closeEditor();
+    };
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            save();
+        } else if (e.key === 'Escape') {
+            closeEditor();
+        }
+    });
+
+    // Auto-save on blur? Or just close? Requester wants arrow keys which works in input type=number.
+    // Let's rely on Enter to save to prevent accidental saves while scrolling through numbers.
 
     setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
 }
