@@ -9,6 +9,7 @@
  * Displays member monthly load with overload warnings and detail popups.
  */
 
+import { openCellEditor } from '../gantt/gantt-editor.js';
 import { allocations, members as membersApi, themes as themesApi } from '../api.js';
 import {
     currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate,
@@ -112,30 +113,99 @@ function setupControls() {
     });
 }
 
-function exportCSV() {
+async function exportCSV() {
     const months = getVisibleMonths(startMonth, visibleCount, scale);
+    const monthsHeader = months.map(m => formatMonthHeader(m, scale).replace('\n', ''));
 
     // Header
-    const headers = ['メンバー', '所属', 'テーマ', 'カテゴリ', 'ステータス', ...months];
-    let csvContent = '\uFEFF' + headers.join(',') + '\n';
+    const headers = ['メンバー', '所属', 'テーマ', 'カテゴリ', 'ステータス', ...monthsHeader];
+    let csvContent = headers.join(',') + '\n';
 
-    // Detailed Data
-    // We need to re-fetch or reconstruct the detailed allocation data map
-    // Since we don't store the raw map globally, we'll rebuild it from current global data
-    // Ideally we should have stored it in refreshMemberView but rebuilding is cheap enough here.
+    // Build detail data: member -> theme -> { month: rate }
+    const memberThemeLoads = {}; // { memberId: { themeId: { month: rate } } }
 
-    // Re-fetch all allocations for current range? 
-    // Wait, refreshMemberView has local scopes.
-    // Let's make a simplified attempt: iterate all members and all themes,
-    // fetch allocation if it exists from a global store? 
-    // We don't have a reliable global store for allocations yet.
-    // Let's modify refreshMemberView to store the latest data in a module-level variable.
-    // OR just re-fetch here if it was fast enough? 
-    // Actually, let's create a hidden global var or attach to window for simplicity? 
-    // No, let's use a module level variable `lastAllocations` similar to `allMembers`.
+    lastAllocations.forEach(a => {
+        if (!memberThemeLoads[a.member_id]) memberThemeLoads[a.member_id] = {};
+        if (!memberThemeLoads[a.member_id][a.theme_id]) memberThemeLoads[a.member_id][a.theme_id] = {};
+        memberThemeLoads[a.member_id][a.theme_id][a.month] = a.allocation_rate;
+    });
+
+    // Generate rows
+    allMembers.forEach(member => {
+        const memberThemes = memberThemeLoads[member.member_id] || {};
+        const themeIds = Object.keys(memberThemes).map(id => parseInt(id));
+
+        if (themeIds.length === 0) {
+            // Option: export member with no themes?
+            // For now, let's only export members with allocations to match the view's "expand" logic?
+            // Actually, view shows all members, but only expands if they have themes.
+            // Let's export even if no themes?
+            // "Member Load" usually implies seeing what they are working on.
+            // If they have no work, a single row with empty theme columns might be useful to show they are free.
+            const row = [
+                member.display_name,
+                member.department || '',
+                '', // Theme
+                '', // Category
+                '', // Status
+                ...months.map(() => '')
+            ];
+            csvContent += row.join(',') + '\n';
+        } else {
+            themeIds.forEach(tid => {
+                const theme = allThemes.find(t => t.theme_id === tid);
+                const themeName = theme ? theme.name : `Theme ${tid}`;
+                const category = theme ? theme.category : '';
+                const status = theme ? theme.status : '';
+                const themeLoads = memberThemes[tid];
+
+                const row = [
+                    member.display_name,
+                    member.department || '',
+                    themeName,
+                    category,
+                    status,
+                    ...months.map(m => themeLoads[m] || '')
+                ];
+                csvContent += row.join(',') + '\n';
+            });
+        }
+    });
+
+    // Send to backend
+    const filename = `member_load_${months[0]}_${months[months.length - 1]}.csv`;
+
+    try {
+        const response = await fetch('/api/export/csv', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                content: csvContent,
+                filename: filename
+            })
+        });
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } else {
+            console.error('Export failed:', await response.text());
+            alert('CSV出力に失敗しました。');
+        }
+    } catch (err) {
+        console.error('Export error:', err);
+        alert('CSV出力中にエラーが発生しました。');
+    }
 }
-
-// ... (existing code)
 
 function render(months, memberLoads, warnings, allAllocs) {
     renderHeader(months);
@@ -193,7 +263,7 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             const isOver = warnSet.has(`${member.member_id}-${m}`);
             const cls = getLoadClass(load, member.capacity, isOver);
 
-            html += `<td class="${isCurrent ? 'month-current' : ''}">`;
+            html += `<td class="${isCurrent ? 'month-current' : ''}" data-member-cell="${member.member_id}-${m}">`;
             if (load > 0) {
                 html += `<span class="load-cell ${cls}">${load}%</span>`;
             }
@@ -218,11 +288,16 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             </td>`;
 
             months.forEach(m => {
-                // For theme rows, we don't aggregate if scale > 1 for now, or we just take the month's value
-                // Assuming scale=1 for simplicity in detail view, or simple lookup
                 const val = themeLoads[m] || 0;
                 const isCurrent = m === cur;
-                html += `<td class="${isCurrent ? 'month-current' : ''}">`;
+                // Use member-cell class or similar for targeting? 
+                // We'll add data attributes for click handling
+                html += `<td class="member-theme-cell ${isCurrent ? 'month-current' : ''}" 
+                            data-member="${member.member_id}" 
+                            data-theme="${tid}" 
+                            data-month="${m}"
+                            data-rate="${val}">`;
+
                 if (val > 0) {
                     html += `<span class="theme-row-load">${val}%</span>`;
                 }
@@ -240,17 +315,175 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             e.stopPropagation();
             const memberId = btn.dataset.toggle;
             const isExpanded = btn.classList.contains('expanded');
-
-            // Toggle button state
             btn.classList.toggle('expanded');
-            btn.textContent = isExpanded ? '▶' : '▼'; // Optional: if using CSS rotation, text might not change or use unicode
-
-            // Toggle rows
+            btn.textContent = isExpanded ? '▶' : '▼';
             tbody.querySelectorAll(`tr[data-parent="${memberId}"]`).forEach(row => {
                 row.classList.toggle('hidden');
             });
         });
     });
+
+    // Cell click handlers for editor
+    tbody.querySelectorAll('.member-theme-cell').forEach(cell => {
+        cell.addEventListener('click', (e) => {
+            const themeId = parseInt(cell.dataset.theme);
+            const memberId = parseInt(cell.dataset.member);
+            const month = cell.dataset.month;
+            const currentRate = parseInt(cell.dataset.rate) || 0;
+
+            if (scale === 1) { // Only allow editing in 1M scale for clarity
+                openCellEditor(cell, themeId, memberId, month, currentRate, (newRate) => {
+                    handleCellEdit(cell, newRate, themeId, memberId, month);
+                }, (dir, changed, newRate) => {
+                    handleCellNavigation(cell, dir, changed, newRate, themeId, memberId, month);
+                });
+            }
+        });
+    });
+}
+
+function handleCellEdit(cell, newRate, themeId, memberId, month) {
+    // 1. Update Cell DOM
+    cell.dataset.rate = newRate;
+    cell.innerHTML = newRate > 0 ? `<span class="theme-row-load">${newRate}%</span>` : '';
+
+    // 2. Update Local Data (lastAllocations)
+    let alloc = lastAllocations.find(a => a.member_id === memberId && a.theme_id === themeId && a.month === month);
+    if (alloc) {
+        alloc.allocation_rate = newRate;
+    } else {
+        lastAllocations.push({
+            member_id: memberId,
+            theme_id: themeId,
+            month: month,
+            allocation_rate: newRate
+        });
+    }
+
+    // 3. Recalculate member total for this month
+    updateMemberTotalCell(memberId, month);
+}
+
+function handleCellNavigation(currentCell, direction, changed, newRate, themeId, memberId, month) {
+    if (changed) {
+        // Optimistic update if value changed before navigation
+        handleCellEdit(currentCell, newRate, themeId, memberId, month);
+
+        // Background save is handled by openCellEditor's internal logic which calls API, 
+        // but handleCellEdit updates local state.
+        // NOTE: `openCellEditor` calls `onSave` (which is `handleCellEdit` here) AND does the API call.
+        // So we don't need to call API here again. 
+    }
+
+    // Move Focus
+    const next = calculateNextFocus(currentCell, direction);
+    if (next) {
+        const selector = `.member-theme-cell[data-theme="${next.themeId}"][data-member="${next.memberId}"][data-month="${next.month}"]`;
+        const tbody = document.getElementById('member-load-tbody');
+        const targetCell = tbody.querySelector(selector);
+        if (targetCell) {
+            const rate = parseInt(targetCell.dataset.rate) || 0;
+            openCellEditor(targetCell, next.themeId, next.memberId, next.month, rate, (newRate) => {
+                handleCellEdit(targetCell, newRate, next.themeId, next.memberId, next.month);
+            }, (dir, ch, nr) => {
+                handleCellNavigation(targetCell, dir, ch, nr, next.themeId, next.memberId, next.month);
+            });
+        }
+    }
+}
+
+function calculateNextFocus(currentCell, direction) {
+    const row = currentCell.closest('tr');
+    if (!row) return null;
+
+    if (direction === 'ArrowLeft') {
+        const prevTd = currentCell.previousElementSibling;
+        if (prevTd && prevTd.classList.contains('member-theme-cell')) {
+            return extractCellData(prevTd);
+        }
+    }
+    else if (direction === 'ArrowRight') {
+        const nextTd = currentCell.nextElementSibling;
+        if (nextTd && nextTd.classList.contains('member-theme-cell')) {
+            return extractCellData(nextTd);
+        }
+    }
+    else if (direction === 'ArrowUp') {
+        // Move to previous theme row (same member or previous member)
+        let prevRow = row.previousElementSibling;
+        while (prevRow) { // Skip member summary rows?
+            // Member rows are `member-row`, Theme rows are `theme-row`.
+            // We want to skip `member-row` because they are not editable in this context (they are summaries).
+            // But if we hit a member row, we should look before it for the last theme row of the previous member?
+            // `row.previousElementSibling` works linearly.
+
+            if (prevRow.classList.contains('theme-row') && !prevRow.classList.contains('hidden')) {
+                const cellIndex = currentCell.cellIndex; // Index matches because tables align?
+                // `member-row` has 1 th + months. `theme-row` has 1 td + months.
+                // But `theme-row` first td is name. `member-row` first td is name.
+                // Indices should match 1:1 for month columns.
+                const target = prevRow.children[cellIndex];
+                if (target && target.classList.contains('member-theme-cell')) {
+                    return extractCellData(target);
+                }
+                break;
+            }
+            if (prevRow.classList.contains('member-row')) {
+                // If we hit a member row header, keep going up to find the previous member's last theme?
+                // Yes, continue loop.
+            }
+            prevRow = prevRow.previousElementSibling;
+        }
+    }
+    else if (direction === 'ArrowDown') {
+        let nextRow = row.nextElementSibling;
+        while (nextRow) {
+            if (nextRow.classList.contains('theme-row') && !nextRow.classList.contains('hidden')) {
+                const cellIndex = currentCell.cellIndex;
+                const target = nextRow.children[cellIndex];
+                if (target && target.classList.contains('member-theme-cell')) {
+                    return extractCellData(target);
+                }
+                break;
+            }
+            nextRow = nextRow.nextElementSibling;
+        }
+    }
+    return null;
+}
+
+function extractCellData(cell) {
+    return {
+        themeId: parseInt(cell.dataset.theme),
+        memberId: parseInt(cell.dataset.member),
+        month: cell.dataset.month
+    };
+}
+
+function updateMemberTotalCell(memberId, month) {
+    // Recalculate total for this member/month from lastAllocations
+    const total = lastAllocations
+        .filter(a => a.member_id === memberId && a.month === month)
+        .reduce((sum, a) => sum + a.allocation_rate, 0);
+
+    // Find the cell
+    const cell = document.querySelector(`td[data-member-cell="${memberId}-${month}"]`);
+    if (cell) {
+        // Find capacity
+        const member = allMembers.find(m => m.member_id === memberId);
+        const capacity = member ? member.capacity : 100; // Default 100
+
+        // Re-render cell content
+        const cls = getLoadClass(total, capacity, total > capacity); // Simple check, ignore `warnings` API for local update?
+        // Ideally we should check if it is in warnings set, but warnings set comes from API.
+        // For immediate feedback, `total > capacity` is a good proxy for "overload".
+
+        if (total > 0) {
+            cell.innerHTML = `<span class="load-cell ${cls}">${total}%</span>`;
+        } else {
+            cell.innerHTML = '';
+        }
+    }
 }
 
 function getLoadClass(load, capacity, isOver) {
