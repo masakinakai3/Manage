@@ -147,4 +147,16 @@ def _seed_admin(app):
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, port=5001)
+    
+    # When running as an executable, open the browser automatically
+    if getattr(sys, 'frozen', False):
+        import webbrowser
+        import threading
+        # Ensure debug is False when frozen to avoid reloader issues
+        debug_mode = False
+        # Open browser after a small delay to let server start
+        threading.Timer(1.5, lambda: webbrowser.open('http://127.0.0.1:5001/')).start()
+    else:
+        debug_mode = True
+
+    app.run(debug=debug_mode, port=5001)
