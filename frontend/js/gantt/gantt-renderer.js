@@ -188,7 +188,8 @@ function renderBody(months) {
         html += `<span class="theme-toggle-icon ${isCollapsed ? '' : 'expanded'}">▶</span>`;
         html += `<span class="theme-priority" data-theme-id="${theme.theme_id}" title="優先度 (クリックで編集)">${theme.priority}</span>`;
         html += `<span class="theme-color-bar" style="background:${theme.color}"></span>`;
-        html += `<span class="theme-name">${theme.name}</span></span>`;
+        html += `<span class="theme-name">${theme.name}</span>`;
+        html += `<span class="theme-member-count" title="アサイン人数" style="margin-left: 6px; font-size: 0.8rem; color: var(--text-muted); background: var(--border-color); padding: 1px 6px; border-radius: 10px; display: inline-flex; align-items: center; gap: 3px;">👤 ${themeMembers.length}</span></span>`;
 
         const periodText = (theme.start_month && theme.end_month)
             ? `${shortenMonth(theme.start_month)} 〜 ${shortenMonth(theme.end_month)}`
