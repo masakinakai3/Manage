@@ -181,7 +181,7 @@ erDiagram
 | theme_id | Integer | PK | テーマID |
 | name | String(200) | Not Null | テーマ名 |
 | category | String(100) | Default '' | カテゴリ（製品群など） |
-| status | String(20) | Not Null | 進行状態 (planning, active, completed) |
+| status | String(20) | Not Null | 進行状態 (planning, active, done, hold) |
 | color | String(7) | Default '#6366f1' | 表示色 (HEX) |
 | start_month | String(7) | Nullable | 開始月 (YYYY-MM) |
 | end_month | String(7) | Nullable | 終了月 (YYYY-MM) |
@@ -339,7 +339,7 @@ Flaskを採用するにあたり、マイクロフレームワークの特性を
 ### 5.1 起動フロー
 1.  **EXE実行 (Backend起動)**:
     - パッケージ化された `app.exe` (または `app.py`) が起動します。
-    - Flaskサーバーがポート5000で立ち上がり、ブラウザで `http://localhost:5000` を開きます。
+    - Flaskサーバーがポート5001で立ち上がり、ブラウザで `http://localhost:5001` を開きます。
     - 起動時にデータベース (`database.db`) の存在確認を行い、なければ作成します。
 
 2.  **Frontend初期化**:
@@ -360,7 +360,7 @@ sequenceDiagram
     User->>Server: EXE実行 (ダブルクリック)
     activate Server
     Server->>DB: 接続確認 (なければ作成)
-    Server->>Browser: ブラウザ起動 (http://localhost:5000)
+    Server->>Browser: ブラウザ起動 (http://localhost:5001)
     deactivate Server
 
     activate Browser
@@ -450,7 +450,7 @@ sequenceDiagram
 ### 6.4 管理モーダル
 
 - `theme-list` や `member-list` からの操作で、HTML文字列テンプレートを用いて動的にモーダル (`div#modal-overlay`) を生成します。
-- フォームの値は直接 `doucment.getElementById` で取得し、APIクライアント (`api.js`) を通じて送信します。
+- フォームの値は直接 `document.getElementById` で取得し、APIクライアント (`api.js`) を通じて送信します。
 
 ### 6.5 フロントエンド・バックエンドの役割とデータ連携
 
@@ -548,8 +548,7 @@ sequenceDiagram
 | ファイルパス | 役割・分類 | 主な責務 |
 |---|---|---|
 | `app.py` | **App Entry** | Flaskアプリ初期化、静的ファイル配信設定、SPA用ルート定義。 |
-| `database.py` | **DB Config** | SQLAlchemyインスタンス作成、SQLite接続設定。 |
-| `models.py` | **ORM Models** | データベース定義 (`User`, `Member`, `Theme`, `Allocation`)。 |
+| `models.py` | **ORM Models** | データベース定義 (`User`, `Member`, `Theme`, `Allocation`) およびSQLAlchemyインスタンス。 |
 | `routes/auth.py` | **API Route** | 認証関連 (ログイン、ログアウト、セッション確認)。 |
 | `routes/themes.py` | **API Route** | テーマ管理 (一覧取得、作成、編集)。 |
 | `routes/members.py` | **API Route** | メンバー管理 (一覧取得、作成、編集)。 |
@@ -560,11 +559,11 @@ sequenceDiagram
 #### (1) `app.py`
 アプリケーションのエントリーポイントです。
 - **SPA対応**: `/` および `/assets/<path>` へのリクエストに対し、`frontend/dist` 配下の静的ファイルを返します。
-- **API登録**: `routes` パッケージ配下のBlueprint (`auth_bp`, `api_bp` 等) を登録します。
+- **API登録**: `routes` パッケージ配下のBlueprint (`auth_bp`, `themes_bp`, `members_bp`, `allocations_bp`, `export_bp`) を登録します。
 
 #### (2) `models.py`
 データベースのスキーマ定義を行います。
-- **`Allocation` モデル**: 複合主キー (`theme_id`, `member_id`, `month`) を持ち、多対多の関係性とアサイン率を管理します。
+- **`Allocation` モデル**: 複合ユニーク制約 (`uq_allocation`: `theme_id`, `member_id`, `month`) を持ち、多対多の関係性とアサイン率を管理します。
 
 #### (3) `routes/allocations.py`
 ガントチャートのデータの読み書きを担う核心部分です。
@@ -576,7 +575,7 @@ sequenceDiagram
 
 ## 9. ビルド・デプロイ設計
 
-### 8.1 EXE化プロセス
+### 9.1 EXE化プロセス
 
 `build_exe.py` スクリプトにより自動化されています。
 
