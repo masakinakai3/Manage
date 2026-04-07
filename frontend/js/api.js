@@ -91,3 +91,37 @@ export const allocations = {
         return request(`/allocations/warnings?${qs}`);
     },
 };
+
+// Data Backup (Export / Import)
+export const dataBackup = {
+    /** Download a full JSON backup of all application data. */
+    exportJson: async () => {
+        const res = await fetch(`${API_BASE}/export/json`, { credentials: 'include' });
+        if (!res.ok) throw new Error(`Export failed: HTTP ${res.status}`);
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        const filename = match ? match[1] : 'manage_backup.json';
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
+
+    /** Upload a JSON backup file and restore all data. */
+    importJson: async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch(`${API_BASE}/import/json`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Import failed: HTTP ${res.status}`);
+        return data;
+    },
+};
+

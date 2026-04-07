@@ -63,12 +63,14 @@ def create_app(test_config=None):
     from routes.members import members_bp
     from routes.allocations import allocations_bp
     from routes.export import export_bp
+    from routes.import_data import import_data_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(themes_bp, url_prefix='/api/themes')
     app.register_blueprint(members_bp, url_prefix='/api/members')
     app.register_blueprint(allocations_bp, url_prefix='/api/allocations')
     app.register_blueprint(export_bp, url_prefix='/api/export')
+    app.register_blueprint(import_data_bp, url_prefix='/api/import')
 
     # Serve React App
     @app.route('/', defaults={'path': ''})

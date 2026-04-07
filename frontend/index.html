@@ -69,6 +69,21 @@
                     </a></li>
             </ul>
             <div class="sidebar-footer">
+                <div class="backup-actions">
+                    <button id="export-json-btn" class="btn btn-ghost btn-sm" title="全データをJSONでエクスポート">
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M13 8V2H7v6H2l8 8 8-8h-5zM0 18h20v2H0v-2z"/>
+                        </svg>
+                        Export
+                    </button>
+                    <label id="import-json-label" class="btn btn-ghost btn-sm" title="JSONからデータをインポート" style="cursor:pointer;margin:0">
+                        <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M7 12V6h6v6h5l-8 8-8-8h5zM0 0h20v2H0V0z"/>
+                        </svg>
+                        Import
+                        <input type="file" id="import-json-input" accept=".json" style="display:none">
+                    </label>
+                </div>
                 <div class="user-info">
                     <div class="user-avatar" id="user-avatar">A</div>
                     <span id="user-name">admin</span>

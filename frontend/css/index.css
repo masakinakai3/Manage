@@ -342,17 +342,32 @@ body {
     padding: var(--space-3) var(--space-4);
     border-top: 1px solid var(--color-border);
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.backup-actions {
+    display: flex;
+    gap: var(--space-2);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.backup-actions .btn {
+    flex: 1;
+    justify-content: center;
+    font-size: var(--text-xs);
 }
 
 .user-info {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: var(--space-2);
     font-size: var(--text-sm);
     color: var(--color-text-secondary);
 }
+
 
 .user-avatar {
     width: 28px;

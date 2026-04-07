@@ -9,7 +9,7 @@
  * Handles routing, authentication, and view initialization.
  */
 
-import { auth, themes as themesApi, members as membersApi } from './api.js';
+import { auth, themes as themesApi, members as membersApi, dataBackup } from './api.js';
 import { initGantt, refreshGantt } from './gantt/gantt-renderer.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 
@@ -70,6 +70,45 @@ async function showApp() {
     // Initialize management views
     initThemeManagement();
     initMemberManagement();
+
+    // Export / Import
+    initBackup();
+}
+
+function initBackup() {
+    // Export
+    document.getElementById('export-json-btn').addEventListener('click', async () => {
+        try {
+            await dataBackup.exportJson();
+        } catch (err) {
+            alert('エクスポートに失敗しました: ' + err.message);
+        }
+    });
+
+    // Import
+    document.getElementById('import-json-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        // Reset input so the same file can be selected again
+        e.target.value = '';
+
+        if (!confirm(
+            'インポートを実行すると現在のすべてのデータが置き換えられます。\n' +
+            'この操作は元に戻せません。続行しますか？'
+        )) return;
+
+        try {
+            const result = await dataBackup.importJson(file);
+            alert(
+                `インポートが完了しました。\n` +
+                `テーマ: ${result.themes} 件 / メンバー: ${result.members} 件 / 割当: ${result.allocations} 件`
+            );
+            // Refresh all views
+            await Promise.all([refreshGantt(), refreshMemberView()]);
+        } catch (err) {
+            alert('インポートに失敗しました: ' + err.message);
+        }
+    });
 }
 
 function switchView(viewName) {
