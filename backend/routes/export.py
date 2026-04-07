@@ -53,6 +53,86 @@ def export_csv():
     )
     return response
 
+@export_bp.route('/xlsx', methods=['POST'])
+@login_required
+def export_xlsx():
+    import io
+    from openpyxl import Workbook
+    from openpyxl.styles import PatternFill, Font, Alignment
+    from openpyxl.utils import get_column_letter
+    
+    data = request.get_json()
+    if not data:
+        return {'error': 'No data'}, 400
+        
+    headers = data.get('headers', [])
+    rows = data.get('rows', [])
+    filename = data.get('filename', 'gantt_export.xlsx')
+    filename = re.sub(r'[^\w\-.]', '_', filename)
+    
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Gantt"
+    
+    header_fill = PatternFill(start_color="1F497D", end_color="1F497D", fill_type="solid")
+    header_font = Font(color="FFFFFF", bold=True)
+    summary_fill = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
+    
+    rate_low = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+    rate_mid = PatternFill(start_color="E0E0FF", end_color="E0E0FF", fill_type="solid")
+    rate_high = PatternFill(start_color="B3B3FF", end_color="B3B3FF", fill_type="solid")
+    rate_full = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+    rate_over = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+    
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+        
+    for r_idx, row_data in enumerate(rows, start=2):
+        ws.append(row_data)
+        is_summary = row_data[1] == "合算"
+        
+        for c_idx, val in enumerate(row_data, start=1):
+            cell = ws.cell(row=r_idx, column=c_idx)
+            if is_summary and c_idx <= 3:
+                cell.fill = summary_fill
+                cell.font = Font(bold=True)
+                
+            if c_idx > 3 and val and str(val).endswith('%'):
+                rate = int(str(val).replace('%', ''))
+                if rate > 100:
+                    cell.fill = rate_over
+                elif rate == 100:
+                    cell.fill = rate_full
+                elif rate > 60:
+                    cell.fill = rate_high
+                elif rate > 30:
+                    cell.fill = rate_mid
+                else:
+                    cell.fill = rate_low
+                cell.alignment = Alignment(horizontal="center")
+                cell.value = rate / 100
+                cell.number_format = '0%'
+
+    ws.column_dimensions['A'].width = 30
+    ws.column_dimensions['B'].width = 20
+    ws.column_dimensions['C'].width = 15
+    for i in range(4, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 12
+        
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    return Response(
+        output.read(),
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"'
+        }
+    )
 
 @export_bp.route('/json', methods=['GET'])
 @login_required

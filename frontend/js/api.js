@@ -125,3 +125,12 @@ export const dataBackup = {
     },
 };
 
+// Snapshots
+export const snapshots = {
+    list: () => request('/snapshots'),
+    get: (id) => request(`/snapshots/${id}`),
+    create: (data) => request('/snapshots', {
+        method: 'POST', body: JSON.stringify(data),
+    }),
+    delete: (id) => request(`/snapshots/${id}`, { method: 'DELETE' }),
+};

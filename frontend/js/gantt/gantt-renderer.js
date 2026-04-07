@@ -10,12 +10,45 @@
  * allocation rate display, and warning indicators.
  */
 
-import { allocations, themes as themesApi, members as membersApi } from '../api.js';
+import { allocations, themes as themesApi, members as membersApi, snapshots as snapshotsApi } from '../api.js';
 import {
     currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate,
     shortenMonth
 } from '../utils/date-utils.js';
 import { openCellEditor } from './gantt-editor.js';
+
+export const HistoryManager = {
+    stack: [],
+    index: -1,
+    push(undoData, redoData) {
+        this.stack = this.stack.slice(0, this.index + 1);
+        this.stack.push({ undo: undoData, redo: redoData });
+        this.index++;
+    },
+    async perform(data) {
+        try {
+            await allocations.bulkUpdate(data);
+            await refreshGantt();
+        } catch (err) {
+            console.error("History action failed", err);
+            alert("操作の取り消し・やり直しに失敗しました。");
+        }
+    },
+    async undo() {
+        if (this.index >= 0) {
+            const action = this.stack[this.index];
+            this.index--;
+            await this.perform(action.undo);
+        }
+    },
+    async redo() {
+        if (this.index < this.stack.length - 1) {
+            this.index++;
+            const action = this.stack[this.index];
+            await this.perform(action.redo);
+        }
+    }
+};
 
 let allThemes = [];
 let allMembers = [];
@@ -28,9 +61,26 @@ let nextFocus = null; // { themeId, memberId, month }
 let startMonth = addMonths(currentMonth(), -1);
 let visibleCount = 14;
 let scale = 1;
+let currentSnapshotData = null;
+
+async function loadSnapshots() {
+    try {
+        const list = await snapshotsApi.list();
+        const select = document.getElementById('snapshot-select');
+        select.innerHTML = '<option value="">-- スナップショット比較なし --</option>';
+        list.forEach(s => {
+            const d = new Date(s.created_at);
+            const ts = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            select.innerHTML += `<option value="${s.id}">${s.name} (${ts})</option>`;
+        });
+    } catch (err) {
+        console.error('Failed to load snapshots', err);
+    }
+}
 
 export async function initGantt() {
     setupControls();
+    await loadSnapshots();
 
     // Load collapsed state
     const saved = localStorage.getItem('gantt_collapsed');
@@ -121,6 +171,41 @@ function setupControls() {
     document.getElementById('gantt-export-csv').addEventListener('click', () => {
         handleExportCSV();
     });
+
+    // XLSX Export
+    document.getElementById('gantt-export-xlsx').addEventListener('click', () => {
+        handleExportXLSX();
+    });
+
+    // Snapshots
+    document.getElementById('snapshot-save-btn').addEventListener('click', async () => {
+        const name = prompt('スナップショットの名前を入力してください:', `Snap_${new Date().toLocaleDateString()}`);
+        if (!name) return;
+        try {
+            await snapshotsApi.create({ name, data: allAllocations });
+            alert('スナップショットを保存しました。');
+            await loadSnapshots();
+        } catch (err) {
+            alert('保存に失敗しました: ' + err.message);
+        }
+    });
+
+    document.getElementById('snapshot-select').addEventListener('change', async (e) => {
+        const id = e.target.value;
+        if (!id) {
+            currentSnapshotData = null;
+        } else {
+            try {
+                const snap = await snapshotsApi.get(id);
+                currentSnapshotData = JSON.parse(snap.data);
+            } catch (err) {
+                alert('スナップショットの取得に失敗しました');
+                currentSnapshotData = null;
+                e.target.value = '';
+            }
+        }
+        refreshGantt();
+    });
 }
 
 function render(months) {
@@ -205,6 +290,7 @@ function renderBody(months) {
 
         months.forEach(m => {
             let total = 0;
+            let oldTotal = 0;
             let breakdown = [];
             themeMembers.forEach(member => {
                 const r = aggregateRate(themeMemberRates[member.member_id] || {}, m, scale);
@@ -212,13 +298,26 @@ function renderBody(months) {
                     total += r;
                     breakdown.push(`${member.display_name}: ${r}%`);
                 }
+                if (currentSnapshotData && scale === 1) {
+                    const sAlloc = currentSnapshotData.find(a => a.theme_id === theme.theme_id && a.member_id === member.member_id && a.month === m);
+                    if (sAlloc) oldTotal += sAlloc.allocation_rate;
+                }
             });
             const cls = getCellClass(total, false);
             const isCurrent = m === cur;
             const isPeriod = theme.start_month && theme.end_month && m >= theme.start_month && m <= theme.end_month;
             const tooltip = breakdown.length > 0 ? breakdown.join('\n') : '';
+
+            let content = total > 0 ? `${total}%` : '';
+            if (currentSnapshotData && scale === 1 && total !== oldTotal) {
+                const diff = total - oldTotal;
+                const sign = diff > 0 ? '+' : '';
+                const color = diff > 0 ? 'var(--color-danger)' : 'var(--color-primary-hover)';
+                content = `${total > 0 ? total + '%' : '0%'} <span style="font-size:0.7em; color:${color}">(${sign}${diff})</span>`;
+            }
+
             html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
-            html += `<div class="gantt-cell" title="${tooltip}">${total > 0 ? total + '%' : ''}</div>`;
+            html += `<div class="gantt-cell" title="${tooltip}">${content}</div>`;
             html += `</td>`;
         });
         html += '</tr>';
@@ -240,9 +339,25 @@ function renderBody(months) {
                 const isCurrent = m === cur;
                 const isPeriod = theme.start_month && theme.end_month && m >= theme.start_month && m <= theme.end_month;
 
+                let content = '';
+                if (currentSnapshotData && scale === 1) {
+                    const sAlloc = currentSnapshotData.find(a => a.theme_id === theme.theme_id && a.member_id === member.member_id && a.month === m);
+                    const oldRate = sAlloc ? sAlloc.allocation_rate : 0;
+                    if (rate !== oldRate) {
+                        const diff = rate - oldRate;
+                        const sign = diff > 0 ? '+' : '';
+                        const color = diff > 0 ? 'var(--color-danger)' : 'var(--color-primary-hover)';
+                        content = `${rate > 0 ? rate + '%' : '0%'} <span style="font-size:0.7em; color:${color}">(${sign}${diff})</span>`;
+                    } else {
+                        content = rate > 0 ? `${rate}%` : '';
+                    }
+                } else {
+                    content = rate > 0 ? `${rate}%` : '';
+                }
+
                 html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
                 html += `<div class="gantt-cell ${cls}" data-rate="${rate}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${m}">`;
-                if (rate > 0) html += `${rate}%`;
+                html += content;
                 if (hasWarning) html += `<span class="warning-icon">⚠</span>`;
                 html += `</div></td>`;
             });
@@ -428,8 +543,8 @@ function handleCellNavigation(currentCell, direction, changed, newRate, themeId,
         }
 
         // 2. Update Local Data (allAllocations)
-        // We need to find the allocation object and update it, or add a new one
         let alloc = allAllocations.find(a => a.theme_id === themeId && a.member_id === memberId && a.month === month);
+        const oldRate = alloc ? alloc.allocation_rate : 0;
         if (alloc) {
             alloc.allocation_rate = newRate;
         } else {
@@ -443,14 +558,18 @@ function handleCellNavigation(currentCell, direction, changed, newRate, themeId,
         }
 
         // 3. Background Save (Fire and Forget)
-        allocations.updateSingle({
+        const updateData = {
             theme_id: themeId,
             member_id: memberId,
             month: month,
             allocation_rate: newRate,
-        }).catch(err => {
+        };
+        HistoryManager.push(
+            [{...updateData, allocation_rate: oldRate}],
+            [updateData]
+        );
+        allocations.updateSingle(updateData).catch(err => {
             console.error('Background save failed:', err);
-            // In a real app, we might show a toast or revert the change here
             alert('保存に失敗しました。リロードしてください。');
         });
     }
@@ -614,37 +733,29 @@ function setupDragAndDrop(tbody, onDragStart) {
         try {
             if (isSameMember) {
                 // Period move: move allocation to different month
-                await allocations.bulkUpdate([
-                    {
-                        theme_id: parseInt(state.themeId),
-                        member_id: parseInt(state.memberId),
-                        month: state.month,
-                        allocation_rate: 0,
-                    },
-                    {
-                        theme_id: parseInt(state.themeId),
-                        member_id: parseInt(state.memberId),
-                        month: target.dataset.month,
-                        allocation_rate: state.rate,
-                    },
-                ]);
+                const redoData = [
+                    { theme_id: parseInt(state.themeId), member_id: parseInt(state.memberId), month: state.month, allocation_rate: 0 },
+                    { theme_id: parseInt(state.themeId), member_id: parseInt(state.memberId), month: target.dataset.month, allocation_rate: state.rate },
+                ];
+                const undoData = [
+                    { theme_id: parseInt(state.themeId), member_id: parseInt(state.memberId), month: state.month, allocation_rate: state.rate },
+                    { theme_id: parseInt(state.themeId), member_id: parseInt(state.memberId), month: target.dataset.month, allocation_rate: targetRate },
+                ];
+                HistoryManager.push(undoData, redoData);
+                await allocations.bulkUpdate(redoData);
             } else {
                 // Transfer: move allocation to different member
                 const newTargetRate = Math.min(100, targetRate + state.rate);
-                await allocations.bulkUpdate([
-                    {
-                        theme_id: parseInt(state.themeId),
-                        member_id: parseInt(state.memberId),
-                        month: state.month,
-                        allocation_rate: 0,
-                    },
-                    {
-                        theme_id: parseInt(target.dataset.theme),
-                        member_id: parseInt(target.dataset.member),
-                        month: target.dataset.month,
-                        allocation_rate: newTargetRate,
-                    },
-                ]);
+                const redoData = [
+                    { theme_id: parseInt(state.themeId), member_id: parseInt(state.memberId), month: state.month, allocation_rate: 0 },
+                    { theme_id: parseInt(target.dataset.theme), member_id: parseInt(target.dataset.member), month: target.dataset.month, allocation_rate: newTargetRate },
+                ];
+                const undoData = [
+                    { theme_id: parseInt(state.themeId), member_id: parseInt(state.memberId), month: state.month, allocation_rate: state.rate },
+                    { theme_id: parseInt(target.dataset.theme), member_id: parseInt(target.dataset.member), month: target.dataset.month, allocation_rate: targetRate },
+                ];
+                HistoryManager.push(undoData, redoData);
+                await allocations.bulkUpdate(redoData);
             }
             refreshGantt();
         } catch (err) {
@@ -1075,6 +1186,96 @@ async function handleExportCSV() {
         document.body.removeChild(form);
     } catch (err) {
         console.error('CSV Export Error:', err);
-        alert('CSV\u51fa\u529b\u4e2d\u306b\u30a8\u30e9\u30fc\u304c\u767a\u751f\u3057\u307e\u3057\u305f: ' + err.message);
+        alert('CSV出力中にエラーが発生しました: ' + err.message);
+    }
+}
+
+async function handleExportXLSX() {
+    try {
+        const months = getVisibleMonths(startMonth, visibleCount, scale);
+
+        const getCSVHeaderLabel = (m, s) => {
+            const [y, mm] = m.split('-').map(Number);
+            const shortY = String(y).slice(2);
+            if (s === 1) return `${shortY}-${String(mm).padStart(2, '0')}`;
+            if (s === 3) return `${shortY}-Q${Math.ceil(mm / 3)}`;
+            if (s === 6) return `${shortY}-${mm <= 6 ? 'H1' : 'H2'}`;
+            return `${y}`;
+        };
+
+        const headers = ['テーマ', '内訳', 'ステータス'];
+        months.forEach(m => headers.push(getCSVHeaderLabel(m, scale)));
+        
+        const rows = [];
+        const allocMap = {};
+        allAllocations.forEach(a => {
+            const key = `${a.theme_id}-${a.member_id}`;
+            if (!allocMap[key]) allocMap[key] = {};
+            allocMap[key][a.month] = a.allocation_rate;
+        });
+
+        allThemes.forEach(theme => {
+            const statusLabel = { planning: '計画中', active: '進行中', completed: '完了', cancelled: '中止' }[theme.status] || theme.status;
+            const assignedIds = new Set(theme.member_ids || []);
+            const themeMemberRates = {};
+            const themeMembers = [];
+
+            allMembers.forEach(member => {
+                const key = `${theme.theme_id}-${member.member_id}`;
+                if (allocMap[key]) {
+                    assignedIds.add(member.member_id);
+                    themeMemberRates[member.member_id] = allocMap[key];
+                }
+            });
+
+            assignedIds.forEach(mid => {
+                const member = allMembers.find(m => m.member_id === mid);
+                if (member) {
+                    themeMembers.push(member);
+                    if (!themeMemberRates[mid]) themeMemberRates[mid] = allocMap[`${theme.theme_id}-${mid}`] || {};
+                }
+            });
+
+            const summaryRow = [theme.name, '合算', statusLabel];
+            months.forEach(m => {
+                let total = 0;
+                themeMembers.forEach(member => {
+                    total += aggregateRate(themeMemberRates[member.member_id] || {}, m, scale);
+                });
+                summaryRow.push(total > 0 ? `${total}%` : '');
+            });
+            rows.push(summaryRow);
+
+            themeMembers.forEach(member => {
+                const memberRow = ['', member.display_name, ''];
+                months.forEach(m => {
+                    const rate = aggregateRate(themeMemberRates[member.member_id] || {}, m, scale);
+                    memberRow.push(rate > 0 ? `${rate}%` : '');
+                });
+                rows.push(memberRow);
+            });
+        });
+
+        const fileName = `gantt_export_${currentMonth().replace('-', '')}.xlsx`;
+        
+        const res = await fetch('/api/export/xlsx', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ headers, rows, filename: fileName })
+        });
+        
+        if (!res.ok) throw new Error(`Export failed: HTTP ${res.status}`);
+        
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+
+    } catch (err) {
+        console.error('XLSX Export Error:', err);
+        alert('Excel出力中にエラーが発生しました: ' + err.message);
     }
 }

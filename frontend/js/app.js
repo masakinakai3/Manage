@@ -10,7 +10,7 @@
  */
 
 import { auth, themes as themesApi, members as membersApi, dataBackup } from './api.js';
-import { initGantt, refreshGantt } from './gantt/gantt-renderer.js';
+import { initGantt, refreshGantt, HistoryManager } from './gantt/gantt-renderer.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 
 // State
@@ -73,6 +73,23 @@ async function showApp() {
 
     // Export / Import
     initBackup();
+    initUIConfig();
+
+    // Keyboard Shortcuts (Undo / Redo)
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'z') {
+            if (e.shiftKey) {
+                HistoryManager.redo();
+            } else {
+                HistoryManager.undo();
+            }
+            e.preventDefault();
+        }
+        if ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 'y') {
+            HistoryManager.redo();
+            e.preventDefault();
+        }
+    });
 }
 
 function initBackup() {
@@ -108,6 +125,41 @@ function initBackup() {
         } catch (err) {
             alert('インポートに失敗しました: ' + err.message);
         }
+    });
+}
+
+function initUIConfig() {
+    // Theme Toggle
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    const loadTheme = () => {
+        const t = localStorage.getItem('theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+    };
+    loadTheme();
+    if (themeBtn) {
+        themeBtn.addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('theme', next);
+        });
+    }
+
+    // Zoom
+    let currentZoom = parseInt(localStorage.getItem('gantt_zoom')) || 56;
+    const applyZoom = () => {
+        document.documentElement.style.setProperty('--cell-width', currentZoom + 'px');
+        localStorage.setItem('gantt_zoom', currentZoom);
+    };
+    applyZoom();
+
+    document.getElementById('gantt-zoom-in')?.addEventListener('click', () => {
+        currentZoom = Math.min(120, currentZoom + 10);
+        applyZoom();
+    });
+    document.getElementById('gantt-zoom-out')?.addEventListener('click', () => {
+        currentZoom = Math.max(30, currentZoom - 10);
+        applyZoom();
     });
 }
 

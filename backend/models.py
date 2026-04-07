@@ -97,6 +97,23 @@ class Theme(db.Model):
             'member_ids': [m.member_id for m in self.members]
         }
 
+class Snapshot(db.Model):
+    """Gantt data snapshot for comparison."""
+    __tablename__ = 'snapshots'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    data = db.Column(db.Text, nullable=False) # JSON
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'data': self.data,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
 
 class Allocation(db.Model):
     """Monthly allocation of a member to a theme."""
