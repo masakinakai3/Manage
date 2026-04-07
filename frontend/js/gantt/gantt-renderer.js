@@ -447,7 +447,6 @@ function renderBody(months) {
         });
     });
 
-    // Cell click → edit (suppress if drag occurred)
     let isDragging = false;
     tbody.querySelectorAll('.gantt-row-member .gantt-cell').forEach(cell => {
         cell.addEventListener('click', (e) => {
@@ -463,6 +462,16 @@ function renderBody(months) {
                     handleCellNavigation(e.target, dir, changed, newRate, themeId, memberId, month);
                 });
             }
+        });
+
+        cell.addEventListener('contextmenu', (e) => {
+            if (scale !== 1) return;
+            e.preventDefault();
+            const themeId = parseInt(cell.dataset.theme);
+            const memberId = parseInt(cell.dataset.member);
+            const month = cell.dataset.month;
+            const currentRate = parseInt(cell.dataset.rate) || 0;
+            showContextMenu(e.clientX, e.clientY, cell, themeId, memberId, month, currentRate);
         });
 
         // Tooltip on hover
@@ -482,7 +491,8 @@ function renderBody(months) {
     setupDragAndDrop(tbody, () => { isDragging = true; });
 }
 
-// Module-level drag state
+// Module-level state
+let clipboardRate = null;
 let _dragState = null;
 let _dragCells = [];
 let _dragOnStart = null;
@@ -630,6 +640,63 @@ function calculateNextFocus(currentCell, direction) {
         }
     }
     return null;
+}
+
+function showContextMenu(x, y, cell, themeId, memberId, month, currentRate) {
+    const menu = document.getElementById('context-menu');
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.hidden = false;
+    
+    const pasteBtn = menu.querySelector('#ctx-paste');
+    if (clipboardRate !== null) {
+        pasteBtn.classList.remove('disabled');
+    } else {
+        pasteBtn.classList.add('disabled');
+    }
+    
+    // Re-attach handlers safely by clearing old ones
+    const newMenu = menu.cloneNode(true);
+    menu.parentNode.replaceChild(newMenu, menu);
+    
+    newMenu.querySelector('#ctx-edit').onclick = () => {
+        newMenu.hidden = true;
+        openCellEditor(cell, themeId, memberId, month, currentRate, (newRate) => {
+            handleCellEdit(cell, newRate, themeId, memberId, month);
+        }, (dir, changed, newRate) => {
+            handleCellNavigation(cell, dir, changed, newRate, themeId, memberId, month);
+        });
+    };
+    
+    newMenu.querySelector('#ctx-copy').onclick = () => {
+        clipboardRate = currentRate;
+        newMenu.hidden = true;
+    };
+    
+    newMenu.querySelector('#ctx-paste').onclick = () => {
+        if (clipboardRate === null) return;
+        newMenu.hidden = true;
+        if (currentRate !== clipboardRate) {
+            handleCellNavigation(cell, null, true, clipboardRate, themeId, memberId, month);
+        }
+    };
+    
+    newMenu.querySelector('#ctx-clear').onclick = () => {
+        newMenu.hidden = true;
+        if (currentRate !== 0) {
+            handleCellNavigation(cell, null, true, 0, themeId, memberId, month);
+        }
+    };
+    
+    const hideMenu = (e) => {
+        if (!newMenu.contains(e.target)) {
+            newMenu.hidden = true;
+            document.removeEventListener('mousedown', hideMenu);
+        }
+    };
+    setTimeout(() => {
+        document.addEventListener('mousedown', hideMenu);
+    }, 10);
 }
 
 function extractCellData(cell) {
