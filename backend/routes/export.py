@@ -6,6 +6,7 @@
 
 """CSV export endpoint for Gantt chart data."""
 
+import re
 from flask import Blueprint, request, Response
 from flask_login import login_required
 
@@ -30,6 +31,9 @@ def export_csv():
     else:
         csv_content = request.form.get('content', '')
         filename = request.form.get('filename', 'gantt_export.csv')
+
+    # Sanitize filename to prevent header injection (remove newlines and unsafe chars)
+    filename = re.sub(r'[^\w\-.]', '_', filename)
 
     if not csv_content:
         return {'error': 'No CSV content provided'}, 400

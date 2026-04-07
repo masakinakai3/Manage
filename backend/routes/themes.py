@@ -25,10 +25,11 @@ def list_themes():
         allocs = Allocation.query.filter_by(theme_id=t.theme_id).filter(
             Allocation.allocation_rate > 0
         )
-        months = [a.month for a in allocs.all()]
+        allocs_list = allocs.all()  # Execute query once
+        months = [a.month for a in allocs_list]
         # Currently assigned members (via association) or those with allocations
         assigned_ids = set(m.member_id for m in t.members)
-        alloc_ids = set(a.member_id for a in allocs.all())
+        alloc_ids = set(a.member_id for a in allocs_list)
         all_member_ids = assigned_ids | alloc_ids
         
         # Use stored dates or calculated fallback
@@ -44,6 +45,8 @@ def list_themes():
 @login_required
 def create_theme():
     data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({'error': 'name is required'}), 400
     theme = Theme(
         name=data['name'],
         category=data.get('category', ''),

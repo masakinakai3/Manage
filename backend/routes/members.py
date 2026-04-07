@@ -28,6 +28,8 @@ def list_members():
 @login_required
 def create_member():
     data = request.get_json()
+    if not data or not data.get('display_name'):
+        return jsonify({'error': 'display_name is required'}), 400
     member = Member(
         display_name=data['display_name'],
         department=data.get('department', ''),

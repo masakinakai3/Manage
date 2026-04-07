@@ -42,7 +42,7 @@ def create_app(test_config=None):
         app.config.update(test_config)
 
     # Extensions
-    CORS(app, supports_credentials=True)
+    CORS(app, supports_credentials=True, origins=['http://127.0.0.1:5001', 'http://localhost:5001'])
     db.init_app(app)
 
     # Login manager
@@ -86,7 +86,12 @@ def create_app(test_config=None):
 
     @app.before_request
     def auto_login():
+        """Auto-login is restricted to localhost only to avoid unintended access."""
+        from flask import request as flask_request
         from flask_login import current_user, login_user
+        # Only auto-login from loopback addresses
+        if flask_request.remote_addr not in ('127.0.0.1', '::1'):
+            return
         if not current_user.is_authenticated:
             user = db.session.query(User).filter_by(username='admin').first()
             if user:

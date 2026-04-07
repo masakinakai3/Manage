@@ -91,6 +91,12 @@ def bulk_update():
 
     count = 0
     for item in data:
+        # Validate required fields
+        missing = [f for f in ('theme_id', 'member_id', 'month', 'allocation_rate') if f not in item]
+        if missing:
+            return jsonify({'error': f'Missing fields: {missing}'}), 400
+        if not isinstance(item.get('allocation_rate'), int):
+            return jsonify({'error': 'allocation_rate must be an integer'}), 400
         result = _upsert_allocation(
             theme_id=item['theme_id'],
             member_id=item['member_id'],
