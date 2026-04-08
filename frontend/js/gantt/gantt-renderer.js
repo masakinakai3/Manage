@@ -62,6 +62,8 @@ let startMonth = addMonths(currentMonth(), -1);
 let visibleCount = 14;
 let scale = 1;
 let currentSnapshotData = null;
+let searchQuery = '';
+let groupBy = 'none';
 
 async function loadSnapshots() {
     try {
@@ -140,6 +142,22 @@ function setupControls() {
             refreshGantt();
         });
     });
+
+    // Filter and Grouping
+    const searchInput = document.getElementById('gantt-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value.trim().toLowerCase();
+            refreshGantt();
+        });
+    }
+    const groupBySelect = document.getElementById('gantt-group-by');
+    if (groupBySelect) {
+        groupBySelect.addEventListener('change', (e) => {
+            groupBy = e.target.value;
+            refreshGantt();
+        });
+    }
 
     // Navigation
     document.getElementById('gantt-prev').addEventListener('click', () => {
@@ -240,8 +258,47 @@ function renderBody(months) {
 
     let html = '';
 
-    allThemes.forEach(theme => {
-        const isCollapsed = collapsedThemes.has(theme.theme_id);
+    let displayThemes = allThemes;
+    if (searchQuery) {
+        displayThemes = allThemes.filter(t => {
+            const matchName = t.name.toLowerCase().includes(searchQuery);
+            const matchCat = (t.category || '').toLowerCase().includes(searchQuery);
+            const assignedIds = new Set(t.member_ids || []);
+            allMembers.forEach(m => {
+                const key = `${t.theme_id}-${m.member_id}`;
+                if (allocMap[key]) assignedIds.add(m.member_id);
+            });
+            const matchMember = allMembers.some(m => assignedIds.has(m.member_id) && m.display_name.toLowerCase().includes(searchQuery));
+            return matchName || matchCat || matchMember;
+        });
+    }
+
+    let groups = [];
+    if (groupBy !== 'none') {
+        const grouped = {};
+        displayThemes.forEach(t => {
+            const key = groupBy === 'category' ? (t.category || '未分類') : (t.status || '未定義');
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(t);
+        });
+        Object.keys(grouped).sort().forEach(groupKey => {
+            let displayKey = groupKey;
+            if (groupBy === 'status') {
+                const sl = { planning: '計画中', active: '進行中', completed: '完了', cancelled: '中止' };
+                displayKey = sl[groupKey] || groupKey;
+            }
+            groups.push({ key: displayKey, themes: grouped[groupKey] });
+        });
+    } else {
+        groups = [{ key: null, themes: displayThemes }];
+    }
+
+    groups.forEach(g => {
+        if (g.key) {
+            html += `<tr class="gantt-row-group"><td colspan="${months.length + 1}">${g.key}</td></tr>`;
+        }
+        g.themes.forEach(theme => {
+            const isCollapsed = collapsedThemes.has(theme.theme_id);
 
         // Find members assigned to this theme OR with allocations
         const assignedIds = new Set(theme.member_ids || []);
@@ -317,7 +374,7 @@ function renderBody(months) {
             }
 
             html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
-            html += `<div class="gantt-cell" title="${tooltip}">${content}</div>`;
+            html += `<div class="gantt-cell" tabindex="0" title="${tooltip}">${content}</div>`;
             html += `</td>`;
         });
         html += '</tr>';
@@ -356,13 +413,14 @@ function renderBody(months) {
                 }
 
                 html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
-                html += `<div class="gantt-cell ${cls}" data-rate="${rate}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${m}">`;
+                html += `<div class="gantt-cell ${cls}" tabindex="0" data-rate="${rate}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${m}">`;
                 html += content;
                 if (hasWarning) html += `<span class="warning-icon">⚠</span>`;
                 html += `</div></td>`;
             });
             html += '</tr>';
         });
+    });
     });
 
     tbody.innerHTML = html;
@@ -485,6 +543,40 @@ function renderBody(months) {
             }
         });
         cell.addEventListener('mouseleave', hideTooltip);
+    });
+
+    // Keyboard Navigation (Arrow keys / Enter)
+    tbody.addEventListener('keydown', (e) => {
+        const cell = e.target;
+        if (!cell.classList.contains('gantt-cell') || !cell.dataset.theme) return;
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const themeId = parseInt(cell.dataset.theme);
+            const memberId = parseInt(cell.dataset.member);
+            const month = cell.dataset.month;
+            const currentRate = parseInt(cell.dataset.rate) || 0;
+            if (scale === 1) {
+                openCellEditor(cell, themeId, memberId, month, currentRate, (newRate) => {
+                    handleCellEdit(cell, newRate, themeId, memberId, month);
+                }, (dir, changed, newRate) => {
+                    handleCellNavigation(cell, dir, changed, newRate, themeId, memberId, month);
+                });
+            }
+            return;
+        }
+
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+            const next = calculateNextFocus(cell, e.key);
+            if (next) {
+                const selector = `.gantt-cell[data-theme="${next.themeId}"][data-member="${next.memberId}"][data-month="${next.month}"]`;
+                const targetCell = tbody.querySelector(selector);
+                if (targetCell) {
+                    targetCell.focus();
+                }
+            }
+        }
     });
 
     // Drag & drop for allocation transfer

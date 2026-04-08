@@ -114,6 +114,14 @@
                             <button class="scale-btn" data-scale="6">6M</button>
                                 <button class="scale-btn" data-scale="12">1Y</button>
                         </div>
+                        <div class="search-filter-controls" style="display:flex; gap: 8px; margin-left: 8px;">
+                            <input type="text" id="gantt-search" placeholder="テーマ・担当者・カテゴリで検索..." style="padding: 4px 8px; font-size: 0.85rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 4px; color: var(--color-text); width: 220px;" autocomplete="off">
+                            <select id="gantt-group-by" style="padding: 4px 8px; font-size: 0.85rem; background: var(--color-bg); border: 1px solid var(--color-border); border-radius: 4px; color: var(--color-text);">
+                                <option value="none">グルーピングなし</option>
+                                <option value="category">カテゴリ別</option>
+                                <option value="status">ステータス別</option>
+                            </select>
+                        </div>
                         <div class="zoom-controls" style="display:flex; gap: 4px;">
                             <button id="gantt-zoom-in" class="btn btn-ghost btn-sm" title="ズームイン（横幅拡大）">＋</button>
                             <button id="gantt-zoom-out" class="btn btn-ghost btn-sm" title="ズームアウト（横幅縮小）">－</button>

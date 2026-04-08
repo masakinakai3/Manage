@@ -532,3 +532,23 @@
     animation: cell-blink 1.5s infinite ease-in-out;
     border-color: var(--color-primary) !important;
 }
+
+/* Keyboard Focus Styles */
+.gantt-cell:focus {
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+    z-index: 10;
+}
+
+/* Grouping Header Row */
+.gantt-row-group td {
+    background: var(--color-bg-card) !important;
+    font-weight: 700 !important;
+    font-size: var(--text-sm) !important;
+    height: 32px !important;
+    color: var(--color-text);
+    text-align: left !important;
+    padding-left: var(--space-4) !important;
+    border-top: 2px solid var(--color-primary-subtle);
+    border-bottom: 2px solid var(--color-border);
+}

@@ -50,11 +50,14 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
             saving = false;
         });
 
-        // Do NOT close editor to allow continued navigation/viewing
-        // closeCellEditor(); 
+        // Editor stays open — only Esc closes it
+        input.select();
     };
 
-    const cancel = () => closeCellEditor();
+    const cancel = () => {
+        closeCellEditor();
+        cellEl.focus();
+    };
 
     const handleKeydown = (e) => {
         if (e.key === 'Enter') { e.preventDefault(); save(); }
@@ -104,7 +107,10 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     newClearBtn.addEventListener('click', clearRate);
     input.addEventListener('keydown', handleKeydown);
 
-    activeEditor = { cleanup: () => input.removeEventListener('keydown', handleKeydown) };
+    activeEditor = { 
+        cleanup: () => input.removeEventListener('keydown', handleKeydown),
+        cellEl: cellEl
+    };
 
     // Close on outside click
     setTimeout(() => {
