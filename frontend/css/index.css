@@ -1179,6 +1179,31 @@ td.out-period {
     background: var(--color-bg-hover);
 }
 
+.member-selection-item {
+    padding: var(--space-2) var(--space-3);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: background-color var(--transition-fast);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.member-selection-item:hover {
+    background: var(--color-bg-hover);
+}
+
+.member-selection-item.is-selected {
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.member-selection-item.is-selected::after {
+    content: '✓';
+    font-weight: bold;
+}
+
 .context-menu-item.disabled {
     opacity: 0.5;
     cursor: not-allowed;

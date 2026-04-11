@@ -374,7 +374,7 @@ function renderBody(months) {
             }
 
             html += `<td class="${isCurrent ? 'month-current' : ''} ${isPeriod ? 'in-period' : 'out-period'}">`;
-            html += `<div class="gantt-cell" tabindex="0" title="${tooltip}">${content}</div>`;
+            html += `<div class="gantt-cell ${cls}" tabindex="0" title="${tooltip}">${content}</div>`;
             html += `</td>`;
         });
         html += '</tr>';
@@ -998,27 +998,54 @@ async function showAssignMemberModal(themeId) {
         availableMembers.forEach(m => {
             html += `
                 <div class="member-selection-item" data-member-id="${m.member_id}">
-                    <span class="member-name">${m.display_name}</span>
-                    <span class="member-dept">${m.department || ''}</span>
+                    <div style="display:flex; flex-direction:column">
+                        <span class="member-name">${m.display_name}</span>
+                        <span class="member-dept" style="font-size:0.8em; color:var(--color-text-muted)">${m.department || ''}</span>
+                    </div>
                 </div>
             `;
         });
         html += '</div>';
         modalBody.innerHTML = html;
-        modalFooter.innerHTML = '<button class="btn btn-ghost" id="modal-cancel">キャンセル</button>';
+
+        // Footer with Submit button
+        modalFooter.innerHTML = `
+            <button class="btn btn-ghost" id="modal-cancel">キャンセル</button>
+            <button class="btn btn-primary" id="modal-submit" disabled>登録</button>
+        `;
+
+        const selectedMemberIds = new Set();
+        const submitBtn = document.getElementById('modal-submit');
 
         // Bind selection events
         modalBody.querySelectorAll('.member-selection-item').forEach(item => {
-            item.addEventListener('click', async () => {
+            item.addEventListener('click', () => {
                 const memberId = parseInt(item.dataset.memberId);
-                try {
-                    await themesApi.assignMember(themeId, memberId);
-                    modalOverlay.hidden = true;
-                    refreshGantt();
-                } catch (err) {
-                    alert('追加に失敗しました: ' + err.message);
+                if (selectedMemberIds.has(memberId)) {
+                    selectedMemberIds.delete(memberId);
+                    item.classList.remove('is-selected');
+                } else {
+                    selectedMemberIds.add(memberId);
+                    item.classList.add('is-selected');
                 }
+                submitBtn.disabled = selectedMemberIds.size === 0;
             });
+        });
+
+        // Bind submit action
+        submitBtn.addEventListener('click', async () => {
+            if (selectedMemberIds.size === 0) return;
+            try {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '登録中...';
+                await themesApi.assignMembersBulk(themeId, Array.from(selectedMemberIds));
+                modalOverlay.hidden = true;
+                refreshGantt();
+            } catch (err) {
+                alert('登録に失敗しました: ' + err.message);
+                submitBtn.disabled = false;
+                submitBtn.textContent = '登録';
+            }
         });
     }
 

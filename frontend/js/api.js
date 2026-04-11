@@ -49,6 +49,9 @@ export const themes = {
     assignMember: (themeId, memberId) => request(`/themes/${themeId}/members`, {
         method: 'POST', body: JSON.stringify({ member_id: memberId }),
     }),
+    assignMembersBulk: (themeId, memberIds) => request(`/themes/${themeId}/members/bulk`, {
+        method: 'POST', body: JSON.stringify({ member_ids: memberIds }),
+    }),
     unassignMember: (themeId, memberId) => request(`/themes/${themeId}/members/${memberId}`, {
         method: 'DELETE',
     }),

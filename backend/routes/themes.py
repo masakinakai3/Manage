@@ -109,6 +109,32 @@ def assign_member(theme_id):
     return jsonify(theme.to_dict())
 
 
+@themes_bp.route('/<int:theme_id>/members/bulk', methods=['POST'])
+@login_required
+def assign_members_bulk(theme_id):
+    theme = db.session.get(Theme, theme_id)
+    if not theme:
+        return jsonify({'error': 'Theme not found'}), 404
+    data = request.get_json()
+    member_ids = data.get('member_ids', [])
+    
+    if not isinstance(member_ids, list):
+        return jsonify({'error': 'member_ids must be a list'}), 400
+    
+    added_count = 0
+    for mid in member_ids:
+        member = db.session.get(Member, mid)
+        if member and member not in theme.members:
+            theme.members.append(member)
+            added_count += 1
+            
+    if added_count > 0:
+        db.session.commit()
+        
+    return jsonify({'message': f'Added {added_count} members', 'theme': theme.to_dict()})
+
+
+
 @themes_bp.route('/<int:theme_id>/members/<int:member_id>', methods=['DELETE'])
 @login_required
 def unassign_member(theme_id, member_id):

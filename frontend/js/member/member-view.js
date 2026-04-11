@@ -343,6 +343,10 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             months.forEach(m => {
                 const val = aggregateRate(themeLoads, m, scale);
                 const isCurrent = m === cur;
+                // For individual theme rows, we color based on constant 100% scale or member capacity?
+                // Using member capacity for consistency with the parent row's percentage calculation.
+                const cls = getLoadClass(val, member.capacity, false); 
+
                 html += `<td class="member-theme-cell ${isCurrent ? 'month-current' : ''}" 
                             data-member="${member.member_id}" 
                             data-theme="${tid}" 
@@ -351,7 +355,7 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
 
                 if (val > 0) {
                     html += `<div class="theme-cell-inner">`;
-                    html += `<span class="theme-row-load">${val}%</span>`;
+                    html += `<span class="theme-row-load ${cls}">${val}%</span>`;
                     html += `<div class="theme-cell-bar" style="width:${Math.min(val, 100)}%;background:${themeColor}"></div>`;
                     html += `</div>`;
                 }
