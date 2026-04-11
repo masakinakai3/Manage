@@ -225,6 +225,53 @@ function renderHeader(months) {
     thead.innerHTML = html;
 }
 
+/**
+ * Build a stacked bar HTML string showing theme-color proportions for a member/month.
+ * @param {number} memberId
+ * @param {string} month
+ * @param {object} memberThemes  { themeId: { month: rate } }
+ * @param {number} capacity  member's capacity %
+ * @returns {{ barHtml: string, details: Array<{theme_name,color,rate}> }}
+ */
+function buildStackedBar(memberId, month, memberThemes, capacity) {
+    const details = [];
+    Object.keys(memberThemes).forEach(themeId => {
+        const tid = parseInt(themeId);
+        const rate = aggregateRate(memberThemes[tid], month, scale);
+        if (rate <= 0) return;
+        const theme = allThemes.find(t => t.theme_id === tid);
+        details.push({
+            theme_id: tid,
+            theme_name: theme ? theme.name : `Theme ${tid}`,
+            color: theme ? theme.color : '#888888',
+            rate,
+        });
+    });
+
+    if (details.length === 0) return { barHtml: '', details: [] };
+
+    const total = details.reduce((s, d) => s + d.rate, 0);
+    // Bar base is capacity (capped at 100 for display; overflow shown in red extension)
+    const barBase = Math.max(total, capacity, 100);
+
+    let segmentsHtml = '';
+    details.forEach(d => {
+        const widthPct = (d.rate / barBase) * 100;
+        segmentsHtml += `<span class="stacked-bar-segment" style="width:${widthPct.toFixed(2)}%;background:${d.color}" title="${d.theme_name}: ${d.rate}%"></span>`;
+    });
+
+    // Capacity marker line position
+    const markerPct = (capacity / barBase) * 100;
+    const overflowClass = total > capacity ? ' stacked-bar--over' : '';
+
+    const barHtml = `<div class="stacked-bar${overflowClass}">
+        ${segmentsHtml}
+        <span class="stacked-bar-capacity" style="left:${markerPct.toFixed(2)}%" title="キャパシティ: ${capacity}%"></span>
+    </div>`;
+
+    return { barHtml, details };
+}
+
 function renderBody(months, memberLoads, warnings, allAllocs) {
     const tbody = document.getElementById('member-load-tbody');
     const cur = currentMonth();
@@ -262,10 +309,16 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             const isCurrent = m === cur;
             const isOver = warnSet.has(`${member.member_id}-${m}`);
             const cls = getLoadClass(load, member.capacity, isOver);
+            const { barHtml, details } = buildStackedBar(member.member_id, m, memberThemes, member.capacity);
+            // Serialize details into data attribute for hover popup
+            const detailsJson = details.length > 0 ? encodeURIComponent(JSON.stringify(details)) : '';
 
-            html += `<td class="${isCurrent ? 'month-current' : ''}" data-member-cell="${member.member_id}-${m}">`;
+            html += `<td class="${isCurrent ? 'month-current' : ''}" data-member-cell="${member.member_id}-${m}" data-member-id="${member.member_id}" data-month="${m}" data-details="${detailsJson}">`;
             if (load > 0) {
+                html += `<div class="member-cell-inner">`;
                 html += `<span class="load-cell ${cls}">${load}%</span>`;
+                html += barHtml;
+                html += `</div>`;
             }
             html += `</td>`;
         });
@@ -288,10 +341,8 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             </td>`;
 
             months.forEach(m => {
-                const val = themeLoads[m] || 0;
+                const val = aggregateRate(themeLoads, m, scale);
                 const isCurrent = m === cur;
-                // Use member-cell class or similar for targeting? 
-                // We'll add data attributes for click handling
                 html += `<td class="member-theme-cell ${isCurrent ? 'month-current' : ''}" 
                             data-member="${member.member_id}" 
                             data-theme="${tid}" 
@@ -299,7 +350,10 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
                             data-rate="${val}">`;
 
                 if (val > 0) {
+                    html += `<div class="theme-cell-inner">`;
                     html += `<span class="theme-row-load">${val}%</span>`;
+                    html += `<div class="theme-cell-bar" style="width:${Math.min(val, 100)}%;background:${themeColor}"></div>`;
+                    html += `</div>`;
                 }
                 html += `</td>`;
             });
@@ -320,6 +374,26 @@ function renderBody(months, memberLoads, warnings, allAllocs) {
             tbody.querySelectorAll(`tr[data-parent="${memberId}"]`).forEach(row => {
                 row.classList.toggle('hidden');
             });
+        });
+    });
+
+    // Hover popup on member summary cells (stacked bar)
+    tbody.querySelectorAll('td[data-member-cell]').forEach(td => {
+        td.addEventListener('mouseenter', (e) => {
+            const encoded = td.dataset.details;
+            if (!encoded) return;
+            let details;
+            try { details = JSON.parse(decodeURIComponent(encoded)); } catch { return; }
+            if (!details || details.length === 0) return;
+            const memberId = parseInt(td.dataset.memberId);
+            const month = td.dataset.month;
+            const member = allMembers.find(m => m.member_id === memberId);
+            if (!member) return;
+            showDetailPopup(e, member, month, details);
+        });
+        td.addEventListener('mouseleave', () => {
+            // Popup auto-closes on outside click; mouseleave closes immediately for clean UX
+            document.querySelectorAll('.member-detail-popup').forEach(el => el.remove());
         });
     });
 
@@ -471,16 +545,25 @@ function updateMemberTotalCell(memberId, month) {
     if (cell) {
         // Find capacity
         const member = allMembers.find(m => m.member_id === memberId);
-        const capacity = member ? member.capacity : 100; // Default 100
+        const capacity = member ? member.capacity : 100;
 
-        // Re-render cell content
-        const cls = getLoadClass(total, capacity, total > capacity); // Simple check, ignore `warnings` API for local update?
-        // Ideally we should check if it is in warnings set, but warnings set comes from API.
-        // For immediate feedback, `total > capacity` is a good proxy for "overload".
+        const cls = getLoadClass(total, capacity, total > capacity);
 
         if (total > 0) {
-            cell.innerHTML = `<span class="load-cell ${cls}">${total}%</span>`;
+            // Rebuild memberThemeLoads for this member from lastAllocations
+            const memberThemes = {};
+            lastAllocations
+                .filter(a => a.member_id === memberId)
+                .forEach(a => {
+                    if (!memberThemes[a.theme_id]) memberThemes[a.theme_id] = {};
+                    memberThemes[a.theme_id][a.month] = a.allocation_rate;
+                });
+            const { barHtml, details } = buildStackedBar(memberId, month, memberThemes, capacity);
+            const detailsJson = details.length > 0 ? encodeURIComponent(JSON.stringify(details)) : '';
+            cell.dataset.details = detailsJson;
+            cell.innerHTML = `<div class="member-cell-inner"><span class="load-cell ${cls}">${total}%</span>${barHtml}</div>`;
         } else {
+            cell.dataset.details = '';
             cell.innerHTML = '';
         }
     }
