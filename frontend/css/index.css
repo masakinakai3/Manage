@@ -650,6 +650,43 @@ body {
     padding: var(--space-5);
 }
 
+#modal-color-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: var(--space-2);
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+}
+
+#modal-color-picker .card-color-dot {
+    transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+#modal-color-picker .card-color-dot:hover {
+    transform: scale(1.15);
+}
+
+/* Pulse animation for used colors */
+#modal-color-picker .card-color-dot.is-used {
+    animation: color-pulse 2s infinite ease-in-out;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+@keyframes color-pulse {
+    0% {
+        box-shadow: 0 0 0px transparent;
+    }
+    50% {
+        box-shadow: 0 0 12px currentColor;
+        filter: brightness(1.2);
+    }
+    100% {
+        box-shadow: 0 0 0px transparent;
+    }
+}
+
 .modal-footer {
     padding: var(--space-3) var(--space-5);
     border-top: 1px solid var(--color-border);

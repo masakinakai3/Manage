@@ -195,6 +195,9 @@ function switchView(viewName) {
 const THEME_COLORS = [
     '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
     '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6',
+    '#64748b', '#71717a', '#ef4444', '#f59e0b', '#84cc16',
+    '#10b981', '#0891b2', '#2563eb', '#4f46e5', '#7c3aed',
+    '#c026d3', '#db2777', '#dc2626', '#d97706'
 ];
 
 const STATUS_LABELS = {
@@ -257,13 +260,37 @@ async function loadThemeList() {
     }
 }
 
-function openThemeModal(theme = null) {
+async function openThemeModal(theme = null) {
     const isEdit = !!theme;
     document.getElementById('modal-title').textContent = isEdit ? 'テーマ編集' : 'テーマ追加';
 
-    let colorOptions = THEME_COLORS.map(c =>
-        `<span class="card-color-dot" style="background:${c};width:24px;height:24px;cursor:pointer;border:2px solid ${c === (theme?.color || THEME_COLORS[0]) ? 'white' : 'transparent'};border-radius:50%;display:inline-block;margin:2px" data-color="${c}"></span>`
-    ).join('');
+    // Get all current themes to identify used colors
+    let existingThemes = [];
+    try {
+        existingThemes = await themesApi.list();
+    } catch (err) {
+        console.error('Failed to fetch themes for color picker:', err);
+    }
+
+    // Map of colors to theme names (excluding the current theme being edited)
+    const usedColorsMap = {};
+    existingThemes.forEach(t => {
+        if (isEdit && t.theme_id === theme.theme_id) return;
+        if (!usedColorsMap[t.color]) usedColorsMap[t.color] = [];
+        usedColorsMap[t.color].push(t.name);
+    });
+
+    let colorOptions = THEME_COLORS.map(c => {
+        const usedBy = usedColorsMap[c] || [];
+        const isUsed = usedBy.length > 0;
+        const usedTitle = isUsed ? `使用中: ${usedBy.join(', ')}` : '';
+        const isSelected = c === (theme?.color || THEME_COLORS[0]);
+        
+        return `<span class="card-color-dot ${isUsed ? 'is-used' : ''}" 
+            style="background:${c};width:24px;height:24px;cursor:pointer;border:2px solid ${isSelected ? 'white' : 'transparent'};border-radius:50%;display:inline-block;margin:2px" 
+            data-color="${c}"
+            title="${usedTitle}"></span>`;
+    }).join('');
 
     document.getElementById('modal-body').innerHTML = `
         <div class="form-field">
