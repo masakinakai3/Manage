@@ -12,9 +12,7 @@
     <title>リソース管理ツール</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/index.css">
     <link rel="stylesheet" href="/css/gantt.css">
     <link rel="stylesheet" href="/css/member-view.css">
@@ -90,7 +88,7 @@
                         </select>
 
                         <div class="search-filter-controls">
-                            <input type="text" id="gantt-search" class="view-input" placeholder="テーマ名・カテゴリ・メンバー名で検索" autocomplete="off">
+                            <input type="text" id="gantt-search" class="view-input" placeholder="テーマ名・カテゴリ・メモ・メンバー名で検索" autocomplete="off">
                             <select id="gantt-group-by" class="view-select">
                                 <option value="none">グループなし</option>
                                 <option value="category">カテゴリ</option>
@@ -125,11 +123,62 @@
                     </div>
                 </div>
 
-                <div class="gantt-container" id="gantt-container">
-                    <table class="gantt-table" id="gantt-table">
-                        <thead id="gantt-thead"></thead>
-                        <tbody id="gantt-tbody"></tbody>
-                    </table>
+                <section id="gantt-summary" class="summary-grid"></section>
+
+                <section class="aggregate-panels">
+                    <article class="summary-card">
+                        <div class="summary-label">カテゴリ別テーマ数</div>
+                        <div id="aggregate-by-category" class="aggregate-list"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">ステータス別テーマ数</div>
+                        <div id="aggregate-by-status" class="aggregate-list"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">部署別平均負荷</div>
+                        <div id="aggregate-by-department" class="aggregate-list"></div>
+                    </article>
+                </section>
+
+                <section id="snapshot-diff-summary" class="summary-grid"></section>
+
+                <div class="gantt-workspace">
+                    <div class="gantt-container" id="gantt-container">
+                        <table class="gantt-table" id="gantt-table">
+                            <thead id="gantt-thead"></thead>
+                            <tbody id="gantt-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <aside id="gantt-detail-panel" class="detail-panel">
+                        <h3>セル詳細</h3>
+                        <p id="detail-empty" class="summary-subtext">セルを選択すると、右側で連続編集とメモ更新ができます。</p>
+                        <div id="detail-form" hidden>
+                            <div class="form-field">
+                                <label>対象</label>
+                                <div id="detail-target" class="detail-target"></div>
+                            </div>
+                            <div class="form-field">
+                                <label for="detail-rate">負荷率 (%)</label>
+                                <input id="detail-rate" type="number" min="0" max="100" step="1">
+                            </div>
+                            <div class="form-field">
+                                <label for="detail-memo">メモ</label>
+                                <textarea id="detail-memo" rows="5" class="dialog-input"></textarea>
+                            </div>
+                            <div class="form-field">
+                                <label for="detail-bulk-rate">表示中の月へ一括反映</label>
+                                <input id="detail-bulk-rate" type="number" min="0" max="100" step="1">
+                            </div>
+                            <div class="detail-actions">
+                                <button id="detail-prev" class="btn btn-ghost btn-sm" type="button">前のセル</button>
+                                <button id="detail-next" class="btn btn-ghost btn-sm" type="button">次のセル</button>
+                                <button id="detail-preview-bulk" class="btn btn-ghost btn-sm" type="button">一括編集プレビュー</button>
+                                <button id="detail-save" class="btn btn-primary btn-sm" type="button">保存</button>
+                            </div>
+                            <div id="detail-message" class="summary-subtext"></div>
+                        </div>
+                    </aside>
                 </div>
             </div>
 
