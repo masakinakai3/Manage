@@ -2,33 +2,44 @@
 
 ## UX / UI
 
-- 一覧画面は、検索条件が 0 件でも壊れずにメッセージを表示する
-- ガントとメンバー負荷の期間変更は、両画面で共有される
-- 保存系操作の後に、保存状態と通知が表示される
-- 過負荷セルは視覚的に判別できる
-- スナップショット比較を選ぶと、差分件数が表示される
+- Gantt view and member-load view both render without requiring preloaded data.
+- First-use onboarding is visible until dismissed and provides a working sample-data path.
+- Empty and low-data situations still show guidance instead of blank screens.
+- Saved views can restore period, scale, search, and grouping settings.
+- Insights screen shows health checks, recommendations, and dashboard summaries for the active horizon.
 
 ## Editing
 
-- ガントのセルを選択すると右側の詳細パネルに対象情報が出る
-- 詳細パネルから負荷率とメモを保存できる
-- 詳細パネルから表示中の月へ一括更新する前に、プレビュー確認が出る
-- 前後セルへ連続移動できる
+- Allocation cell editing continues to work from the grid and the detail panel.
+- Undo and redo still function for allocation changes.
+- Period navigation and scale switching remain synchronized across related views.
 
 ## Aggregation
 
-- ガント画面でカテゴリ別・ステータス別・部署別集計が表示される
-- メンバー負荷画面で KPI サマリーが表示される
+- Category, status, and department summaries remain visible in the Gantt workspace.
+- Member-load summaries continue to highlight overload and slack situations.
+- Dashboard metrics show monthly trend, department load, top themes, and distribution summaries.
 
 ## Export / Import
 
-- CSV/Excel 出力にメモ列が含まれる
-- JSON インポート前に影響確認ができる
+- Standard CSV and Excel export still work.
+- Advanced export supports column selection and review-oriented templates.
+- JSON export and import continue to support backup and restore.
+
+## Keyboard / Responsive
+
+- Shortcut help is accessible in-product.
+- Shortcuts do not fire while typing in an input, select, or textarea.
+- Narrow-width layouts remain usable for viewing, filtering, and confirmation workflows.
+
+## Process / Documentation
+
+- Documentation update rules are defined in `docs/DocumentationOperations.md`.
+- Development workflow standards are defined in `docs/DevelopmentWorkflow.md`.
+- PR template exists at `.github/pull_request_template.md`.
 
 ## Quality
 
-- `npm run lint`
 - `npm test`
 - `npm run build`
-
-上記がローカルまたは CI で確認できること
+- `pytest -q`

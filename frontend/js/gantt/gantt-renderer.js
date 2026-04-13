@@ -49,14 +49,18 @@ export async function initGantt() {
     startMonth = state.startMonth;
     scale = state.scale;
     searchQuery = state.ganttSearch || '';
+    groupBy = state.groupBy || 'none';
     bindControls();
     await loadSnapshots();
     subscribeViewState((next) => {
         startMonth = next.startMonth;
         scale = next.scale;
         searchQuery = next.ganttSearch || '';
+        groupBy = next.groupBy || 'none';
         const search = document.getElementById('gantt-search');
         if (search) search.value = searchQuery;
+        const groupByInput = document.getElementById('gantt-group-by');
+        if (groupByInput) groupByInput.value = groupBy;
         syncScaleButtons();
         refreshGantt();
     });
@@ -94,7 +98,7 @@ export async function refreshGantt() {
 function bindControls() {
     document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.addEventListener('click', () => updateViewState({ scale: Number.parseInt(button.dataset.scale, 10) })));
     document.getElementById('gantt-search')?.addEventListener('input', (event) => updateViewState({ ganttSearch: event.target.value.trim().toLowerCase() }));
-    document.getElementById('gantt-group-by')?.addEventListener('change', (event) => { groupBy = event.target.value; refreshGantt(); });
+    document.getElementById('gantt-group-by')?.addEventListener('change', (event) => updateViewState({ groupBy: event.target.value }));
     document.getElementById('gantt-prev')?.addEventListener('click', () => updateViewState({ startMonth: addMonths(startMonth, -scale * 3) }));
     document.getElementById('gantt-next')?.addEventListener('click', () => updateViewState({ startMonth: addMonths(startMonth, scale * 3) }));
     document.getElementById('gantt-today')?.addEventListener('click', () => {
@@ -440,14 +444,8 @@ function findAdjacentCell(button, direction) {
 }
 
 function exportCsv() {
-    const months = getVisibleMonths(startMonth, visibleCount, scale);
-    const rows = [['テーマ', 'メンバー', '部署', '月', '負荷率', 'メモ']];
-    allAllocations.forEach((item) => {
-        if (!months.includes(item.month)) return;
-        const theme = allThemes.find((row) => row.theme_id === item.theme_id);
-        const member = allMembers.find((row) => row.member_id === item.member_id);
-        rows.push([theme?.name || '', member?.display_name || '', member?.department || '', item.month, item.allocation_rate, item.memo || '']);
-    });
+    const { headers, rows } = getGanttExportDataset(['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo']);
+    rows.unshift(headers);
     const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\r\n');
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -460,12 +458,8 @@ function exportCsv() {
 }
 
 async function exportXlsx() {
-    const rows = allAllocations.map((item) => {
-        const theme = allThemes.find((row) => row.theme_id === item.theme_id);
-        const member = allMembers.find((row) => row.member_id === item.member_id);
-        return [theme?.name || '', member?.display_name || '', member?.department || '', item.month, `${item.allocation_rate}%`, item.memo || ''];
-    });
-    const response = await fetch('/api/export/xlsx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ headers: ['テーマ', 'メンバー', '部署', '月', '負荷率', 'メモ'], rows, filename: 'gantt_export.xlsx' }) });
+    const { headers, rows } = getGanttExportDataset(['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo']);
+    const response = await fetch('/api/export/xlsx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ headers, rows: rows.map((row) => row.map((value, index) => (headers[index] === 'Allocation' ? `${value}%` : value))), filename: 'gantt_export.xlsx' }) });
     const blob = await response.blob();
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -555,3 +549,27 @@ function diffChip(rate, month, themeId, memberId, members = []) { if (snapshotAl
 function hydrateCollapsed() { try { collapsedThemes = new Set(JSON.parse(localStorage.getItem('gantt_collapsed') || '[]')); } catch { collapsedThemes = new Set(); } }
 function persistCollapsed() { localStorage.setItem('gantt_collapsed', JSON.stringify([...collapsedThemes])); }
 function syncScaleButtons() { document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.classList.toggle('active', Number.parseInt(button.dataset.scale, 10) === scale)); }
+
+export function getGanttExportDataset(selectedColumns = ['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo', 'Category', 'Status', 'Priority', 'Capacity']) {
+    const months = getVisibleMonths(startMonth, visibleCount, scale);
+    const rows = allAllocations
+        .filter((item) => months.includes(item.month))
+        .map((item) => {
+            const theme = allThemes.find((row) => row.theme_id === item.theme_id);
+            const member = allMembers.find((row) => row.member_id === item.member_id);
+            const lookup = {
+                Theme: theme?.name || '',
+                Member: member?.display_name || '',
+                Department: member?.department || '',
+                Month: item.month,
+                Allocation: item.allocation_rate,
+                Memo: item.memo || '',
+                Category: theme?.category || '',
+                Status: theme?.status || '',
+                Priority: theme?.priority ?? '',
+                Capacity: member?.capacity ?? '',
+            };
+            return selectedColumns.map((column) => lookup[column] ?? '');
+        });
+    return { headers: selectedColumns, rows };
+}

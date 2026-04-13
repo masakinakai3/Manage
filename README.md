@@ -58,3 +58,12 @@ Windows では [`tools/run_checks.ps1`](/C:/Users/galax/Desktop/Manage/tools/run
 - [SoftwareDesign.md](/C:/Users/galax/Desktop/Manage/SoftwareDesign.md)
 - [UserManual.md](/C:/Users/galax/Desktop/Manage/UserManual.md)
 - [UnitTestSpecification.md](/C:/Users/galax/Desktop/Manage/UnitTestSpecification.md)
+
+## Recent additions
+
+- First-use onboarding with sample data guidance
+- Saved views for recurring search, grouping, and period settings
+- Insights screen for health checks, adjustment recommendations, and review dashboards
+- Advanced CSV/Excel export templates with selectable columns
+- Keyboard shortcut help and responsive narrow-width support
+- Documentation and PR workflow standards under `docs/` and `.github/`

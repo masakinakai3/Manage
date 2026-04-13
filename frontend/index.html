@@ -1,15 +1,10 @@
-<!--
-  Copyright (c) 2026 Masaki Nakai (https://github.com/masakinakai3)
-  Released under the MIT license
-  https://opensource.org/licenses/mit-license.php
--->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="リソース管理ツール。テーマ別とメンバー別の工数計画を確認・更新できます。">
-    <title>リソース管理ツール</title>
+    <meta name="description" content="リソース配分、テーマ進捗、メンバー負荷を横断して管理するツール">
+    <title>Resource Manager</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -23,12 +18,12 @@
             <div class="sidebar-header">
                 <div class="sidebar-logo">
                     <svg width="28" height="28" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                        <rect width="40" height="40" rx="10" fill="url(#logo-grad2)" />
-                        <path d="M12 14h16v3H12zm0 5h12v3H12zm0 5h8v3H12z" fill="white" opacity="0.9" />
+                        <rect width="40" height="40" rx="10" fill="url(#logo-grad2)"></rect>
+                        <path d="M12 14h16v3H12zm0 5h12v3H12zm0 5h8v3H12z" fill="white" opacity="0.9"></path>
                         <defs>
                             <linearGradient id="logo-grad2" x1="0" y1="0" x2="40" y2="40">
-                                <stop stop-color="#6366f1" />
-                                <stop offset="1" stop-color="#8b5cf6" />
+                                <stop stop-color="#6366f1"></stop>
+                                <stop offset="1" stop-color="#8b5cf6"></stop>
                             </linearGradient>
                         </defs>
                     </svg>
@@ -37,27 +32,29 @@
             </div>
 
             <ul class="nav-list">
-                <li><a href="#" class="nav-item active" data-view="gantt"><span>テーマ別ガント</span></a></li>
+                <li><a href="#" class="nav-item active" data-view="gantt"><span>ガントチャート</span></a></li>
                 <li><a href="#" class="nav-item" data-view="member-load"><span>メンバー負荷</span></a></li>
-                <li><a href="#" class="nav-item" data-view="themes"><span>テーマ管理</span></a></li>
-                <li><a href="#" class="nav-item" data-view="members"><span>メンバー管理</span></a></li>
+                <li><a href="#" class="nav-item" data-view="insights"><span>Insights</span></a></li>
+                <li><a href="#" class="nav-item" data-view="themes"><span>テーマ一覧</span></a></li>
+                <li><a href="#" class="nav-item" data-view="members"><span>メンバー一覧</span></a></li>
             </ul>
 
             <div class="sidebar-footer">
                 <div class="sidebar-status-panel">
                     <div class="sidebar-status-row">
                         <span class="sidebar-status-label">保存状態</span>
-                        <span id="save-state" class="save-state-pill" data-state="idle">準備完了</span>
+                        <span id="save-state" class="save-state-pill" data-state="idle">待機中</span>
                     </div>
                     <div id="busy-state" class="sidebar-busy" hidden>処理中...</div>
                 </div>
 
                 <div class="sidebar-actions">
                     <button id="theme-toggle-btn" class="btn btn-ghost btn-sm" type="button">表示テーマ切替</button>
+                    <button id="shortcut-help-btn" class="btn btn-ghost btn-sm" type="button">Shortcut Help</button>
                     <button id="export-json-btn" class="btn btn-ghost btn-sm" type="button">JSON エクスポート</button>
                     <label id="import-json-label" class="btn btn-ghost btn-sm" for="import-json-input">JSON インポート</label>
                     <input type="file" id="import-json-input" accept=".json" hidden>
-                    <p id="backup-hint" class="sidebar-hint">インポート前に現在のデータをエクスポートしておくと安心です。</p>
+                    <p id="backup-hint" class="sidebar-hint">インポート前に現在のデータをエクスポートしておくと安全です。</p>
                 </div>
 
                 <div class="user-info">
@@ -70,8 +67,19 @@
 
         <main id="main-content">
             <div id="view-gantt" class="view active">
+                <section id="onboarding-panel" class="onboarding-panel" hidden>
+                    <div class="onboarding-copy">
+                        <strong>初回利用オンボーディング</strong>
+                        <p>サンプルデータ、初期設定ガイド、空状態ガイドで立ち上がりを早くします。</p>
+                    </div>
+                    <div class="onboarding-actions">
+                        <button id="onboarding-sample-btn" class="btn btn-primary btn-sm" type="button">サンプルデータ作成</button>
+                        <button id="onboarding-dismiss-btn" class="btn btn-ghost btn-sm" type="button">閉じる</button>
+                    </div>
+                </section>
+
                 <div class="view-header">
-                    <h2>テーマ別ガントチャート</h2>
+                    <h2>ガントチャート</h2>
                     <div class="view-controls">
                         <div class="scale-switcher" id="scale-switcher">
                             <button class="scale-btn active" data-scale="1" type="button">1M</button>
@@ -83,17 +91,26 @@
                         <select id="shared-period-preset" class="view-select">
                             <option value="rolling-6">直近 6 か月</option>
                             <option value="rolling-12">直近 12 か月</option>
-                            <option value="current-quarter">今四半期</option>
+                            <option value="current-quarter">現在四半期</option>
                             <option value="current-year">今年</option>
                         </select>
 
                         <div class="search-filter-controls">
-                            <input type="text" id="gantt-search" class="view-input" placeholder="テーマ名・カテゴリ・メモ・メンバー名で検索" autocomplete="off">
+                            <input type="text" id="gantt-search" class="view-input" placeholder="テーマ名、カテゴリ、メモ、メンバー名で検索" autocomplete="off">
                             <select id="gantt-group-by" class="view-select">
                                 <option value="none">グループなし</option>
                                 <option value="category">カテゴリ</option>
                                 <option value="status">ステータス</option>
                             </select>
+                        </div>
+
+                        <div class="saved-view-controls">
+                            <select id="saved-view-select" class="view-select">
+                                <option value="">Saved views</option>
+                            </select>
+                            <button id="saved-view-apply-btn" class="btn btn-ghost btn-sm" type="button">Apply</button>
+                            <button id="saved-view-save-btn" class="btn btn-ghost btn-sm" type="button">Save View</button>
+                            <button id="saved-view-delete-btn" class="btn btn-ghost btn-sm" type="button">Delete</button>
                         </div>
 
                         <div class="zoom-controls">
@@ -113,11 +130,12 @@
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたみ</button>
                             <button id="gantt-export-csv" class="btn btn-ghost btn-sm" type="button">CSV 出力</button>
                             <button id="gantt-export-xlsx" class="btn btn-ghost btn-sm" type="button">Excel 出力</button>
+                            <button id="gantt-export-advanced" class="btn btn-ghost btn-sm" type="button">高度な出力</button>
                         </div>
 
                         <div class="month-nav">
                             <button id="gantt-prev" class="btn btn-icon" type="button">前へ</button>
-                            <button id="gantt-today" class="btn btn-ghost btn-sm" type="button">今月へ</button>
+                            <button id="gantt-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
                             <button id="gantt-next" class="btn btn-icon" type="button">次へ</button>
                         </div>
                     </div>
@@ -152,7 +170,7 @@
 
                     <aside id="gantt-detail-panel" class="detail-panel">
                         <h3>セル詳細</h3>
-                        <p id="detail-empty" class="summary-subtext">セルを選択すると、右側で連続編集とメモ更新ができます。</p>
+                        <p id="detail-empty" class="summary-subtext">セルを選択すると、個別編集や一括更新プレビューが使えます。</p>
                         <div id="detail-form" hidden>
                             <div class="form-field">
                                 <label>対象</label>
@@ -173,7 +191,7 @@
                             <div class="detail-actions">
                                 <button id="detail-prev" class="btn btn-ghost btn-sm" type="button">前のセル</button>
                                 <button id="detail-next" class="btn btn-ghost btn-sm" type="button">次のセル</button>
-                                <button id="detail-preview-bulk" class="btn btn-ghost btn-sm" type="button">一括編集プレビュー</button>
+                                <button id="detail-preview-bulk" class="btn btn-ghost btn-sm" type="button">一括更新プレビュー</button>
                                 <button id="detail-save" class="btn btn-primary btn-sm" type="button">保存</button>
                             </div>
                             <div id="detail-message" class="summary-subtext"></div>
@@ -196,15 +214,15 @@
                         <select id="member-period-preset" class="view-select">
                             <option value="rolling-6">直近 6 か月</option>
                             <option value="rolling-12">直近 12 か月</option>
-                            <option value="current-quarter">今四半期</option>
+                            <option value="current-quarter">現在四半期</option>
                             <option value="current-year">今年</option>
                         </select>
 
-                        <input type="text" id="member-search" class="view-input" placeholder="メンバー名・部署・テーマ名で検索" autocomplete="off">
+                        <input type="text" id="member-search" class="view-input" placeholder="メンバー名、部署、テーマ名で検索" autocomplete="off">
 
                         <div class="month-nav">
                             <button id="member-prev" class="btn btn-icon" type="button">前へ</button>
-                            <button id="member-today" class="btn btn-ghost btn-sm" type="button">今月へ</button>
+                            <button id="member-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
                             <button id="member-next" class="btn btn-icon" type="button">次へ</button>
                         </div>
                     </div>
@@ -220,11 +238,56 @@
                 </div>
             </div>
 
+            <div id="view-insights" class="view" hidden>
+                <div class="view-header">
+                    <h2>Insights</h2>
+                    <div class="view-controls">
+                        <p class="summary-subtext">健全性チェック、推奨調整案、月次レビュー向けの集計をまとめて確認できます。</p>
+                    </div>
+                </div>
+
+                <section id="insights-summary" class="summary-grid"></section>
+
+                <section class="insight-layout">
+                    <article class="summary-card">
+                        <div class="summary-label">データ健全性チェック</div>
+                        <div id="health-check-list" class="insight-list"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">推奨調整案</div>
+                        <div id="recommendation-list" class="insight-list"></div>
+                    </article>
+                </section>
+
+                <section class="insight-layout insight-layout--dashboard">
+                    <article class="summary-card">
+                        <div class="summary-label">月次推移</div>
+                        <div id="dashboard-monthly-trend"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">部署別負荷</div>
+                        <div id="dashboard-department-load"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">負荷上位テーマ</div>
+                        <div id="dashboard-top-themes"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">カテゴリ分布</div>
+                        <div id="dashboard-category-distribution" class="dashboard-pill-list"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">ステータス分布</div>
+                        <div id="dashboard-status-distribution" class="dashboard-pill-list"></div>
+                    </article>
+                </section>
+            </div>
+
             <div id="view-themes" class="view" hidden>
                 <div class="view-header">
-                    <h2>テーマ管理</h2>
+                    <h2>テーマ一覧</h2>
                     <div class="view-controls">
-                        <input type="text" id="theme-list-search" class="view-input" placeholder="テーマ名・カテゴリで検索" autocomplete="off">
+                        <input type="text" id="theme-list-search" class="view-input" placeholder="テーマ名、カテゴリで検索" autocomplete="off">
                         <select id="theme-list-sort" class="view-select">
                             <option value="name-asc">名前順</option>
                             <option value="priority-desc">優先度順</option>
@@ -239,14 +302,14 @@
 
             <div id="view-members" class="view" hidden>
                 <div class="view-header">
-                    <h2>メンバー管理</h2>
+                    <h2>メンバー一覧</h2>
                     <div class="view-controls">
-                        <input type="text" id="member-list-search" class="view-input" placeholder="メンバー名・部署で検索" autocomplete="off">
+                        <input type="text" id="member-list-search" class="view-input" placeholder="メンバー名、部署で検索" autocomplete="off">
                         <select id="member-list-sort" class="view-select">
                             <option value="name-asc">名前順</option>
-                            <option value="capacity-desc">稼働率順</option>
+                            <option value="capacity-desc">能力順</option>
                             <option value="department-asc">部署順</option>
-                            <option value="active-desc">有効メンバー優先</option>
+                            <option value="active-desc">有効順</option>
                         </select>
                         <button id="add-member-btn" class="btn btn-primary" type="button">メンバー追加</button>
                     </div>

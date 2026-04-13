@@ -85,3 +85,36 @@ def test_bulk_allocations(auth_client, app):
     with app.app_context():
         alloc = Allocation.query.filter_by(theme_id=t_id, member_id=m_id, month='2024-05').first()
         assert alloc is None
+
+
+def test_insights_overview(auth_client, app):
+    """Test insights overview for dashboard, health checks, and recommendations."""
+    with app.app_context():
+        theme = Theme(
+            name='Insight Theme',
+            category='Platform',
+            status='completed',
+            start_month='2024-04',
+            end_month='2024-05',
+        )
+        member_a = Member(display_name='Insight Alice', department='Platform', capacity=100)
+        member_b = Member(display_name='Insight Bob', department='Platform', capacity=100)
+        db.session.add_all([theme, member_a, member_b])
+        db.session.commit()
+
+        theme.members.append(member_a)
+        db.session.add_all([
+            Allocation(theme_id=theme.theme_id, member_id=member_a.member_id, month='2024-05', allocation_rate=70),
+            Allocation(theme_id=theme.theme_id, member_id=member_a.member_id, month='2024-06', allocation_rate=50),
+            Allocation(theme_id=theme.theme_id, member_id=member_b.member_id, month='2024-06', allocation_rate=20),
+        ])
+        db.session.commit()
+
+    response = auth_client.get('/api/insights/overview?from=2024-05&to=2024-06')
+    assert response.status_code == 200
+    data = response.json
+    assert data['summary']['theme_count'] >= 1
+    assert isinstance(data['health_checks'], list)
+    assert isinstance(data['recommendations'], list)
+    assert 'dashboard' in data
+    assert any(item['code'] == 'closed_theme_with_remaining_allocation' for item in data['health_checks'])

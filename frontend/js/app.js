@@ -4,11 +4,12 @@
  * https://opensource.org/licenses/mit-license.php
  */
 
-import { auth, themes as themesApi, members as membersApi, dataBackup } from './api.js';
-import { initGantt, refreshGantt, HistoryManager } from './gantt/gantt-renderer.js';
+import { auth, themes as themesApi, members as membersApi, allocations, dataBackup } from './api.js';
+import { initGantt, refreshGantt, HistoryManager, getGanttExportDataset } from './gantt/gantt-renderer.js';
+import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
-import { getPresetConfig, loadViewState, updateViewState } from './shared-state.js';
-import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showToast } from './ui.js';
+import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
+import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
 
 const THEME_COLORS = [
     '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308',
@@ -49,11 +50,16 @@ async function showApp() {
     initNavigation();
     initBackup();
     initUiConfig();
+    initSavedViews();
+    initOnboarding();
+    initKeyboardShortcuts();
+    initAdvancedExport();
     initThemeManagement();
     initMemberManagement();
 
     await initGantt();
     await initMemberView();
+    await initInsightsView();
 
     setSaveState('saved', '表示内容は最新です');
 }
@@ -77,6 +83,8 @@ function initNavigation() {
     });
 
     document.addEventListener('keydown', (event) => {
+        if (shouldIgnoreShortcut(event)) return;
+
         if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'z') {
             event.preventDefault();
             if (event.shiftKey) {
@@ -211,6 +219,7 @@ function switchView(viewName) {
 
     if (viewName === 'gantt') refreshGantt();
     if (viewName === 'member-load') refreshMemberView();
+    if (viewName === 'insights') refreshInsightsView();
     if (viewName === 'themes') loadThemeList();
     if (viewName === 'members') loadMemberList();
 }
@@ -578,4 +587,297 @@ function presetLabel(value) {
         'current-year': '今年',
     };
     return labels[value] || value;
+}
+
+function initSavedViews() {
+    document.getElementById('saved-view-apply-btn')?.addEventListener('click', applySelectedSavedView);
+    document.getElementById('saved-view-save-btn')?.addEventListener('click', saveCurrentView);
+    document.getElementById('saved-view-delete-btn')?.addEventListener('click', deleteCurrentSavedView);
+    refreshSavedViewOptions();
+}
+
+function refreshSavedViewOptions() {
+    const select = document.getElementById('saved-view-select');
+    if (!select) return;
+
+    const views = loadSavedViews();
+    select.innerHTML = '<option value="">Saved views</option>' + views.map((view) => `<option value="${view.id}">${view.name}</option>`).join('');
+}
+
+async function saveCurrentView() {
+    const name = await showPromptDialog({
+        title: 'Save current view',
+        message: 'Enter a name for this view.',
+        defaultValue: currentView === 'member-load' ? 'Member review view' : 'Planning view',
+        confirmText: 'Save',
+        cancelText: 'Cancel',
+    });
+    if (!name) return;
+
+    const viewState = loadViewState();
+    upsertSavedView({
+        id: `view-${Date.now()}`,
+        name,
+        view: currentView,
+        state: {
+            ...viewState,
+            groupBy: document.getElementById('gantt-group-by')?.value || viewState.groupBy || 'none',
+        },
+    });
+    refreshSavedViewOptions();
+    showToast('Saved view was added.', 'success');
+}
+
+function applySelectedSavedView() {
+    const select = document.getElementById('saved-view-select');
+    if (!select?.value) return;
+    const view = loadSavedViews().find((item) => item.id === select.value);
+    if (!view) return;
+
+    updateViewState(view.state || {});
+    if (view.state?.groupBy) {
+        const groupByInput = document.getElementById('gantt-group-by');
+        if (groupByInput) groupByInput.value = view.state.groupBy;
+    }
+    switchView(view.view || 'gantt');
+    showToast(`Applied saved view: ${view.name}`, 'info');
+}
+
+function deleteCurrentSavedView() {
+    const select = document.getElementById('saved-view-select');
+    if (!select?.value) return;
+    deleteSavedView(select.value);
+    refreshSavedViewOptions();
+    showToast('Saved view was deleted.', 'info');
+}
+
+function initOnboarding() {
+    const onboarding = loadOnboardingState();
+    const banner = document.getElementById('onboarding-panel');
+    if (!banner) return;
+
+    banner.hidden = onboarding.dismissed;
+    document.getElementById('onboarding-dismiss-btn')?.addEventListener('click', () => {
+        updateOnboardingState({ dismissed: true });
+        banner.hidden = true;
+    });
+    document.getElementById('onboarding-sample-btn')?.addEventListener('click', createSampleData);
+}
+
+async function createSampleData() {
+    try {
+        setBusyState(true, 'Creating sample data...');
+        const existingThemes = await themesApi.list();
+        const existingMembers = await membersApi.list(false);
+        if (existingThemes.length > 0 || existingMembers.length > 0) {
+            const shouldContinue = await showConfirmDialog({
+                title: 'Create sample data',
+                message: 'Existing data was found. Sample records will be appended. Continue?',
+                confirmText: 'Add',
+                cancelText: 'Cancel',
+            });
+            if (!shouldContinue) return;
+        }
+
+        const members = await Promise.all([
+            membersApi.create({ display_name: 'Aoi Tanaka', department: 'Platform', capacity: 100 }),
+            membersApi.create({ display_name: 'Haru Sato', department: 'Platform', capacity: 80 }),
+            membersApi.create({ display_name: 'Mio Suzuki', department: 'Product', capacity: 100 }),
+        ]);
+        const themes = await Promise.all([
+            themesApi.create({ name: 'Core Renewal', category: 'Platform', status: 'active', priority: 9, color: '#6366f1', start_month: '2026-04', end_month: '2026-09' }),
+            themesApi.create({ name: 'Mobile Approval', category: 'Product', status: 'active', priority: 7, color: '#14b8a6', start_month: '2026-04', end_month: '2026-07' }),
+            themesApi.create({ name: 'Data Cleanup', category: 'Ops', status: 'planning', priority: 6, color: '#f97316', start_month: '2026-05', end_month: '2026-08' }),
+        ]);
+
+        await Promise.all([
+            themesApi.assignMembersBulk(themes[0].theme_id, [members[0].member_id, members[1].member_id]),
+            themesApi.assignMembersBulk(themes[1].theme_id, [members[2].member_id]),
+            themesApi.assignMembersBulk(themes[2].theme_id, [members[1].member_id, members[2].member_id]),
+        ]);
+
+        await allocations.bulkUpdate([
+            { theme_id: themes[0].theme_id, member_id: members[0].member_id, month: '2026-04', allocation_rate: 70, memo: 'Architecture' },
+            { theme_id: themes[0].theme_id, member_id: members[0].member_id, month: '2026-05', allocation_rate: 80, memo: 'Implementation' },
+            { theme_id: themes[0].theme_id, member_id: members[1].member_id, month: '2026-04', allocation_rate: 40, memo: 'Support' },
+            { theme_id: themes[1].theme_id, member_id: members[2].member_id, month: '2026-04', allocation_rate: 60, memo: 'Approval flow' },
+            { theme_id: themes[1].theme_id, member_id: members[2].member_id, month: '2026-05', allocation_rate: 50, memo: 'Review' },
+            { theme_id: themes[2].theme_id, member_id: members[1].member_id, month: '2026-05', allocation_rate: 35, memo: 'Audit' },
+            { theme_id: themes[2].theme_id, member_id: members[2].member_id, month: '2026-06', allocation_rate: 25, memo: 'Cleanup' },
+        ]);
+
+        updateOnboardingState({ dismissed: true, sampleLoaded: true });
+        document.getElementById('onboarding-panel').hidden = true;
+        await Promise.all([refreshGantt(), refreshMemberView(), refreshInsightsView(), loadThemeList(), loadMemberList()]);
+        showToast('Sample data is ready.', 'success');
+    } catch (error) {
+        showToast(`Failed to create sample data: ${formatError(error)}`, 'error');
+    } finally {
+        setBusyState(false);
+    }
+}
+
+function initKeyboardShortcuts() {
+    document.addEventListener('keydown', (event) => {
+        if (shouldIgnoreShortcut(event)) return;
+
+        const key = String(event.key).toLowerCase();
+        if (key === '?') {
+            event.preventDefault();
+            showShortcutHelp();
+            return;
+        }
+        if (key === '/') {
+            event.preventDefault();
+            focusCurrentSearch();
+            return;
+        }
+        if (key === 'g') switchView('gantt');
+        if (key === 'l') switchView('member-load');
+        if (key === 'i') switchView('insights');
+        if (key === 't') switchView('themes');
+        if (key === 'u') switchView('members');
+    });
+}
+
+function showShortcutHelp() {
+    document.getElementById('modal-title').textContent = 'Keyboard shortcuts';
+    document.getElementById('modal-body').innerHTML = `
+        <div class="shortcut-grid">
+            <div><kbd>?</kbd> Open help</div>
+            <div><kbd>/</kbd> Focus search</div>
+            <div><kbd>g</kbd> Gantt view</div>
+            <div><kbd>l</kbd> Member load view</div>
+            <div><kbd>i</kbd> Insights view</div>
+            <div><kbd>t</kbd> Themes</div>
+            <div><kbd>u</kbd> Members</div>
+            <div><kbd>Ctrl/Cmd + Z</kbd> Undo</div>
+            <div><kbd>Ctrl/Cmd + Shift + Z</kbd> Redo</div>
+        </div>
+    `;
+    document.getElementById('modal-footer').innerHTML = '<button class="btn btn-primary" id="modal-save-btn" type="button">Close</button>';
+    document.getElementById('modal-overlay').hidden = false;
+    document.getElementById('modal-close').onclick = closeModal;
+    document.getElementById('modal-save-btn').onclick = closeModal;
+}
+
+function focusCurrentSearch() {
+    const targets = {
+        gantt: 'gantt-search',
+        'member-load': 'member-search',
+        themes: 'theme-list-search',
+        members: 'member-list-search',
+    };
+    const input = document.getElementById(targets[currentView] || 'gantt-search');
+    input?.focus();
+    input?.select?.();
+}
+
+function shouldIgnoreShortcut(event) {
+    const target = event.target;
+    return Boolean(
+        event.altKey ||
+        target?.closest?.('input, textarea, select, [contenteditable="true"]'),
+    );
+}
+
+function initAdvancedExport() {
+    document.getElementById('gantt-export-advanced')?.addEventListener('click', openAdvancedExportModal);
+    document.getElementById('shortcut-help-btn')?.addEventListener('click', showShortcutHelp);
+}
+
+function openAdvancedExportModal() {
+    const columns = ['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo', 'Category', 'Status', 'Priority', 'Capacity'];
+    document.getElementById('modal-title').textContent = 'Advanced export';
+    document.getElementById('modal-body').innerHTML = `
+        <div class="form-field">
+            <label for="export-template">Template</label>
+            <select id="export-template">
+                <option value="standard">Standard list</option>
+                <option value="meeting">Meeting deck</option>
+                <option value="review">Monthly review</option>
+            </select>
+        </div>
+        <div class="form-field">
+            <label for="export-format">Format</label>
+            <select id="export-format">
+                <option value="csv">CSV</option>
+                <option value="xlsx">Excel</option>
+            </select>
+        </div>
+        <div class="form-field">
+            <label>Columns</label>
+            <div class="checkbox-grid">
+                ${columns.map((column) => `
+                    <label class="check-item">
+                        <input type="checkbox" value="${column}" checked>
+                        <span>${column}</span>
+                    </label>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    document.getElementById('modal-footer').innerHTML = `
+        <button class="btn btn-ghost" id="modal-cancel-btn" type="button">Cancel</button>
+        <button class="btn btn-primary" id="modal-save-btn" type="button">Export</button>
+    `;
+    document.getElementById('modal-overlay').hidden = false;
+    document.getElementById('modal-close').onclick = closeModal;
+    document.getElementById('modal-cancel-btn').onclick = closeModal;
+    document.getElementById('modal-save-btn').onclick = runAdvancedExport;
+}
+
+async function runAdvancedExport() {
+    const template = document.getElementById('export-template').value;
+    const format = document.getElementById('export-format').value;
+    let columns = Array.from(document.querySelectorAll('.checkbox-grid input:checked')).map((input) => input.value);
+    if (columns.length === 0) {
+        showToast('Select at least one column.', 'warning');
+        return;
+    }
+
+    if (template === 'meeting') {
+        columns = ['Theme', 'Member', 'Month', 'Allocation', 'Status'];
+    } else if (template === 'review') {
+        columns = ['Department', 'Theme', 'Member', 'Month', 'Allocation', 'Category', 'Priority'];
+    }
+
+    const { headers, rows } = getGanttExportDataset(columns);
+    const filename = `manage_${template}_${new Date().toISOString().slice(0, 10)}.${format}`;
+
+    if (format === 'csv') {
+        const csv = [headers, ...rows].map((row) => row.map(csvEscapeLocal).join(',')).join('\r\n');
+        downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }), filename);
+        closeModal();
+        showToast('Advanced CSV export completed.', 'success');
+        return;
+    }
+
+    const response = await fetch('/api/export/xlsx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            headers,
+            rows: rows.map((row) => row.map((value, index) => (headers[index] === 'Allocation' ? `${value}%` : value))),
+            filename,
+        }),
+    });
+    const blob = await response.blob();
+    downloadBlob(blob, filename);
+    closeModal();
+    showToast('Advanced Excel export completed.', 'success');
+}
+
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+}
+
+function csvEscapeLocal(value) {
+    const text = String(value ?? '');
+    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }

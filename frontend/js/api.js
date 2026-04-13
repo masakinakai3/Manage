@@ -137,3 +137,11 @@ export const snapshots = {
     }),
     delete: (id) => request(`/snapshots/${id}`, { method: 'DELETE' }),
 };
+
+// Insights
+export const insights = {
+    overview: (from, to) => {
+        const qs = new URLSearchParams({ from, to }).toString();
+        return request(`/insights/overview?${qs}`);
+    },
+};

@@ -65,6 +65,7 @@ def create_app(test_config=None):
     from routes.export import export_bp
     from routes.import_data import import_data_bp
     from routes.snapshots import snapshots_bp
+    from routes.insights import insights_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(themes_bp, url_prefix='/api/themes')
@@ -73,6 +74,7 @@ def create_app(test_config=None):
     app.register_blueprint(export_bp, url_prefix='/api/export')
     app.register_blueprint(import_data_bp, url_prefix='/api/import')
     app.register_blueprint(snapshots_bp, url_prefix='/api/snapshots')
+    app.register_blueprint(insights_bp, url_prefix='/api/insights')
 
     # Serve React App
     @app.route('/', defaults={'path': ''})
