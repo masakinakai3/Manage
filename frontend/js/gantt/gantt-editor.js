@@ -10,6 +10,7 @@
  */
 
 import { allocations } from '../api.js';
+import { formatError, setSaveState, showToast } from '../ui.js';
 
 let activeEditor = null;
 let saving = false;
@@ -31,6 +32,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const save = () => {
         if (saving) return;
         saving = true;
+        setSaveState('saving', 'セルを保存しています...');
         const newRate = parseInt(input.value) || 0;
         const clampedRate = Math.max(0, Math.min(100, newRate));
 
@@ -43,9 +45,12 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
             member_id: memberId,
             month: month,
             allocation_rate: clampedRate,
+        }).then(() => {
+            setSaveState('saved', `${month} の配分を保存しました`);
         }).catch(err => {
             console.error('Failed to save:', err);
-            // Optionally notify user
+            setSaveState('error', 'セル保存に失敗しました');
+            showToast(`セル保存に失敗しました: ${formatError(err)}`, 'error');
         }).finally(() => {
             saving = false;
         });
@@ -86,6 +91,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const clearRate = async () => {
         if (saving) return;
         saving = true;
+        setSaveState('saving', 'セルをクリアしています...');
         try {
             await allocations.updateSingle({
                 theme_id: themeId,
@@ -95,8 +101,11 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
             });
             closeCellEditor();
             onSave();
+            setSaveState('saved', `${month} の配分をクリアしました`);
         } catch (err) {
             console.error('Failed to clear:', err);
+            setSaveState('error', 'セルのクリアに失敗しました');
+            showToast(`セルのクリアに失敗しました: ${formatError(err)}`, 'error');
         } finally {
             saving = false;
         }
@@ -107,7 +116,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     newClearBtn.addEventListener('click', clearRate);
     input.addEventListener('keydown', handleKeydown);
 
-    activeEditor = { 
+    activeEditor = {
         cleanup: () => input.removeEventListener('keydown', handleKeydown),
         cellEl: cellEl
     };

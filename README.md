@@ -1,124 +1,60 @@
-<!--
-  Copyright (c) 2026 Masaki Nakai (https://github.com/masakinakai3)
-  Released under the MIT license
-  https://opensource.org/licenses/mit-license.php
--->
 # リソース管理ツール
 
-開発テーマごとの人員配置（誰が・いつ・何割）を可視化し、リソース計画の調整を支援する WEB アプリケーションです。
-
-## アプリケーションへのアクセス
-
-起動後、以下のURLにアクセスしてアプリを使用します。
-
-- **通常起動 (Backendのみ)**: [http://127.0.0.1:5000](http://127.0.0.1:5000)
-- **開発モード (Frontend Dev)**: [http://localhost:5173](http://localhost:5173)
-
-## 主な機能
-
-- **テーマ視点ガントチャート**: テーマ × メンバー × 月の割当を表形式で可視化。期間のハイライト、カテゴリ表示、進捗ステータス管理機能付き。
-- **メンバー負荷表**: メンバーごとの月次負荷率を集計・表示し、リソースの過不足を一目で特定。
-- **直感的な操作**:
-  - ドラッグ＆ドロップによるメンバーアサイン移動・期間変更。
-  - スピンボタンによる正確な期間設定 (YY-MM)。
-  - セルクリックによる稼働率編集。
-- **視覚的フィードバック**:
-  - 負荷オーバー時の警告アラート。
-  - テーマ期間（開始〜終了）の可視化。
-  - 折りたたみ時のメンバー別負荷内訳ツールチップ。
-- **状態保存**: ガントチャートの展開/折りたたみ状態をブラウザに自動保存。
-- **管理機能**: テーマ・メンバーの追加・編集・削除、スキル設定、CSVエクスポート。
-- **簡単導入**: 認証不要（自動管理者ログイン）、単一EXEファイルでの配布が可能。
+テーマ別ガントとメンバー別負荷の 2 画面で、月次の配分計画を管理する Web アプリです。
 
 ## 技術スタック
 
-| レイヤー | 技術 |
-|---|---|
-| フロントエンド | HTML5, CSS3, Vanilla JS (Vite) |
-| バックエンド | Python 3.10+, Flask |
-| データベース | SQLite (SQLAlchemy) |
-| 配布 | PyInstaller (Single EXE) |
+- Backend: Python 3.10+, Flask, SQLAlchemy, SQLite
+- Frontend: Vite, Vanilla JavaScript, HTML, CSS
+- Build: PyInstaller
 
-## 動作環境
-
-- Windows 10/11
-- 最新のWebブラウザ (Chrome, Edge, Firefox等)
-
-## 開発環境セットアップ
-
-### 前提条件
-
-- Python 3.10+
-- Node.js 18+
-
-### インストール
+## セットアップ
 
 ```bash
-# バックエンド依存関係
 cd backend
 pip install -r requirements.txt
 
-# フロントエンド依存関係
-cd frontend
+cd ../frontend
 npm install
 ```
 
-### 開発サーバー起動
+## 開発起動
 
 ```bash
-# ターミナル1: バックエンド (http://localhost:5001)
 cd backend
 python app.py
 
-# ターミナル2: フロントエンド (http://localhost:5173)
-cd frontend
+cd ../frontend
 npm run dev
 ```
 
-## EXEファイルのビルド
+- Backend: `http://127.0.0.1:5001`
+- Frontend: `http://localhost:5173`
 
-フロントエンドとバックエンドを1つの実行ファイル (`manage_app.exe`) にまとめます。
+## テストと品質チェック
 
 ```bash
-# プロジェクトルートで実行
-python build_exe.py
+python -m pytest
+
+cd frontend
+npm test
+npm run lint
+npm run format:check
 ```
 
-生成された `dist/manage_app.exe` を配布することで、PythonやNode.jsがインストールされていない環境でも動作します。
+Windows では [`tools/run_checks.ps1`](/C:/Users/galax/Desktop/Manage/tools/run_checks.ps1) でまとめて実行できます。
 
-## プロジェクト構成
+## 主な改善
 
-```
-Manage/
-├── backend/                # Flask Backend
-│   ├── app.py              # Entry point & Config
-│   ├── models.py           # DB Models
-│   ├── routes/             # API Endpoints
-│   └── services/           # Business Logic
-├── frontend/               # Vite Frontend
-│   ├── index.html          # SPA Entry
-│   ├── css/                # Styling
-│   └── js/                 # Application Logic
-│       ├── gantt/          # Gantt Chart Components
-│       └── member/         # Member View Components
-├── doc/                    # Documentation
-│   └── UserManual.md       # ユーザーマニュアル
-├── Requirement.md          # 要件定義
-└── build_exe.py            # PyInstaller Build Script
-```
+- 保存状態をサイドバーで常時表示
+- JSON インポート/エクスポート時の確認と結果通知を改善
+- テーマ管理・メンバー管理に検索と並び替えを追加
+- ガントとメンバー負荷の表示期間・検索条件を共有
+- メンバー負荷にサマリーカードを追加
 
-## 関連ドキュメント
+## ドキュメント
 
-本プロジェクトには以下のドキュメントが含まれています。
-
-| ファイル名 | 説明 |
-|---|---|
-| [Requirement.md](Requirement.md) | **要件定義書**: アプリケーションの機能要件、非機能要件、制約事項。 |
-| [SoftwareDesign.md](SoftwareDesign.md) | **ソフトウェア設計書**: アーキテクチャ、DBスキーマ、API設計、画面フロー詳細。 |
-| [UserManual.md](UserManual.md) | **ユーザーマニュアル**: アプリケーションの操作方法、仕様説明。 |
-| [UnitTestSpecification.md](UnitTestSpecification.md) | **単体テスト仕様書**: バックエンド単体テストの計画、テストケース一覧。 |
-| [tests/README.md](tests/README.md) | **テスト実行手順**: 単体テスト環境の構築と実行コマンド。 |
-
-## ライセンス
-
-[MIT License](LICENSE)
+- [Requirement.md](/C:/Users/galax/Desktop/Manage/Requirement.md)
+- [SoftwareDesign.md](/C:/Users/galax/Desktop/Manage/SoftwareDesign.md)
+- [UserManual.md](/C:/Users/galax/Desktop/Manage/UserManual.md)
+- [UnitTestSpecification.md](/C:/Users/galax/Desktop/Manage/UnitTestSpecification.md)

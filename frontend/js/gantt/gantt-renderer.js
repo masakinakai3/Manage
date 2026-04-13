@@ -16,6 +16,8 @@ import {
     shortenMonth
 } from '../utils/date-utils.js';
 import { openCellEditor } from './gantt-editor.js';
+import { getPresetConfig, loadViewState, subscribeViewState, updateViewState } from '../shared-state.js';
+import { formatError, setBusyState, setSaveState, showPromptDialog, showToast } from '../ui.js';
 
 export const HistoryManager = {
     stack: [],
@@ -81,8 +83,31 @@ async function loadSnapshots() {
 }
 
 export async function initGantt() {
+    const state = loadViewState();
+    startMonth = state.startMonth;
+    scale = state.scale;
+    searchQuery = state.ganttSearch || '';
+
     setupControls();
     await loadSnapshots();
+    subscribeViewState((nextState) => {
+        startMonth = nextState.startMonth;
+        scale = nextState.scale;
+        searchQuery = nextState.ganttSearch || '';
+
+        const searchInput = document.getElementById('gantt-search');
+        if (searchInput && searchInput.value !== searchQuery) {
+            searchInput.value = searchQuery;
+        }
+
+        const presetInput = document.getElementById('shared-period-preset');
+        if (presetInput) {
+            presetInput.value = nextState.preset;
+        }
+
+        syncScaleButtons();
+        refreshGantt();
+    });
 
     // Load collapsed state
     const saved = localStorage.getItem('gantt_collapsed');
@@ -107,6 +132,7 @@ export async function refreshGantt() {
     const toEnd = scale > 1 ? addMonths(to, scale - 1) : to;
 
     try {
+        setBusyState(true, 'ガントを読み込んでいます...');
         [allThemes, allMembers, allAllocations] = await Promise.all([
             themesApi.list(),
             membersApi.list(),
@@ -125,6 +151,10 @@ export async function refreshGantt() {
         render(months);
     } catch (err) {
         console.error('Failed to load gantt data:', err);
+        setSaveState('error', 'ガントの読み込みに失敗しました');
+        showToast(`ガントの読み込みに失敗しました: ${formatError(err)}`, 'error');
+    } finally {
+        setBusyState(false);
     }
 }
 
@@ -133,22 +163,19 @@ function saveCollapsedState() {
 }
 
 function setupControls() {
-    // Scale switcher
     document.querySelectorAll('#scale-switcher .scale-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            document.querySelector('#scale-switcher .scale-btn.active')?.classList.remove('active');
-            btn.classList.add('active');
-            scale = parseInt(btn.dataset.scale);
-            refreshGantt();
+            scale = parseInt(btn.dataset.scale, 10);
+            updateViewState({ scale });
         });
     });
 
-    // Filter and Grouping
     const searchInput = document.getElementById('gantt-search');
     if (searchInput) {
+        searchInput.value = searchQuery;
         searchInput.addEventListener('input', (e) => {
             searchQuery = e.target.value.trim().toLowerCase();
-            refreshGantt();
+            updateViewState({ ganttSearch: searchQuery });
         });
     }
     const groupBySelect = document.getElementById('gantt-group-by');
@@ -159,18 +186,20 @@ function setupControls() {
         });
     }
 
-    // Navigation
     document.getElementById('gantt-prev').addEventListener('click', () => {
         startMonth = addMonths(startMonth, -scale * 3);
-        refreshGantt();
+        updateViewState({ startMonth });
     });
     document.getElementById('gantt-next').addEventListener('click', () => {
         startMonth = addMonths(startMonth, scale * 3);
-        refreshGantt();
+        updateViewState({ startMonth });
     });
     document.getElementById('gantt-today').addEventListener('click', () => {
-        startMonth = addMonths(currentMonth(), -1);
-        refreshGantt();
+        const preset = document.getElementById('shared-period-preset').value || 'rolling-6';
+        const config = getPresetConfig(preset);
+        startMonth = config.startMonth;
+        scale = config.scale;
+        updateViewState({ startMonth, scale, preset });
     });
 
     // Expand / Collapse all
@@ -223,6 +252,12 @@ function setupControls() {
             }
         }
         refreshGantt();
+    });
+}
+
+function syncScaleButtons() {
+    document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => {
+        button.classList.toggle('active', parseInt(button.dataset.scale, 10) === scale);
     });
 }
 
@@ -739,18 +774,18 @@ function showContextMenu(x, y, cell, themeId, memberId, month, currentRate) {
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
     menu.hidden = false;
-    
+
     const pasteBtn = menu.querySelector('#ctx-paste');
     if (clipboardRate !== null) {
         pasteBtn.classList.remove('disabled');
     } else {
         pasteBtn.classList.add('disabled');
     }
-    
+
     // Re-attach handlers safely by clearing old ones
     const newMenu = menu.cloneNode(true);
     menu.parentNode.replaceChild(newMenu, menu);
-    
+
     newMenu.querySelector('#ctx-edit').onclick = () => {
         newMenu.hidden = true;
         openCellEditor(cell, themeId, memberId, month, currentRate, (newRate) => {
@@ -759,12 +794,12 @@ function showContextMenu(x, y, cell, themeId, memberId, month, currentRate) {
             handleCellNavigation(cell, dir, changed, newRate, themeId, memberId, month);
         });
     };
-    
+
     newMenu.querySelector('#ctx-copy').onclick = () => {
         clipboardRate = currentRate;
         newMenu.hidden = true;
     };
-    
+
     newMenu.querySelector('#ctx-paste').onclick = () => {
         if (clipboardRate === null) return;
         newMenu.hidden = true;
@@ -772,14 +807,14 @@ function showContextMenu(x, y, cell, themeId, memberId, month, currentRate) {
             handleCellNavigation(cell, null, true, clipboardRate, themeId, memberId, month);
         }
     };
-    
+
     newMenu.querySelector('#ctx-clear').onclick = () => {
         newMenu.hidden = true;
         if (currentRate !== 0) {
             handleCellNavigation(cell, null, true, 0, themeId, memberId, month);
         }
     };
-    
+
     const hideMenu = (e) => {
         if (!newMenu.contains(e.target)) {
             newMenu.hidden = true;
@@ -1220,7 +1255,7 @@ function showPriorityEditor(pElement, themeId) {
         const val = input.value;
         const num = parseInt(val);
         if (isNaN(num) || num < 0 || num > 9) {
-            // Invalid input, just close or maybe show error? 
+            // Invalid input, just close or maybe show error?
             // For now, consistent with requester: valid 0-9
             return;
         }
@@ -1391,7 +1426,7 @@ async function handleExportXLSX() {
 
         const headers = ['テーマ', '内訳', 'ステータス'];
         months.forEach(m => headers.push(getCSVHeaderLabel(m, scale)));
-        
+
         const rows = [];
         const allocMap = {};
         allAllocations.forEach(a => {
@@ -1443,15 +1478,15 @@ async function handleExportXLSX() {
         });
 
         const fileName = `gantt_export_${currentMonth().replace('-', '')}.xlsx`;
-        
+
         const res = await fetch('/api/export/xlsx', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ headers, rows, filename: fileName })
         });
-        
+
         if (!res.ok) throw new Error(`Export failed: HTTP ${res.status}`);
-        
+
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');

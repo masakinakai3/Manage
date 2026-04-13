@@ -8,109 +8,106 @@
  * Date utility functions for month-based calculations.
  */
 
-/**
- * Get current month as 'YYYY-MM'.
- */
 export function currentMonth() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
-/**
- * Shorten 'YYYY-MM' to 'YY-MM'.
- */
 export function shortenMonth(monthStr) {
     if (!monthStr || monthStr.length < 7) return monthStr;
     return monthStr.slice(2);
 }
 
-/**
- * Generate array of month strings from start to end (inclusive).
- */
 export function monthRange(start, end) {
     const months = [];
-    let [y, m] = start.split('-').map(Number);
-    const [ey, em] = end.split('-').map(Number);
-    while (y < ey || (y === ey && m <= em)) {
-        months.push(`${y}-${String(m).padStart(2, '0')}`);
-        m++;
-        if (m > 12) { m = 1; y++; }
+    let [year, month] = start.split('-').map(Number);
+    const [endYear, endMonth] = end.split('-').map(Number);
+
+    while (year < endYear || (year === endYear && month <= endMonth)) {
+        months.push(`${year}-${String(month).padStart(2, '0')}`);
+        month += 1;
+        if (month > 12) {
+            month = 1;
+            year += 1;
+        }
     }
+
     return months;
 }
 
-/**
- * Add N months to a month string. N can be negative.
- */
-export function addMonths(monthStr, n) {
-    let [y, m] = monthStr.split('-').map(Number);
-    m += n;
-    while (m > 12) { m -= 12; y++; }
-    while (m < 1) { m += 12; y--; }
-    return `${y}-${String(m).padStart(2, '0')}`;
+export function addMonths(monthStr, delta) {
+    let [year, month] = monthStr.split('-').map(Number);
+    month += delta;
+
+    while (month > 12) {
+        month -= 12;
+        year += 1;
+    }
+
+    while (month < 1) {
+        month += 12;
+        year -= 1;
+    }
+
+    return `${year}-${String(month).padStart(2, '0')}`;
 }
 
-/**
- * Format month string for display.
- * scale=1: '1月', scale=3: 'Q1', scale=6: 'H1', scale=12: '2026'
- */
 export function formatMonth(monthStr, scale = 1) {
-    const [y, m] = monthStr.split('-').map(Number);
-    if (scale === 1) return `${m}月`;
-    if (scale === 3) return `Q${Math.ceil(m / 3)}`;
-    if (scale === 6) return m <= 6 ? 'H1' : 'H2';
-    if (scale === 12) return `${y}`;
-    return `${m}月`;
+    const [year, month] = monthStr.split('-').map(Number);
+
+    if (scale === 1) return `${month}月`;
+    if (scale === 3) return `Q${Math.ceil(month / 3)}`;
+    if (scale === 6) return month <= 6 ? 'H1' : 'H2';
+    if (scale === 12) return `${year}`;
+    return `${month}月`;
 }
 
-/**
- * Format month for header with year context.
- */
 export function formatMonthHeader(monthStr, scale = 1) {
-    const [y, m] = monthStr.split('-').map(Number);
+    const [year, month] = monthStr.split('-').map(Number);
+
     if (scale === 1) {
-        return m === 1 ? `${y}\n${m}月` : `${m}月`;
+        return month === 1 ? `${year}\n${month}月` : `${month}月`;
     }
+
     if (scale === 3) {
-        const q = Math.ceil(m / 3);
-        return q === 1 ? `${y}\nQ${q}` : `Q${q}`;
+        const quarter = Math.ceil(month / 3);
+        return quarter === 1 ? `${year}\nQ${quarter}` : `Q${quarter}`;
     }
+
     if (scale === 6) {
-        const h = m <= 6 ? 'H1' : 'H2';
-        return h === 'H1' ? `${y}\n${h}` : h;
+        const half = month <= 6 ? 'H1' : 'H2';
+        return half === 'H1' ? `${year}\n${half}` : half;
     }
-    return `${y}`;
+
+    return `${year}年`;
 }
 
-/**
- * Get the display months for a given start, visible count, and scale.
- */
 export function getVisibleMonths(startMonth, visibleCount, scale = 1) {
     const months = [];
     let current = startMonth;
-    for (let i = 0; i < visibleCount; i++) {
+
+    for (let index = 0; index < visibleCount; index += 1) {
         months.push(current);
         current = addMonths(current, scale);
     }
+
     return months;
 }
 
-/**
- * Aggregate rates for a scaled period.
- * Returns average rate across months in the period.
- */
 export function aggregateRate(ratesByMonth, periodStart, scale) {
     if (scale === 1) return ratesByMonth[periodStart] || 0;
 
     const months = [];
     let current = periodStart;
-    for (let i = 0; i < scale; i++) {
+
+    for (let index = 0; index < scale; index += 1) {
         months.push(current);
         current = addMonths(current, 1);
     }
 
-    const rates = months.map(m => ratesByMonth[m] || 0);
-    const nonZero = rates.filter(r => r > 0);
-    if (nonZero.length === 0) return 0;
-    return Math.round(nonZero.reduce((a, b) => a + b, 0) / nonZero.length);
+    const rates = months.map((month) => ratesByMonth[month] || 0);
+    const nonZeroRates = rates.filter((rate) => rate > 0);
+    if (nonZeroRates.length === 0) return 0;
+
+    return Math.round(nonZeroRates.reduce((sum, rate) => sum + rate, 0) / nonZeroRates.length);
 }
