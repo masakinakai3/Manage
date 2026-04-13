@@ -46,7 +46,7 @@ def _build_health_checks(themes, members, allocations):
                 "entity_type": "theme",
                 "entity_id": theme.theme_id,
                 "entity_name": theme.name,
-                "message": "No members are assigned and no allocation exists.",
+                "message": "メンバーの割り当ても配分も設定されていません。",
             })
 
         if theme.start_month and theme.end_month and theme.start_month > theme.end_month:
@@ -56,7 +56,7 @@ def _build_health_checks(themes, members, allocations):
                 "entity_type": "theme",
                 "entity_id": theme.theme_id,
                 "entity_name": theme.name,
-                "message": f"Theme period is reversed: {theme.start_month} to {theme.end_month}.",
+                "message": f"テーマ期間が逆転しています: {theme.start_month} から {theme.end_month}",
             })
 
         for allocation in allocations_by_theme.get(theme.theme_id, []):
@@ -67,7 +67,7 @@ def _build_health_checks(themes, members, allocations):
                     "entity_type": "allocation",
                     "entity_id": allocation.id,
                     "entity_name": theme.name,
-                    "message": f"Allocation exists before theme start month ({allocation.month} < {theme.start_month}).",
+                    "message": f"テーマ開始月より前に配分があります ({allocation.month} < {theme.start_month})。",
                 })
             if theme.end_month and allocation.month > theme.end_month:
                 issues.append({
@@ -76,7 +76,7 @@ def _build_health_checks(themes, members, allocations):
                     "entity_type": "allocation",
                     "entity_id": allocation.id,
                     "entity_name": theme.name,
-                    "message": f"Allocation exists after theme end month ({allocation.month} > {theme.end_month}).",
+                    "message": f"テーマ終了月より後に配分があります ({allocation.month} > {theme.end_month})。",
                 })
             if theme.status in {"completed", "cancelled"} and theme.end_month and allocation.month >= theme.end_month:
                 issues.append({
@@ -85,7 +85,7 @@ def _build_health_checks(themes, members, allocations):
                     "entity_type": "allocation",
                     "entity_id": allocation.id,
                     "entity_name": theme.name,
-                    "message": "Closed theme still has remaining allocation in or after its end month.",
+                    "message": "終了済みテーマに終了月以降の配分が残っています。",
                 })
 
     duplicate_theme_names = defaultdict(list)
@@ -99,7 +99,7 @@ def _build_health_checks(themes, members, allocations):
                 "entity_type": "theme",
                 "entity_id": dupes[0].theme_id,
                 "entity_name": dupes[0].name,
-                "message": f"Theme name is duplicated {len(dupes)} times.",
+                "message": f"同名テーマが {len(dupes)} 件あります。",
             })
 
     duplicate_member_names = defaultdict(list)
@@ -113,7 +113,7 @@ def _build_health_checks(themes, members, allocations):
                 "entity_type": "member",
                 "entity_id": dupes[0].member_id,
                 "entity_name": dupes[0].display_name,
-                "message": f"Member name is duplicated {len(dupes)} times.",
+                "message": f"同名メンバーが {len(dupes)} 件あります。",
             })
 
     for (member_id, month), rows in allocations_by_member_month.items():
@@ -126,7 +126,7 @@ def _build_health_checks(themes, members, allocations):
                 "entity_type": "member",
                 "entity_id": member_id,
                 "entity_name": member.display_name if member else str(member_id),
-                "message": f"{len(non_zero_rows)} parallel allocations exist in {month}.",
+                "message": f"{month} に {len(non_zero_rows)} 件の並行配分があります。",
             })
 
     severity_rank = {"high": 0, "medium": 1, "low": 2}
@@ -283,6 +283,15 @@ def overview():
     health_checks = _build_health_checks(themes, members, allocations)
     dashboard = _build_dashboard(themes, members, allocations, from_month, to_month)
     recommendations = _build_recommendations(themes, members, allocations, from_month, to_month)
+    member_loads = get_member_loads(from_month, to_month)
+    assigned_member_count = len({allocation.member_id for allocation in allocations})
+    average_member_load = 0
+    if members:
+        total_average = 0
+        for member in members:
+            loads = list((member_loads.get(member.member_id) or {}).values())
+            total_average += round(sum(loads) / len(loads)) if loads else 0
+        average_member_load = round(total_average / len(members))
 
     return jsonify({
         "summary": {
@@ -291,6 +300,11 @@ def overview():
             "allocation_count": len(allocations),
             "health_issue_count": len(health_checks),
             "recommendation_count": len(recommendations),
+            "active_theme_count": len([theme for theme in themes if theme.status == "active"]),
+            "warning_cell_count": len(get_warnings(from_month, to_month)),
+            "assigned_member_count": assigned_member_count,
+            "average_member_load": average_member_load,
+            "overloaded_member_count": len({item["member_id"] for item in get_warnings(from_month, to_month)}),
         },
         "health_checks": health_checks,
         "dashboard": dashboard,

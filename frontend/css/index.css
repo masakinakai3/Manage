@@ -1477,6 +1477,10 @@ td.out-period {
     gap: var(--space-4);
 }
 
+.onboarding-panel[hidden] {
+    display: none;
+}
+
 .onboarding-copy p {
     color: var(--color-text-secondary);
     margin-top: var(--space-1);

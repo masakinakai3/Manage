@@ -34,7 +34,7 @@
             <ul class="nav-list">
                 <li><a href="#" class="nav-item active" data-view="gantt"><span>ガントチャート</span></a></li>
                 <li><a href="#" class="nav-item" data-view="member-load"><span>メンバー負荷</span></a></li>
-                <li><a href="#" class="nav-item" data-view="insights"><span>Insights</span></a></li>
+                <li><a href="#" class="nav-item" data-view="insights"><span>インサイト</span></a></li>
                 <li><a href="#" class="nav-item" data-view="themes"><span>テーマ一覧</span></a></li>
                 <li><a href="#" class="nav-item" data-view="members"><span>メンバー一覧</span></a></li>
             </ul>
@@ -141,23 +141,6 @@
                     </div>
                 </div>
 
-                <section id="gantt-summary" class="summary-grid"></section>
-
-                <section class="aggregate-panels">
-                    <article class="summary-card">
-                        <div class="summary-label">カテゴリ別テーマ数</div>
-                        <div id="aggregate-by-category" class="aggregate-list"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">ステータス別テーマ数</div>
-                        <div id="aggregate-by-status" class="aggregate-list"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">部署別平均負荷</div>
-                        <div id="aggregate-by-department" class="aggregate-list"></div>
-                    </article>
-                </section>
-
                 <section id="snapshot-diff-summary" class="summary-grid"></section>
 
                 <div class="gantt-workspace">
@@ -240,13 +223,28 @@
 
             <div id="view-insights" class="view" hidden>
                 <div class="view-header">
-                    <h2>Insights</h2>
+                    <h2>インサイト</h2>
                     <div class="view-controls">
                         <p class="summary-subtext">健全性チェック、推奨調整案、月次レビュー向けの集計をまとめて確認できます。</p>
                     </div>
                 </div>
 
                 <section id="insights-summary" class="summary-grid"></section>
+
+                <section class="aggregate-panels">
+                    <article class="summary-card">
+                        <div class="summary-label">カテゴリ別テーマ数</div>
+                        <div id="dashboard-category-distribution" class="dashboard-pill-list"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">ステータス別テーマ数</div>
+                        <div id="dashboard-status-distribution" class="dashboard-pill-list"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">部署別平均負荷</div>
+                        <div id="dashboard-department-summary" class="dashboard-pill-list"></div>
+                    </article>
+                </section>
 
                 <section class="insight-layout">
                     <article class="summary-card">
@@ -271,14 +269,6 @@
                     <article class="summary-card">
                         <div class="summary-label">負荷上位テーマ</div>
                         <div id="dashboard-top-themes"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">カテゴリ分布</div>
-                        <div id="dashboard-category-distribution" class="dashboard-pill-list"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">ステータス分布</div>
-                        <div id="dashboard-status-distribution" class="dashboard-pill-list"></div>
                     </article>
                 </section>
             </div>

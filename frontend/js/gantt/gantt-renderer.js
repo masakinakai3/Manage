@@ -82,8 +82,6 @@ export async function refreshGantt() {
             allocations.warnings(from, toEnd),
             allocations.memberLoads(from, toEnd),
         ]);
-        renderSummary();
-        renderAggregates();
         renderSnapshotSummary(months);
         renderTable(months);
         renderDetailPanel();
@@ -145,12 +143,14 @@ async function loadSelectedSnapshot(event) {
 }
 
 function renderSummary() {
+    const target = document.getElementById('gantt-summary');
+    if (!target) return;
     const assigned = new Set(allAllocations.map((item) => item.member_id)).size;
     const average = allMembers.length === 0 ? 0 : Math.round(allMembers.reduce((sum, member) => {
         const loads = Object.values(memberLoads[member.member_id] || {});
         return sum + (loads.length ? loads.reduce((a, b) => a + b, 0) / loads.length : 0);
     }, 0) / allMembers.length);
-    document.getElementById('gantt-summary').innerHTML = `
+    target.innerHTML = `
         <article class="summary-card"><div class="summary-label">テーマ数</div><div class="summary-value">${allThemes.length}</div><div class="summary-subtext">進行中 ${allThemes.filter((t) => t.status === 'active').length} 件</div></article>
         <article class="summary-card"><div class="summary-label">平均メンバー負荷</div><div class="summary-value">${average}%</div><div class="summary-subtext">全メンバー平均</div></article>
         <article class="summary-card"><div class="summary-label">警告セル</div><div class="summary-value">${warnings.length}</div><div class="summary-subtext">過負荷メンバー ${new Set(warnings.map((w) => w.member_id)).size} 名</div></article>
@@ -158,6 +158,7 @@ function renderSummary() {
 }
 
 function renderAggregates() {
+    if (!document.getElementById('aggregate-by-category')) return;
     renderAggregate('aggregate-by-category', countBy(allThemes, (theme) => theme.category || '未分類'), '件');
     renderAggregate('aggregate-by-status', countBy(allThemes, (theme) => STATUS_LABELS[theme.status] || theme.status), '件');
     const departmentLoads = new Map();
@@ -392,8 +393,6 @@ function applyCellValue(button, rate, memo = '') {
     button.innerHTML = `${safeRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, themeId, memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
 
     updateThemeSummaryCell(themeId, month);
-    renderSummary();
-    renderAggregates();
     renderSnapshotSummary(getVisibleMonths(startMonth, visibleCount, scale));
 
     if (selectedCell && selectedCell.themeId === themeId && selectedCell.memberId === memberId && selectedCell.month === month) {
