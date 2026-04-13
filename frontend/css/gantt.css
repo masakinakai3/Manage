@@ -162,6 +162,16 @@
     flex-shrink: 0;
 }
 
+.theme-status-select {
+    border: 1px solid transparent;
+    appearance: none;
+    -webkit-appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 8px;
+    padding-right: 18px;
+}
+
 .theme-status.status-planning {
     background: rgba(99, 102, 241, 0.2);
     color: #a5b4fc;
@@ -188,6 +198,11 @@
 
 .theme-status:hover {
     filter: brightness(1.3);
+}
+
+.theme-status-select:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.35);
 }
 
 /* Status dropdown */
