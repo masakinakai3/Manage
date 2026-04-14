@@ -12,8 +12,10 @@ import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, 
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
 
 const THEME_COLORS = [
-    '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308',
-    '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6', '#64748b', '#ef4444',
+    '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
+    '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981',
+    '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#2563eb',
+    '#64748b', '#6b7280', '#ef4444', '#dc2626', '#a855f7',
 ];
 
 const STATUS_LABELS = {
@@ -596,12 +598,15 @@ function initSavedViews() {
     refreshSavedViewOptions();
 }
 
-function refreshSavedViewOptions() {
+function refreshSavedViewOptions(selectedId = '') {
     const select = document.getElementById('saved-view-select');
     if (!select) return;
 
     const views = loadSavedViews();
     select.innerHTML = '<option value="">Saved views</option>' + views.map((view) => `<option value="${view.id}">${view.name}</option>`).join('');
+    if (selectedId && views.some((view) => view.id === selectedId)) {
+        select.value = selectedId;
+    }
 }
 
 async function saveCurrentView() {
@@ -615,7 +620,7 @@ async function saveCurrentView() {
     if (!name) return;
 
     const viewState = loadViewState();
-    upsertSavedView({
+    const savedView = {
         id: `view-${Date.now()}`,
         name,
         view: currentView,
@@ -623,8 +628,9 @@ async function saveCurrentView() {
             ...viewState,
             groupBy: document.getElementById('gantt-group-by')?.value || viewState.groupBy || 'none',
         },
-    });
-    refreshSavedViewOptions();
+    };
+    upsertSavedView(savedView);
+    refreshSavedViewOptions(savedView.id);
     showToast('Saved view was added.', 'success');
 }
 

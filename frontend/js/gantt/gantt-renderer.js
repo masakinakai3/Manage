@@ -4,7 +4,7 @@ import { addMonths, currentMonth, formatMonthHeader, getVisibleMonths } from '..
 import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from '../ui.js';
 import { openCellEditor } from './gantt-editor.js';
 
-const STATUS_LABELS = { planning: '計画中', active: '進行中', completed: '完了', cancelled: '中止' };
+const STATUS_LABELS = { planning: 'Planning', active: 'Active', completed: 'Completed', cancelled: 'Cancelled' };
 
 export const HistoryManager = {
     stack: [],
@@ -116,11 +116,11 @@ function bindControls() {
 }
 
 async function saveSnapshot() {
-    const name = await showPromptDialog({ title: 'スナップショットを保存', message: '比較しやすい名前を入力してください。', defaultValue: `Snap_${new Date().toLocaleDateString('ja-JP')}`, confirmText: '保存する' });
+    const name = await showPromptDialog({ title: 'Save snapshot', message: 'Enter a snapshot name.', defaultValue: Snap_, confirmText: 'Save', cancelText: 'Cancel' });
     if (!name) return;
     await snapshotsApi.create({ name, data: allAllocations });
     await loadSnapshots();
-    showToast('スナップショットを保存しました。', 'success');
+    showToast('Snapshot saved.', 'success');
 }
 
 async function loadSnapshots() {
@@ -159,11 +159,11 @@ function renderSummary() {
 
 function renderAggregates() {
     if (!document.getElementById('aggregate-by-category')) return;
-    renderAggregate('aggregate-by-category', countBy(allThemes, (theme) => theme.category || '未分類'), '件');
+    renderAggregate('aggregate-by-category', countBy(allThemes, (theme) => theme.category || 'Uncategorized'), ' items');
     renderAggregate('aggregate-by-status', countBy(allThemes, (theme) => STATUS_LABELS[theme.status] || theme.status), '件');
     const departmentLoads = new Map();
     allMembers.forEach((member) => {
-        const label = member.department || '未設定';
+        const label = member.department || 'No Department';
         const loads = Object.values(memberLoads[member.member_id] || {});
         const avg = loads.length ? Math.round(loads.reduce((a, b) => a + b, 0) / loads.length) : 0;
         const bucket = departmentLoads.get(label) || { total: 0, count: 0 };
@@ -213,23 +213,23 @@ function renderSnapshotSummary(months) {
     target.innerHTML = `<article class="summary-card"><div class="summary-label">差分セル</div><div class="summary-value">${changed}</div><div class="summary-subtext">表示中のみ集計</div></article><article class="summary-card"><div class="summary-label">差分テーマ</div><div class="summary-value">${themes.size}</div><div class="summary-subtext">テーマ単位</div></article><article class="summary-card"><div class="summary-label">差分メンバー</div><div class="summary-value">${members.size}</div><div class="summary-subtext">メンバー単位</div></article>`;
 }
 
-function renderTable(months) {
+renderTable = function(months) {
     const current = currentMonth();
     document.getElementById('gantt-thead').innerHTML = `<tr><th>テーマ / メンバー</th>${months.map((month) => `<th class="${month === current ? 'month-current' : ''}">${formatMonthHeader(month, scale).replace('\n', '<br>')}</th>`).join('')}</tr>`;
     const rows = [];
     const themes = filterThemes();
-    const groups = groupBy === 'none' ? [{ key: '', themes }] : [...countBy(themes, (theme) => groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || '未分類').keys()].map((key) => ({ key, themes: themes.filter((theme) => (groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || '未分類') === key) }));
+    const groups = groupBy === 'none' ? [{ key: '', themes }] : [...countBy(themes, (theme) => groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized').keys()].map((key) => ({ key, themes: themes.filter((theme) => (groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized') === key) }));
     groups.forEach((group) => {
         if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
-            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▶</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${sumThemeRate(theme.theme_id, month, members) || ''}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div></td>`).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || '部署未設定'} / 上限 ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">?</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">Add Member</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div></td>`).join('')}</tr>`);
+            members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
     document.getElementById('gantt-tbody').innerHTML = rows.join('') || `<tr><td colspan="${months.length + 1}" class="summary-subtext">条件に一致するテーマがありません。</td></tr>`;
     bindRows();
-}
+};
 
 function bindRows() {
     document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); refreshGantt(); }));
@@ -246,7 +246,7 @@ function bindRows() {
             await themesApi.update(themeId, { status });
             theme.status = status;
             setSaveState('saved', 'テーマステータスを保存しました');
-            showToast('テーマステータスを更新しました。', 'success');
+            showToast('Theme status updated.', 'success');
             await refreshGantt();
         } catch (error) {
             event.target.value = theme.status;
@@ -276,7 +276,7 @@ function memberCell(theme, member, month, current) {
     const rate = allocation?.allocation_rate || 0;
     const warning = warnings.find((item) => item.member_id === member.member_id && item.month === month);
     const memo = allocation?.memo || '';
-    return `<td class="${month === current ? 'month-current' : ''}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${rate}" data-memo="${escapeHtml(memo)}" title="${memo || 'メモなし'}" type="button">${rate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
+    return `<td class="${month === current ? 'month-current' : ''}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${rate}" data-memo="${escapeHtml(memo)}" title="${memo || 'No memo'}" type="button">${rate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
 }
 
 function renderDetailPanel() {
@@ -292,7 +292,7 @@ function renderDetailPanel() {
     document.getElementById('detail-rate').value = allocation?.allocation_rate || 0;
     document.getElementById('detail-memo').value = allocation?.memo || '';
     document.getElementById('detail-bulk-rate').value = allocation?.allocation_rate || 0;
-    document.getElementById('detail-message').textContent = allocation?.memo ? 'メモは検索対象と CSV 出力に含まれます。' : 'メモを追加すると検索対象になります。';
+    document.getElementById('detail-message').textContent = allocation?.memo ? 'Memo will be included in search and CSV export.' : 'Add a memo to include it in search.';
 }
 
 async function saveSelectedCell() {
@@ -301,7 +301,7 @@ async function saveSelectedCell() {
     const memo = document.getElementById('detail-memo').value.trim();
     await allocations.updateSingle({ theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month: selectedCell.month, allocation_rate: rate, memo });
     setSaveState('saved', 'セルを保存しました');
-    showToast('セルを保存しました。', 'success');
+    showToast('Cell saved.', 'success');
     await refreshGantt();
 }
 
@@ -311,7 +311,7 @@ async function previewBulkUpdate() {
     const memo = document.getElementById('detail-memo').value.trim();
     const months = getVisibleMonths(startMonth, visibleCount, scale);
     const preview = months.map((month) => `- ${month}: ${lookupRate(allAllocations, selectedCell.themeId, selectedCell.memberId, month)}% → ${rate}%`).join('\n');
-    const ok = await showConfirmDialog({ title: '一括編集プレビュー', message: `${preview}\n\nメモ: ${memo || 'なし'}`, confirmText: 'まとめて更新する', cancelText: 'キャンセル' });
+    const ok = await showConfirmDialog({ title: "Preview bulk update", message: `${preview}\n\nMemo: ${memo || "-"}`, confirmText: "Apply", cancelText: "Cancel" });
     if (!ok) return;
     const redo = months.map((month) => ({ theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month, allocation_rate: rate, memo }));
     const undo = months.map((month) => { const current = allAllocations.find((item) => item.theme_id === selectedCell.themeId && item.member_id === selectedCell.memberId && item.month === month); return { theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month, allocation_rate: current?.allocation_rate || 0, memo: current?.memo || '' }; });
@@ -381,7 +381,7 @@ function handleEditorNavigation(button, direction, changed, newRate) {
         allocation_rate: nextRate,
         memo,
     }).then(() => {
-        setSaveState('saved', `${month} の負荷率を保存しました`);
+        setSaveState('saved', `${month} の負荷を保存しました`);
     }).catch((error) => {
         setSaveState('error', 'セル保存に失敗しました');
         showToast(`セル保存に失敗しました: ${formatError(error)}`, 'error');
@@ -417,7 +417,7 @@ function applyCellValue(button, rate, memo = '') {
 
     button.dataset.rate = String(safeRate);
     button.dataset.memo = memo;
-    button.title = memo || 'メモなし';
+    button.title = memo || 'No memo';
     button.className = `gantt-cell ${hasWarning ? 'rate-over' : rateClass(safeRate)}`;
     button.innerHTML = `${safeRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, themeId, memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
 
@@ -429,7 +429,7 @@ function applyCellValue(button, rate, memo = '') {
     }
 }
 
-function updateThemeSummaryCell(themeId, month) {
+updateThemeSummaryCell = function(themeId, month) {
     const summaryRow = Array.from(document.querySelectorAll('.gantt-row-summary')).find((row) => row.querySelector(`.theme-toggle[data-theme-id="${themeId}"]`));
     if (!summaryRow) return;
 
@@ -443,7 +443,7 @@ function updateThemeSummaryCell(themeId, month) {
     if (!targetCell) return;
 
     targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${totalRate || ''}${diffChip(totalRate, month, themeId, null, members)}</div>`;
-}
+};
 
 function findAdjacentCell(button, direction) {
     const currentTd = button.closest('td');
@@ -482,10 +482,10 @@ function exportCsv() {
     link.download = 'gantt_export.csv';
     link.click();
     URL.revokeObjectURL(url);
-    showToast('CSV を出力しました。', 'success');
+    showToast('CSV exported.', 'success');
 }
 
-async function exportXlsx() {
+exportXlsx = async function() {
     const { headers, rows } = getGanttExportDataset(['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo']);
     const response = await fetch('/api/export/xlsx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ headers, rows: rows.map((row) => row.map((value, index) => (headers[index] === 'Allocation' ? `${value}%` : value))), filename: 'gantt_export.xlsx' }) });
     const blob = await response.blob();
@@ -495,8 +495,8 @@ async function exportXlsx() {
     link.download = 'gantt_export.xlsx';
     link.click();
     URL.revokeObjectURL(url);
-    showToast('Excel を出力しました。', 'success');
-}
+    showToast('Excel exported.', 'success');
+};
 
 async function showAssignMemberModal(themeId) {
     const theme = allThemes.find((item) => item.theme_id === themeId);
@@ -507,7 +507,7 @@ async function showAssignMemberModal(themeId) {
         .sort((left, right) => left.display_name.localeCompare(right.display_name, 'ja'));
 
     if (availableMembers.length === 0) {
-        showToast('追加できる有効メンバーがありません。', 'warning');
+        showToast('No available members.', 'warning');
         return;
     }
 
@@ -524,7 +524,7 @@ async function showAssignMemberModal(themeId) {
                     <input type="checkbox" value="${member.member_id}">
                     <div>
                         <div>${member.display_name}</div>
-                        <div class="summary-subtext">${member.department || '部署未設定'} / 上限 ${member.capacity}%</div>
+                        <div class="summary-subtext">${member.department || 'No Department'} / Capacity ${member.capacity}%</div>
                     </div>
                 </label>
             `).join('')}
@@ -541,12 +541,12 @@ async function showAssignMemberModal(themeId) {
     document.getElementById('modal-save-btn').onclick = async () => {
         const selected = Array.from(modalBody.querySelectorAll('input[type="checkbox"]:checked')).map((input) => Number.parseInt(input.value, 10));
         if (selected.length === 0) {
-            showToast('追加するメンバーを選択してください。', 'warning');
+            showToast('Select at least one member.', 'warning');
             return;
         }
         await themesApi.assignMembersBulk(themeId, selected);
         modalOverlay.hidden = true;
-        showToast(`${selected.length} 名をテーマに追加しました。`, 'success');
+        showToast(`${selected.length} members added.`, 'success');
         await refreshGantt();
     };
 }
@@ -600,4 +600,111 @@ export function getGanttExportDataset(selectedColumns = ['Theme', 'Member', 'Dep
             return selectedColumns.map((column) => lookup[column] ?? '');
         });
     return { headers: selectedColumns, rows };
+}
+
+export function getGanttGridExportDataset() {
+    const months = getVisibleMonths(startMonth, visibleCount, scale);
+    const themes = filterThemes();
+    const rows = [];
+    const groups = groupBy === 'none'
+        ? [{ key: '', themes }]
+        : [...countBy(themes, (theme) => groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized').keys()]
+            .map((key) => ({ key, themes: themes.filter((theme) => (groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized') === key) }));
+
+    groups.forEach((group) => {
+        if (group.key) {
+            rows.push({
+                type: 'group',
+                label: group.key,
+                values: months.map(() => ''),
+            });
+        }
+
+        group.themes.forEach((theme) => {
+            const members = themeMembers(theme.theme_id);
+            rows.push({
+                type: 'summary',
+                label: theme.name,
+                color: theme.color || '',
+                values: months.map((month) => formatRateValue(sumThemeRate(theme.theme_id, month, members))),
+            });
+
+            members.forEach((member) => {
+                rows.push({
+                    type: 'member',
+                    label: `${member.display_name}${member.department ? ` (${member.department})` : ''}`,
+                    values: months.map((month) => formatRateValue(lookupRate(allAllocations, theme.theme_id, member.member_id, month))),
+                });
+            });
+        });
+    });
+
+    return {
+        headers: ['Theme / Member', ...months],
+        rows,
+    };
+}
+
+function formatRateValue(rate) {
+    return rate ? `${rate}%` : '';
+}
+
+function renderTable(months) {
+    const current = currentMonth();
+    document.getElementById('gantt-thead').innerHTML = `<tr><th>テーマ / メンバー</th>${months.map((month) => `<th class="${month === current ? 'month-current' : ''}">${formatMonthHeader(month, scale).replace('\n', '<br>')}</th>`).join('')}</tr>`;
+    const rows = [];
+    const themes = filterThemes();
+    const groups = groupBy === 'none'
+        ? [{ key: '', themes }]
+        : [...countBy(themes, (theme) => groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized').keys()]
+            .map((key) => ({ key, themes: themes.filter((theme) => (groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized') === key) }));
+
+    groups.forEach((group) => {
+        if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
+        group.themes.forEach((theme) => {
+            const members = themeMembers(theme.theme_id);
+            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div></td>`).join('')}</tr>`);
+            members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+        });
+    });
+
+    document.getElementById('gantt-tbody').innerHTML = rows.join('') || `<tr><td colspan="${months.length + 1}" class="summary-subtext">条件に一致するテーマがありません。</td></tr>`;
+    bindRows();
+}
+
+function updateThemeSummaryCell(themeId, month) {
+    const summaryRow = Array.from(document.querySelectorAll('.gantt-row-summary')).find((row) => row.querySelector(`.theme-toggle[data-theme-id="${themeId}"]`));
+    if (!summaryRow) return;
+
+    const months = getVisibleMonths(startMonth, visibleCount, scale);
+    const monthIndex = months.indexOf(month);
+    if (monthIndex < 0) return;
+
+    const members = themeMembers(themeId);
+    const totalRate = sumThemeRate(themeId, month, members);
+    const targetCell = summaryRow.children[monthIndex + 1];
+    if (!targetCell) return;
+
+    targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${formatRateValue(totalRate)}${diffChip(totalRate, month, themeId, null, members)}</div>`;
+}
+
+async function exportXlsx() {
+    const dataset = getGanttGridExportDataset();
+    const response = await fetch('/api/export/xlsx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            layout: 'gantt',
+            ...dataset,
+            filename: 'gantt_export.xlsx',
+        }),
+    });
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'gantt_export.xlsx';
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('Excel exported.', 'success');
 }

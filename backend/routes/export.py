@@ -22,6 +22,123 @@ from models import Allocation, Member, Theme, db
 export_bp = Blueprint('export', __name__)
 
 
+def _rate_fill(rate):
+    if rate > 100:
+        return PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
+    if rate == 100:
+        return PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
+    if rate > 60:
+        return PatternFill(start_color='B3B3FF', end_color='B3B3FF', fill_type='solid')
+    if rate > 30:
+        return PatternFill(start_color='E0E0FF', end_color='E0E0FF', fill_type='solid')
+    return PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
+
+
+def _parse_rate(value):
+    if value in (None, ''):
+        return None
+
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.endswith('%'):
+        text = text[:-1]
+
+    try:
+        return int(float(text))
+    except ValueError:
+        return None
+
+
+def _configure_header(worksheet, headers):
+    header_fill = PatternFill(start_color='1F497D', end_color='1F497D', fill_type='solid')
+    header_font = Font(color='FFFFFF', bold=True)
+
+    worksheet.append(headers)
+    for cell in worksheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center')
+
+
+def _export_list_layout(workbook, headers, rows):
+    worksheet = workbook.active
+    worksheet.title = 'Gantt'
+    _configure_header(worksheet, headers)
+
+    for row_index, row_data in enumerate(rows, start=2):
+        worksheet.append(row_data)
+        for column_index, value in enumerate(row_data, start=1):
+            if column_index <= 3:
+                continue
+
+            rate = _parse_rate(value)
+            if rate is None:
+                continue
+
+            cell = worksheet.cell(row=row_index, column=column_index)
+            cell.fill = _rate_fill(rate)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.value = rate / 100
+            cell.number_format = '0%'
+
+    worksheet.column_dimensions['A'].width = 30
+    worksheet.column_dimensions['B'].width = 20
+    worksheet.column_dimensions['C'].width = 15
+    for index in range(4, len(headers) + 1):
+        worksheet.column_dimensions[get_column_letter(index)].width = 12
+
+
+def _export_gantt_layout(workbook, headers, rows):
+    worksheet = workbook.active
+    worksheet.title = 'Gantt'
+    _configure_header(worksheet, headers)
+
+    group_fill = PatternFill(start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
+    summary_fill = PatternFill(start_color='EAF2F8', end_color='EAF2F8', fill_type='solid')
+
+    for row_index, row_data in enumerate(rows, start=2):
+        label = row_data.get('label', '')
+        values = row_data.get('values', [])
+        row_type = row_data.get('type', 'member')
+        worksheet.append([label, *values])
+
+        first_cell = worksheet.cell(row=row_index, column=1)
+        first_cell.alignment = Alignment(horizontal='left', vertical='center')
+
+        if row_type == 'group':
+            first_cell.fill = group_fill
+            first_cell.font = Font(bold=True)
+            for column_index in range(2, len(headers) + 1):
+                worksheet.cell(row=row_index, column=column_index).fill = group_fill
+            continue
+
+        if row_type == 'summary':
+            first_cell.fill = summary_fill
+            first_cell.font = Font(bold=True)
+        else:
+            first_cell.alignment = Alignment(horizontal='left', vertical='center', indent=1)
+
+        for column_index, value in enumerate(values, start=2):
+            cell = worksheet.cell(row=row_index, column=column_index)
+            cell.alignment = Alignment(horizontal='center', vertical='center')
+
+            rate = _parse_rate(value)
+            if rate is None:
+                continue
+
+            cell.value = rate / 100
+            cell.number_format = '0%'
+            cell.fill = _rate_fill(rate)
+            if row_type == 'summary':
+                cell.font = Font(bold=True)
+
+    worksheet.freeze_panes = 'B2'
+    worksheet.column_dimensions['A'].width = 36
+    for index in range(2, len(headers) + 1):
+        worksheet.column_dimensions[get_column_letter(index)].width = 12
+
+
 @export_bp.route('/csv', methods=['POST'])
 @login_required
 def export_csv():
@@ -62,57 +179,10 @@ def export_xlsx():
     filename = re.sub(r'[^\w\-.]', '_', data.get('filename', 'gantt_export.xlsx'))
 
     workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = 'Gantt'
-
-    header_fill = PatternFill(start_color='1F497D', end_color='1F497D', fill_type='solid')
-    header_font = Font(color='FFFFFF', bold=True)
-    summary_fill = PatternFill(start_color='DCE6F1', end_color='DCE6F1', fill_type='solid')
-
-    rate_low = PatternFill(start_color='F2F2F2', end_color='F2F2F2', fill_type='solid')
-    rate_mid = PatternFill(start_color='E0E0FF', end_color='E0E0FF', fill_type='solid')
-    rate_high = PatternFill(start_color='B3B3FF', end_color='B3B3FF', fill_type='solid')
-    rate_full = PatternFill(start_color='C6EFCE', end_color='C6EFCE', fill_type='solid')
-    rate_over = PatternFill(start_color='FFC7CE', end_color='FFC7CE', fill_type='solid')
-
-    worksheet.append(headers)
-    for cell in worksheet[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = Alignment(horizontal='center', vertical='center')
-
-    for row_index, row_data in enumerate(rows, start=2):
-        worksheet.append(row_data)
-        is_summary = len(row_data) > 1 and row_data[1] == '合算'
-
-        for column_index, value in enumerate(row_data, start=1):
-            cell = worksheet.cell(row=row_index, column=column_index)
-            if is_summary and column_index <= 3:
-                cell.fill = summary_fill
-                cell.font = Font(bold=True)
-
-            if column_index > 3 and value and str(value).endswith('%'):
-                rate = int(str(value).replace('%', ''))
-                if rate > 100:
-                    cell.fill = rate_over
-                elif rate == 100:
-                    cell.fill = rate_full
-                elif rate > 60:
-                    cell.fill = rate_high
-                elif rate > 30:
-                    cell.fill = rate_mid
-                else:
-                    cell.fill = rate_low
-
-                cell.alignment = Alignment(horizontal='center')
-                cell.value = rate / 100
-                cell.number_format = '0%'
-
-    worksheet.column_dimensions['A'].width = 30
-    worksheet.column_dimensions['B'].width = 20
-    worksheet.column_dimensions['C'].width = 15
-    for index in range(4, len(headers) + 1):
-        worksheet.column_dimensions[get_column_letter(index)].width = 12
+    if data.get('layout') == 'gantt':
+        _export_gantt_layout(workbook, headers, rows)
+    else:
+        _export_list_layout(workbook, headers, rows)
 
     output = io.BytesIO()
     workbook.save(output)

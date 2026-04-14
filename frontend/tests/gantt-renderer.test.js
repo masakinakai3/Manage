@@ -51,7 +51,7 @@ vi.mock('../js/ui.js', () => ({
 
 vi.mock('../js/shared-state.js', () => ({
     getPresetConfig: vi.fn(() => ({ startMonth: '2026-04', scale: 1 })),
-    loadViewState: vi.fn(() => ({ startMonth: '2026-04', scale: 1, ganttSearch: '' })),
+    loadViewState: vi.fn(() => ({ startMonth: '2026-04', scale: 1, ganttSearch: '', groupBy: 'none' })),
     subscribeViewState: vi.fn(() => () => {}),
     updateViewState: vi.fn(),
 }));
@@ -166,5 +166,27 @@ describe('gantt-renderer regressions', () => {
 
         expect(openCellEditor).toHaveBeenCalledTimes(1);
         expect(openCellEditor.mock.calls[0][0]).toBe(cell);
+    });
+
+    it('renders theme summary allocations with percent suffix', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const summaryCell = document.querySelector('.gantt-row-summary .gantt-cell');
+        expect(summaryCell?.textContent).toContain('20%');
+    });
+
+    it('builds gantt-shaped Excel export data', async () => {
+        const { refreshGantt, getGanttGridExportDataset } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const dataset = getGanttGridExportDataset();
+        expect(dataset.headers).toEqual(['Theme / Member', '2026-04']);
+        expect(dataset.rows).toEqual([
+            { type: 'summary', label: 'Theme A', color: '#00aaff', values: ['20%'] },
+            { type: 'member', label: 'Alice (Dev)', values: ['20%'] },
+        ]);
     });
 });
