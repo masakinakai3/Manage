@@ -341,6 +341,17 @@ async function openThemeModal(theme = null) {
         const border = color === selectedColor ? 'var(--color-text)' : 'transparent';
         return `<span class="card-color-dot ${usedBy.length ? 'is-used' : ''}" style="background:${color};width:24px;height:24px;cursor:pointer;border:2px solid ${border};margin:2px" data-color="${color}" title="${title}"></span>`;
     }).join('');
+    const initialMilestones = Array.isArray(theme?.milestones) && theme.milestones.length > 0
+        ? theme.milestones.map((item) => ({ month: item.month || '', label: item.label || '' }))
+        : (theme?.milestone_month ? [{ month: theme.milestone_month, label: theme.milestone_label || '' }] : [{ month: '', label: '' }]);
+
+    const renderMilestoneRow = (item = { month: '', label: '' }) => `
+        <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
+            <input class="theme-milestone-month" type="month" value="${item.month || ''}">
+            <input class="theme-milestone-label" type="text" value="${item.label || ''}" placeholder="例: リリース">
+            <button class="btn btn-ghost btn-sm theme-milestone-remove" type="button">削除</button>
+        </div>
+    `;
 
     document.getElementById('modal-body').innerHTML = `
         <div class="form-field">
@@ -364,6 +375,11 @@ async function openThemeModal(theme = null) {
             <input id="modal-theme-priority" type="number" value="${theme?.priority ?? 0}" min="0" max="9">
         </div>
         <div class="form-field">
+            <label>マイルストーン</label>
+            <div id="theme-milestones-editor">${initialMilestones.map((item) => renderMilestoneRow(item)).join('')}</div>
+            <button class="btn btn-ghost btn-sm" id="theme-milestone-add" type="button">追加</button>
+        </div>
+        <div class="form-field">
             <label>カラー</label>
             <div id="modal-color-picker">${colorOptions}</div>
             <input id="modal-theme-color" type="hidden" value="${selectedColor}">
@@ -380,6 +396,26 @@ async function openThemeModal(theme = null) {
         });
     });
 
+    const milestoneEditor = document.getElementById('theme-milestones-editor');
+    const bindMilestoneRows = () => {
+        milestoneEditor.querySelectorAll('.theme-milestone-remove').forEach((button) => {
+            button.onclick = () => {
+                const rows = milestoneEditor.querySelectorAll('.theme-milestone-row');
+                if (rows.length === 1) {
+                    rows[0].querySelector('.theme-milestone-month').value = '';
+                    rows[0].querySelector('.theme-milestone-label').value = '';
+                    return;
+                }
+                button.closest('.theme-milestone-row')?.remove();
+            };
+        });
+    };
+    document.getElementById('theme-milestone-add').onclick = () => {
+        milestoneEditor.insertAdjacentHTML('beforeend', renderMilestoneRow());
+        bindMilestoneRows();
+    };
+    bindMilestoneRows();
+
     document.getElementById('modal-footer').innerHTML = `
         <button class="btn btn-ghost" id="modal-cancel-btn" type="button">キャンセル</button>
         <button class="btn btn-primary" id="modal-save-btn" type="button">${isEdit ? '更新する' : '追加する'}</button>
@@ -395,6 +431,12 @@ async function openThemeModal(theme = null) {
             status: document.getElementById('modal-theme-status').value,
             color: document.getElementById('modal-theme-color').value,
             priority: Number.parseInt(document.getElementById('modal-theme-priority').value || '0', 10),
+            milestones: Array.from(document.querySelectorAll('#theme-milestones-editor .theme-milestone-row'))
+                .map((row) => ({
+                    month: row.querySelector('.theme-milestone-month')?.value || '',
+                    label: row.querySelector('.theme-milestone-label')?.value.trim() || '',
+                }))
+                .filter((item) => item.month),
         };
 
         if (!payload.name) {

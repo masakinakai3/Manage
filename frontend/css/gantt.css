@@ -276,6 +276,48 @@
     font: inherit;
 }
 
+.gantt-row-summary td {
+    overflow: hidden;
+}
+
+.gantt-row-summary .gantt-cell {
+    align-items: flex-end;
+    justify-content: center;
+    padding: 0 4px 3px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.gantt-milestones {
+    position: absolute;
+    top: 1px;
+    right: 4px;
+    left: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+    max-width: calc(100% - 8px);
+    max-height: calc(100% - 16px);
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.gantt-milestone-chip {
+    max-width: 100%;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-primary) 22%, white 6%);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    color: var(--color-text);
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 /* Rate color coding */
 .gantt-cell.rate-low {
     color: var(--color-text-muted);

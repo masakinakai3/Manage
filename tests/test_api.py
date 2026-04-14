@@ -5,7 +5,7 @@
 #
 
 import json
-from models import db, Theme, Member, Allocation, SavedView
+from models import db, Theme, ThemeMilestone, Member, Allocation, SavedView
 
 def test_login(client):
     """Test login functionality."""
@@ -42,10 +42,40 @@ def test_create_theme(auth_client):
     response = auth_client.post('/api/themes', json={
         'name': 'New Theme',
         'category': 'Test',
-        'status': 'planning'
+        'status': 'planning',
+        'milestones': [
+            {'month': '2026-06', 'label': 'Release'},
+            {'month': '2026-08', 'label': 'Audit'},
+        ],
     })
     assert response.status_code == 201
     assert response.json['name'] == 'New Theme'
+    assert response.json['milestone_month'] == '2026-06'
+    assert response.json['milestone_label'] == 'Release'
+    assert [item['month'] for item in response.json['milestones']] == ['2026-06', '2026-08']
+    assert [item['label'] for item in response.json['milestones']] == ['Release', 'Audit']
+
+def test_update_theme_milestone(auth_client, app):
+    with app.app_context():
+        theme = Theme(name='Milestone Theme')
+        db.session.add(theme)
+        db.session.commit()
+        theme_id = theme.theme_id
+
+    response = auth_client.put(f'/api/themes/{theme_id}', json={
+        'milestones': [
+            {'month': '2026-09', 'label': 'Go Live'},
+            {'month': '2026-10', 'label': 'Hypercare'},
+        ],
+    })
+    assert response.status_code == 200
+    assert response.json['milestone_month'] == '2026-09'
+    assert response.json['milestone_label'] == 'Go Live'
+    assert [item['label'] for item in response.json['milestones']] == ['Go Live', 'Hypercare']
+
+    with app.app_context():
+        saved = ThemeMilestone.query.filter_by(theme_id=theme_id).order_by(ThemeMilestone.position).all()
+        assert [item.month for item in saved] == ['2026-09', '2026-10']
 
 def test_bulk_allocations(auth_client, app):
     """Test bulk update of allocations."""

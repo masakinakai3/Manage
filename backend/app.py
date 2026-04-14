@@ -11,7 +11,7 @@ import sys
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager
-from models import db, User
+from models import db, User, Theme, ThemeMilestone
 
 
 def create_app(test_config=None):
@@ -98,6 +98,7 @@ def create_app(test_config=None):
     with app.app_context():
         db.create_all()
         _migrate_allocations_unique_index()
+        _migrate_theme_milestones()
         _seed_admin(app)
 
     @app.before_request
@@ -155,6 +156,45 @@ def _migrate_allocations_unique_index():
     except Exception as e:
         db.session.rollback()
         print(f"[Migration] UNIQUE INDEX may already exist: {e}")
+
+
+def _migrate_theme_milestones():
+    """Ensure milestone storage exists and backfill legacy single-milestone data."""
+    from sqlalchemy import text
+
+    existing_columns = {
+        row[1]
+        for row in db.session.execute(text("PRAGMA table_info(themes)")).fetchall()
+    }
+
+    statements = []
+    if 'milestone_month' not in existing_columns:
+        statements.append("ALTER TABLE themes ADD COLUMN milestone_month VARCHAR(7)")
+    if 'milestone_label' not in existing_columns:
+        statements.append("ALTER TABLE themes ADD COLUMN milestone_label VARCHAR(200)")
+
+    for statement in statements:
+        db.session.execute(text(statement))
+
+    if statements:
+        db.session.commit()
+        print("[Migration] Added milestone columns to themes table.")
+
+    themes = Theme.query.filter(Theme.milestone_month.isnot(None)).all()
+    inserted = 0
+    for theme in themes:
+        if theme.milestones:
+            continue
+        theme.milestones.append(ThemeMilestone(
+            month=theme.milestone_month,
+            label=theme.milestone_label,
+            position=0,
+        ))
+        inserted += 1
+
+    if inserted:
+        db.session.commit()
+        print(f"[Migration] Backfilled {inserted} legacy theme milestones.")
 
 
 def _seed_admin(app):

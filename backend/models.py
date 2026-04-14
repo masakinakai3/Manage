@@ -79,12 +79,22 @@ class Theme(db.Model):
     priority = db.Column(db.Integer, nullable=False, default=0)
     start_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
     end_month = db.Column(db.String(7), nullable=True)    # 'YYYY-MM'
+    milestone_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
+    milestone_label = db.Column(db.String(200), nullable=True)
 
     allocations = db.relationship('Allocation', backref='theme', lazy='dynamic',
                                   cascade='all, delete-orphan')
     members = db.relationship('Member', secondary=theme_members, back_populates='themes')
+    milestones = db.relationship(
+        'ThemeMilestone',
+        backref='theme',
+        lazy='select',
+        cascade='all, delete-orphan',
+        order_by='ThemeMilestone.position, ThemeMilestone.id',
+    )
 
     def to_dict(self):
+        milestones = [milestone.to_dict() for milestone in self.milestones]
         return {
             'theme_id': self.theme_id,
             'name': self.name,
@@ -94,7 +104,29 @@ class Theme(db.Model):
             'priority': self.priority,
             'start_month': self.start_month,
             'end_month': self.end_month,
+            'milestones': milestones,
+            'milestone_month': self.milestone_month,
+            'milestone_label': self.milestone_label,
             'member_ids': [m.member_id for m in self.members]
+        }
+
+
+class ThemeMilestone(db.Model):
+    """Milestone attached to a theme."""
+    __tablename__ = 'theme_milestones'
+
+    id = db.Column(db.Integer, primary_key=True)
+    theme_id = db.Column(db.Integer, db.ForeignKey('themes.theme_id'), nullable=False, index=True)
+    month = db.Column(db.String(7), nullable=False)  # 'YYYY-MM'
+    label = db.Column(db.String(200), nullable=True)
+    position = db.Column(db.Integer, nullable=False, default=0)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'month': self.month,
+            'label': self.label,
+            'position': self.position,
         }
 
 class Snapshot(db.Model):

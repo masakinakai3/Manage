@@ -8,10 +8,47 @@
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
-from models import db, Theme, Allocation, Member
+from models import db, Theme, ThemeMilestone, Allocation, Member
 from sqlalchemy import func
 
 themes_bp = Blueprint('themes', __name__)
+
+
+def _normalize_milestones(data):
+    raw_milestones = data.get('milestones')
+    if raw_milestones is None:
+        legacy_month = (data.get('milestone_month') or '').strip()
+        legacy_label = (data.get('milestone_label') or '').strip()
+        raw_milestones = [{'month': legacy_month, 'label': legacy_label}] if legacy_month else []
+
+    milestones = []
+    for index, item in enumerate(raw_milestones):
+        if not isinstance(item, dict):
+            continue
+        month = (item.get('month') or '').strip()
+        label = (item.get('label') or '').strip() or None
+        if not month:
+            continue
+        milestones.append({
+            'month': month,
+            'label': label,
+            'position': index,
+        })
+    return milestones
+
+
+def _replace_theme_milestones(theme, items):
+    theme.milestones = [
+        ThemeMilestone(
+            month=item['month'],
+            label=item['label'],
+            position=item['position'],
+        )
+        for item in items
+    ]
+    first = items[0] if items else None
+    theme.milestone_month = first['month'] if first else None
+    theme.milestone_label = first['label'] if first else None
 
 
 @themes_bp.route('', methods=['GET'])
@@ -56,6 +93,7 @@ def create_theme():
         start_month=data.get('start_month'),
         end_month=data.get('end_month'),
     )
+    _replace_theme_milestones(theme, _normalize_milestones(data))
     db.session.add(theme)
     db.session.commit()
     return jsonify(theme.to_dict()), 201
@@ -71,6 +109,9 @@ def update_theme(theme_id):
     for field in ('name', 'category', 'status', 'color', 'priority', 'start_month', 'end_month'):
         if field in data:
             setattr(theme, field, data[field])
+
+    if 'milestones' in data or 'milestone_month' in data or 'milestone_label' in data:
+        _replace_theme_milestones(theme, _normalize_milestones(data))
     
     # Optional: Bulk update member assignments if provided
     if 'member_ids' in data:

@@ -16,6 +16,10 @@ const themeList = vi.fn(async () => ([{
     status: 'active',
     color: '#00aaff',
     category: 'Delivery',
+    milestones: [
+        { id: 1, month: '2026-04', label: 'Release', position: 0 },
+        { id: 2, month: '2026-04', label: 'Review', position: 1 },
+    ],
     member_ids: [10],
 }]));
 const memberList = vi.fn(async () => ([{
@@ -188,5 +192,15 @@ describe('gantt-renderer regressions', () => {
             { type: 'summary', label: 'Theme A', color: '#00aaff', values: ['20%'] },
             { type: 'member', label: 'Alice (Dev)', values: ['20%'] },
         ]);
+    });
+
+    it('renders milestone markers on the matching theme month', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const milestones = Array.from(document.querySelectorAll('.gantt-row-summary .gantt-milestone-chip'));
+        expect(milestones).toHaveLength(2);
+        expect(milestones.map((item) => item.textContent)).toEqual(['Release', 'Review']);
     });
 });
