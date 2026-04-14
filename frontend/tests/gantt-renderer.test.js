@@ -39,6 +39,7 @@ const allocationList = vi.fn(async () => ([{
 const warnings = vi.fn(async () => ([]));
 const memberLoads = vi.fn(async () => ({ 10: { '2026-04': 20 } }));
 const snapshotList = vi.fn(async () => ([]));
+const themeUpdate = vi.fn(async () => ({}));
 
 vi.mock('../js/gantt/gantt-editor.js', () => ({
     openCellEditor,
@@ -85,6 +86,7 @@ vi.mock('../js/api.js', () => ({
     },
     themes: {
         list: themeList,
+        update: themeUpdate,
         assignMembersBulk: vi.fn(),
     },
 }));
@@ -155,6 +157,7 @@ describe('gantt-renderer regressions', () => {
         warnings.mockClear();
         memberLoads.mockClear();
         snapshotList.mockClear();
+        themeUpdate.mockClear();
         localStorage.clear();
     });
 
@@ -202,5 +205,33 @@ describe('gantt-renderer regressions', () => {
         const milestones = Array.from(document.querySelectorAll('.gantt-row-summary .gantt-milestone-chip'));
         expect(milestones).toHaveLength(2);
         expect(milestones.map((item) => item.textContent)).toEqual(['Release', 'Review']);
+    });
+
+    it('opens and saves milestone edits from the gantt screen', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const button = document.querySelector('.theme-milestone-btn');
+        expect(button).not.toBeNull();
+
+        button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.getElementById('modal-overlay')?.hidden).toBe(false);
+        const rows = document.querySelectorAll('.theme-milestone-row');
+        expect(rows).toHaveLength(2);
+
+        rows[0].querySelector('.theme-milestone-month').value = '2026-05';
+        rows[0].querySelector('.theme-milestone-label').value = 'Launch';
+        document.getElementById('modal-save-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        await Promise.resolve();
+
+        expect(themeUpdate).toHaveBeenCalledWith(1, {
+            milestones: [
+                { month: '2026-05', label: 'Launch' },
+                { month: '2026-04', label: 'Review' },
+            ],
+        });
     });
 });

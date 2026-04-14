@@ -223,7 +223,7 @@ renderTable = function(months) {
         if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
-            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">?</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">Add Member</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">?</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">Milestones</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">Add Member</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
@@ -233,6 +233,7 @@ renderTable = function(months) {
 
 function bindRows() {
     document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); refreshGantt(); }));
+    document.querySelectorAll('.theme-milestone-btn').forEach((button) => button.addEventListener('click', () => showMilestoneModal(Number.parseInt(button.dataset.themeId, 10))));
     document.querySelectorAll('.theme-assign-btn').forEach((button) => button.addEventListener('click', () => showAssignMemberModal(Number.parseInt(button.dataset.themeId, 10))));
     document.querySelectorAll('.theme-status-select').forEach((select) => select.addEventListener('change', async (event) => {
         const themeId = Number.parseInt(event.target.dataset.themeId, 10);
@@ -551,6 +552,97 @@ async function showAssignMemberModal(themeId) {
     };
 }
 
+function closeSharedModal() {
+    const modalOverlay = document.getElementById('modal-overlay');
+    if (modalOverlay) modalOverlay.hidden = true;
+}
+
+function themeMilestonesForEdit(theme) {
+    if (Array.isArray(theme?.milestones) && theme.milestones.length > 0) {
+        return theme.milestones.map((item) => ({ month: item.month || '', label: item.label || '' }));
+    }
+    if (theme?.milestone_month) {
+        return [{ month: theme.milestone_month, label: theme.milestone_label || '' }];
+    }
+    return [{ month: '', label: '' }];
+}
+
+async function showMilestoneModal(themeId) {
+    const theme = allThemes.find((item) => item.theme_id === themeId);
+    if (!theme) return;
+
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const modalFooter = document.getElementById('modal-footer');
+    const modalOverlay = document.getElementById('modal-overlay');
+
+    const renderRow = (item = { month: '', label: '' }) => `
+        <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
+            <input class="theme-milestone-month" type="month" value="${item.month || ''}">
+            <input class="theme-milestone-label" type="text" value="${escapeHtml(item.label || '')}" placeholder="例: リリース">
+            <button class="btn btn-ghost btn-sm theme-milestone-remove" type="button">削除</button>
+        </div>
+    `;
+
+    modalTitle.textContent = `${theme.name} のマイルストーン`;
+    modalBody.innerHTML = `
+        <div class="form-field">
+            <label>マイルストーン</label>
+            <div id="theme-milestones-editor">${themeMilestonesForEdit(theme).map((item) => renderRow(item)).join('')}</div>
+            <button class="btn btn-ghost btn-sm" id="theme-milestone-add" type="button">追加</button>
+        </div>
+    `;
+    modalFooter.innerHTML = `
+        <button class="btn btn-ghost" id="modal-cancel-btn" type="button">キャンセル</button>
+        <button class="btn btn-primary" id="modal-save-btn" type="button">保存する</button>
+    `;
+    modalOverlay.hidden = false;
+
+    const editor = document.getElementById('theme-milestones-editor');
+    const bindMilestoneRows = () => {
+        editor.querySelectorAll('.theme-milestone-remove').forEach((button) => {
+            button.onclick = () => {
+                const rows = editor.querySelectorAll('.theme-milestone-row');
+                if (rows.length === 1) {
+                    rows[0].querySelector('.theme-milestone-month').value = '';
+                    rows[0].querySelector('.theme-milestone-label').value = '';
+                    return;
+                }
+                button.closest('.theme-milestone-row')?.remove();
+            };
+        });
+    };
+
+    document.getElementById('theme-milestone-add').onclick = () => {
+        editor.insertAdjacentHTML('beforeend', renderRow());
+        bindMilestoneRows();
+    };
+    bindMilestoneRows();
+
+    document.getElementById('modal-close').onclick = closeSharedModal;
+    document.getElementById('modal-cancel-btn').onclick = closeSharedModal;
+    document.getElementById('modal-save-btn').onclick = async () => {
+        const milestones = Array.from(editor.querySelectorAll('.theme-milestone-row'))
+            .map((row) => ({
+                month: row.querySelector('.theme-milestone-month')?.value || '',
+                label: row.querySelector('.theme-milestone-label')?.value.trim() || '',
+            }))
+            .filter((item) => item.month);
+
+        try {
+            setSaveState('saving', 'マイルストーンを保存しています...');
+            await themesApi.update(themeId, { milestones });
+            closeSharedModal();
+            setSaveState('saved', 'マイルストーンを保存しました');
+            showToast('マイルストーンを保存しました。', 'success');
+            await refreshGantt();
+        } catch (error) {
+            setSaveState('error', 'マイルストーンの保存に失敗しました');
+            showToast(`マイルストーンの保存に失敗しました: ${formatError(error)}`, 'error');
+        }
+    };
+}
+
 function filterThemes() {
     if (!searchQuery) return allThemes;
     return allThemes.filter((theme) => `${theme.name} ${theme.category || ''}`.toLowerCase().includes(searchQuery) || allAllocations.some((item) => item.theme_id === theme.theme_id && `${item.memo || ''} ${(allMembers.find((member) => member.member_id === item.member_id)?.display_name || '')}`.toLowerCase().includes(searchQuery)));
@@ -689,7 +781,7 @@ function renderTable(months) {
         if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
-            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
