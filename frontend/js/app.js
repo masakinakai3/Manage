@@ -4,7 +4,7 @@
  * https://opensource.org/licenses/mit-license.php
  */
 
-import { auth, themes as themesApi, members as membersApi, allocations, dataBackup } from './api.js';
+import { auth, themes as themesApi, members as membersApi, allocations, dataBackup, savedViews as savedViewsApi } from './api.js';
 import { initGantt, refreshGantt, HistoryManager, getGanttExportDataset } from './gantt/gantt-renderer.js';
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
@@ -29,6 +29,7 @@ const STATUS_LABELS = {
 
 let currentUser = null;
 let currentView = 'gantt';
+let savedViewsCache = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     initUi();
@@ -52,7 +53,7 @@ async function showApp() {
     initNavigation();
     initBackup();
     initUiConfig();
-    initSavedViews();
+    await initSavedViews();
     initOnboarding();
     initKeyboardShortcuts();
     initAdvancedExport();
@@ -591,33 +592,66 @@ function presetLabel(value) {
     return labels[value] || value;
 }
 
-function initSavedViews() {
+async function initSavedViews() {
     document.getElementById('saved-view-apply-btn')?.addEventListener('click', applySelectedSavedView);
     document.getElementById('saved-view-save-btn')?.addEventListener('click', saveCurrentView);
     document.getElementById('saved-view-delete-btn')?.addEventListener('click', deleteCurrentSavedView);
+    await syncSavedViewsFromLocal();
+    await reloadSavedViews();
+}
+
+async function syncSavedViewsFromLocal() {
+    const localViews = loadSavedViews();
+    if (localViews.length === 0) return;
+
+    for (const view of localViews) {
+        try {
+            await savedViewsApi.upsert(view);
+        } catch (error) {
+            console.warn('Failed to migrate local saved view', error);
+            return;
+        }
+    }
+
+    localStorage.removeItem('manage_saved_views');
+}
+
+async function reloadSavedViews(selectedId = '') {
+    try {
+        const views = await savedViewsApi.list();
+        savedViewsCache = views.map((view) => ({
+            ...view,
+            state: parseSavedViewState(view.state),
+        }));
+    } catch (error) {
+        console.warn('Failed to load saved views from API, falling back to local storage', error);
+        savedViewsCache = loadSavedViews();
+    }
     refreshSavedViewOptions();
+    if (selectedId) refreshSavedViewOptions(selectedId);
 }
 
 function refreshSavedViewOptions(selectedId = '') {
     const select = document.getElementById('saved-view-select');
     if (!select) return;
 
-    const views = loadSavedViews();
-    select.innerHTML = '<option value="">Saved views</option>' + views.map((view) => `<option value="${view.id}">${view.name}</option>`).join('');
-    if (selectedId && views.some((view) => view.id === selectedId)) {
+    select.innerHTML = '<option value="">Saved views</option>' + savedViewsCache.map((view) => `<option value="${view.id}">${view.name}</option>`).join('');
+    if (selectedId && savedViewsCache.some((view) => view.id === selectedId)) {
         select.value = selectedId;
     }
 }
 
 async function saveCurrentView() {
-    const name = await showPromptDialog({
+    const defaultName = currentView === 'member-load'
+        ? `Member review ${new Date().toLocaleString('ja-JP')}`
+        : `Planning ${new Date().toLocaleString('ja-JP')}`;
+    const name = (await showPromptDialog({
         title: 'Save current view',
         message: 'Enter a name for this view.',
-        defaultValue: currentView === 'member-load' ? 'Member review view' : 'Planning view',
+        defaultValue: defaultName,
         confirmText: 'Save',
         cancelText: 'Cancel',
-    });
-    if (!name) return;
+    })) || defaultName;
 
     const viewState = loadViewState();
     const savedView = {
@@ -629,15 +663,27 @@ async function saveCurrentView() {
             groupBy: document.getElementById('gantt-group-by')?.value || viewState.groupBy || 'none',
         },
     };
-    upsertSavedView(savedView);
+
+    savedViewsCache = mergeSavedView(savedViewsCache, savedView);
     refreshSavedViewOptions(savedView.id);
+
+    try {
+        await savedViewsApi.upsert(savedView);
+        upsertSavedView(savedView);
+        await reloadSavedViews(savedView.id);
+    } catch (error) {
+        upsertSavedView(savedView);
+        savedViewsCache = loadSavedViews();
+        refreshSavedViewOptions(savedView.id);
+        console.warn('Saved view API unavailable, used local storage fallback', error);
+    }
     showToast('Saved view was added.', 'success');
 }
 
 function applySelectedSavedView() {
     const select = document.getElementById('saved-view-select');
     if (!select?.value) return;
-    const view = loadSavedViews().find((item) => item.id === select.value);
+    const view = savedViewsCache.find((item) => item.id === select.value) || loadSavedViews().find((item) => item.id === select.value);
     if (!view) return;
 
     updateViewState(view.state || {});
@@ -649,12 +695,34 @@ function applySelectedSavedView() {
     showToast(`Applied saved view: ${view.name}`, 'info');
 }
 
-function deleteCurrentSavedView() {
+async function deleteCurrentSavedView() {
     const select = document.getElementById('saved-view-select');
     if (!select?.value) return;
+
+    try {
+        await savedViewsApi.delete(select.value);
+    } catch (error) {
+        console.warn('Failed to delete saved view from API, removing local fallback only', error);
+    }
+
     deleteSavedView(select.value);
-    refreshSavedViewOptions();
+    await reloadSavedViews();
     showToast('Saved view was deleted.', 'info');
+}
+
+function parseSavedViewState(rawState) {
+    if (!rawState) return {};
+    if (typeof rawState === 'object') return rawState;
+    try {
+        return JSON.parse(rawState);
+    } catch {
+        return {};
+    }
+}
+
+function mergeSavedView(views, savedView) {
+    return [...views.filter((view) => view.id !== savedView.id), savedView]
+        .sort((left, right) => left.name.localeCompare(right.name, 'ja'));
 }
 
 function initOnboarding() {

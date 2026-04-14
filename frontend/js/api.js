@@ -138,6 +138,24 @@ export const snapshots = {
     delete: (id) => request(`/snapshots/${id}`, { method: 'DELETE' }),
 };
 
+// Saved Views
+export const savedViews = {
+    list: () => request('/saved-views'),
+    upsert: (data) => request('/saved-views', {
+        method: 'POST', body: JSON.stringify(data),
+    }),
+    delete: async (id) => {
+        const res = await fetch(`${API_BASE}/saved-views/${id}`, {
+            method: 'DELETE',
+            credentials: 'include',
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error || `HTTP ${res.status}`);
+        }
+    },
+};
+
 // Insights
 export const insights = {
     overview: (from, to) => {

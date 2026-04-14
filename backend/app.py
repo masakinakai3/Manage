@@ -66,6 +66,7 @@ def create_app(test_config=None):
     from routes.import_data import import_data_bp
     from routes.snapshots import snapshots_bp
     from routes.insights import insights_bp
+    from routes.saved_views import saved_views_bp
 
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(themes_bp, url_prefix='/api/themes')
@@ -75,6 +76,7 @@ def create_app(test_config=None):
     app.register_blueprint(import_data_bp, url_prefix='/api/import')
     app.register_blueprint(snapshots_bp, url_prefix='/api/snapshots')
     app.register_blueprint(insights_bp, url_prefix='/api/insights')
+    app.register_blueprint(saved_views_bp, url_prefix='/api/saved-views')
 
     # Serve React App
     @app.route('/', defaults={'path': ''})
@@ -83,6 +85,14 @@ def create_app(test_config=None):
         if path and os.path.exists(os.path.join(app.static_folder, path)):
             return app.send_static_file(path)
         return send_from_directory(app.template_folder, 'index.html')
+
+    @app.after_request
+    def disable_cache(response):
+        """Always serve the latest bundled frontend assets in desktop usage."""
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
 
     # Initialize database
     with app.app_context():

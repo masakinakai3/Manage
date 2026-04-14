@@ -5,7 +5,7 @@
 #
 
 import json
-from models import db, Theme, Member, Allocation
+from models import db, Theme, Member, Allocation, SavedView
 
 def test_login(client):
     """Test login functionality."""
@@ -118,3 +118,36 @@ def test_insights_overview(auth_client, app):
     assert isinstance(data['recommendations'], list)
     assert 'dashboard' in data
     assert any(item['code'] == 'closed_theme_with_remaining_allocation' for item in data['health_checks'])
+
+
+def test_saved_views_crud(auth_client, app):
+    payload = {
+        'id': 'view-1',
+        'name': 'Planning view',
+        'view': 'gantt',
+        'state': {
+            'startMonth': '2026-04',
+            'scale': 1,
+            'groupBy': 'none',
+        },
+    }
+
+    response = auth_client.post('/api/saved-views', json=payload)
+    assert response.status_code == 201
+    assert response.json['id'] == 'view-1'
+    assert response.json['name'] == 'Planning view'
+
+    response = auth_client.get('/api/saved-views')
+    assert response.status_code == 200
+    assert any(item['id'] == 'view-1' for item in response.json)
+
+    with app.app_context():
+        saved_view = db.session.get(SavedView, 'view-1')
+        assert saved_view is not None
+        assert json.loads(saved_view.state)['startMonth'] == '2026-04'
+
+    response = auth_client.delete('/api/saved-views/view-1')
+    assert response.status_code == 204
+
+    with app.app_context():
+        assert db.session.get(SavedView, 'view-1') is None
