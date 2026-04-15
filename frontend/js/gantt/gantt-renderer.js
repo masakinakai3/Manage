@@ -668,6 +668,7 @@ function memberMonthTotal(memberId, month) { return allAllocations.filter((item)
 function sumThemeRate(themeId, month, members) { return members.reduce((sum, member) => sum + lookupRate(allAllocations, themeId, member.member_id, month), 0); }
 function lookupRate(source, themeId, memberId, month) { return source.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month)?.allocation_rate || 0; }
 function countBy(items, selector) { const map = new Map(); items.forEach((item) => map.set(selector(item), (map.get(selector(item)) || 0) + 1)); return map; }
+function getGroupKey(theme) { return groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : groupBy === 'priority' ? `優先度 ${theme.priority ?? 0}` : theme.category || 'Uncategorized'; }
 function rateClass(rate) { if (rate <= 0) return ''; if (rate <= 30) return 'rate-low'; if (rate <= 60) return 'rate-mid'; if (rate < 100) return 'rate-high'; if (rate === 100) return 'rate-full'; return 'rate-over'; }
 function csvEscape(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
@@ -706,8 +707,8 @@ export function getGanttGridExportDataset() {
     const rows = [];
     const groups = groupBy === 'none'
         ? [{ key: '', themes }]
-        : [...countBy(themes, (theme) => groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized').keys()]
-            .map((key) => ({ key, themes: themes.filter((theme) => (groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized') === key) }));
+        : [...countBy(themes, getGroupKey).keys()]
+            .map((key) => ({ key, themes: themes.filter((theme) => getGroupKey(theme) === key) }));
 
     groups.forEach((group) => {
         if (group.key) {
@@ -780,8 +781,8 @@ function renderTable(months) {
     const themes = filterThemes();
     const groups = groupBy === 'none'
         ? [{ key: '', themes }]
-        : [...countBy(themes, (theme) => groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized').keys()]
-            .map((key) => ({ key, themes: themes.filter((theme) => (groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized') === key) }));
+        : [...countBy(themes, getGroupKey).keys()]
+            .map((key) => ({ key, themes: themes.filter((theme) => getGroupKey(theme) === key) }));
 
     groups.forEach((group) => {
         if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);

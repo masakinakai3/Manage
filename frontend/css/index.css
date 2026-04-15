@@ -464,8 +464,7 @@ body {
 }
 
 #sidebar.sidebar-collapsed + .sidebar-toggle-btn {
-    left: auto;
-    right: var(--space-4);
+    left: var(--space-4);
 }
 
 /* ==========================================
