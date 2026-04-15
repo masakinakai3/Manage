@@ -206,6 +206,34 @@ function initUiConfig() {
 
     document.getElementById('shared-period-preset').addEventListener('change', (event) => updatePreset(event.target.value));
     document.getElementById('member-period-preset').addEventListener('change', (event) => updatePreset(event.target.value));
+
+    // Sidebar toggle
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+        sidebar?.classList.add('sidebar-collapsed');
+    }
+    sidebarToggle?.addEventListener('click', () => {
+        sidebar?.classList.toggle('sidebar-collapsed');
+        const collapsed = sidebar?.classList.contains('sidebar-collapsed');
+        localStorage.setItem('sidebar_collapsed', String(collapsed));
+    });
+
+    // Detail panel toggle
+    const detailPanel = document.getElementById('gantt-detail-panel');
+    const detailToggle = document.getElementById('detail-panel-toggle');
+    if (localStorage.getItem('detail_collapsed') === 'true') {
+        detailPanel?.classList.add('detail-collapsed');
+    }
+    detailToggle?.addEventListener('click', () => {
+        detailPanel?.classList.toggle('detail-collapsed');
+        const collapsed = detailPanel?.classList.contains('detail-collapsed');
+        localStorage.setItem('detail_collapsed', String(collapsed));
+        detailToggle.textContent = collapsed ? '▶' : '✕';
+    });
+    if (detailPanel?.classList.contains('detail-collapsed') && detailToggle) {
+        detailToggle.textContent = '▶';
+    }
 }
 
 function switchView(viewName) {

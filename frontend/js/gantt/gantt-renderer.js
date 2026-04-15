@@ -213,23 +213,7 @@ function renderSnapshotSummary(months) {
     target.innerHTML = `<article class="summary-card"><div class="summary-label">差分セル</div><div class="summary-value">${changed}</div><div class="summary-subtext">表示中のみ集計</div></article><article class="summary-card"><div class="summary-label">差分テーマ</div><div class="summary-value">${themes.size}</div><div class="summary-subtext">テーマ単位</div></article><article class="summary-card"><div class="summary-label">差分メンバー</div><div class="summary-value">${members.size}</div><div class="summary-subtext">メンバー単位</div></article>`;
 }
 
-renderTable = function(months) {
-    const current = currentMonth();
-    document.getElementById('gantt-thead').innerHTML = `<tr><th>テーマ / メンバー</th>${months.map((month) => `<th class="${month === current ? 'month-current' : ''}">${formatMonthHeader(month, scale).replace('\n', '<br>')}</th>`).join('')}</tr>`;
-    const rows = [];
-    const themes = filterThemes();
-    const groups = groupBy === 'none' ? [{ key: '', themes }] : [...countBy(themes, (theme) => groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized').keys()].map((key) => ({ key, themes: themes.filter((theme) => (groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized') === key) }));
-    groups.forEach((group) => {
-        if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
-        group.themes.forEach((theme) => {
-            const members = themeMembers(theme.theme_id);
-            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">?</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">Milestones</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">Add Member</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
-        });
-    });
-    document.getElementById('gantt-tbody').innerHTML = rows.join('') || `<tr><td colspan="${months.length + 1}" class="summary-subtext">条件に一致するテーマがありません。</td></tr>`;
-    bindRows();
-};
+
 
 function bindRows() {
     document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); refreshGantt(); }));
@@ -503,12 +487,13 @@ async function showAssignMemberModal(themeId) {
     const theme = allThemes.find((item) => item.theme_id === themeId);
     if (!theme) return;
 
-    const availableMembers = allMembers
-        .filter((member) => member.is_active && !(theme.member_ids || []).includes(member.member_id))
+    const currentMemberIds = new Set(themeMembers(themeId).map((m) => m.member_id));
+    const allActiveMembers = allMembers
+        .filter((member) => member.is_active)
         .sort((left, right) => left.display_name.localeCompare(right.display_name, 'ja'));
 
-    if (availableMembers.length === 0) {
-        showToast('No available members.', 'warning');
+    if (allActiveMembers.length === 0) {
+        showToast('利用可能なメンバーがいません。', 'warning');
         return;
     }
 
@@ -517,38 +502,59 @@ async function showAssignMemberModal(themeId) {
     const modalFooter = document.getElementById('modal-footer');
     const modalOverlay = document.getElementById('modal-overlay');
 
-    modalTitle.textContent = `${theme.name} にメンバーを追加`;
+    modalTitle.textContent = `${theme.name} のメンバー管理`;
     modalBody.innerHTML = `
+        <p class="summary-subtext" style="margin-bottom:12px">チェックを入れるとメンバーを追加、外すと削除します。</p>
         <div class="member-selection-list">
-            ${availableMembers.map((member) => `
-                <label class="member-selection-item">
-                    <input type="checkbox" value="${member.member_id}">
+            ${allActiveMembers.map((member) => {
+                const isAssigned = currentMemberIds.has(member.member_id);
+                return `<label class="member-selection-item ${isAssigned ? 'member-assigned' : ''}">
+                    <input type="checkbox" value="${member.member_id}" ${isAssigned ? 'checked' : ''}>
                     <div>
-                        <div>${member.display_name}</div>
+                        <div>${escapeHtml(member.display_name)}${isAssigned ? ' <span class="member-assigned-badge">参加中</span>' : ''}</div>
                         <div class="summary-subtext">${member.department || 'No Department'} / Capacity ${member.capacity}%</div>
                     </div>
-                </label>
-            `).join('')}
+                </label>`;
+            }).join('')}
         </div>
     `;
     modalFooter.innerHTML = `
         <button class="btn btn-ghost" id="modal-cancel-btn" type="button">キャンセル</button>
-        <button class="btn btn-primary" id="modal-save-btn" type="button">追加する</button>
+        <button class="btn btn-primary" id="modal-save-btn" type="button">保存する</button>
     `;
     modalOverlay.hidden = false;
 
     document.getElementById('modal-close').onclick = () => { modalOverlay.hidden = true; };
     document.getElementById('modal-cancel-btn').onclick = () => { modalOverlay.hidden = true; };
     document.getElementById('modal-save-btn').onclick = async () => {
-        const selected = Array.from(modalBody.querySelectorAll('input[type="checkbox"]:checked')).map((input) => Number.parseInt(input.value, 10));
-        if (selected.length === 0) {
-            showToast('Select at least one member.', 'warning');
+        const checkedIds = new Set(
+            Array.from(modalBody.querySelectorAll('input[type="checkbox"]:checked'))
+                .map((input) => Number.parseInt(input.value, 10))
+        );
+        const toAdd = [...checkedIds].filter((id) => !currentMemberIds.has(id));
+        const toRemove = [...currentMemberIds].filter((id) => !checkedIds.has(id));
+
+        if (toAdd.length === 0 && toRemove.length === 0) {
+            modalOverlay.hidden = true;
             return;
         }
-        await themesApi.assignMembersBulk(themeId, selected);
-        modalOverlay.hidden = true;
-        showToast(`${selected.length} members added.`, 'success');
-        await refreshGantt();
+
+        try {
+            if (toAdd.length > 0) {
+                await themesApi.assignMembersBulk(themeId, toAdd);
+            }
+            for (const memberId of toRemove) {
+                await themesApi.unassignMember(themeId, memberId);
+            }
+            modalOverlay.hidden = true;
+            const msgs = [];
+            if (toAdd.length > 0) msgs.push(`${toAdd.length} 名追加`);
+            if (toRemove.length > 0) msgs.push(`${toRemove.length} 名削除`);
+            showToast(msgs.join(' / ') + ' しました。', 'success');
+            await refreshGantt();
+        } catch (error) {
+            showToast(`メンバー更新に失敗しました: ${error?.message || error}`, 'error');
+        }
     };
 }
 

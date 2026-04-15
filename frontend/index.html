@@ -65,6 +65,8 @@
             </div>
         </nav>
 
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="サイドバー切替">☰</button>
+
         <main id="main-content">
             <div id="view-gantt" class="view active">
                 <section id="onboarding-panel" class="onboarding-panel" hidden>
@@ -152,7 +154,10 @@
                     </div>
 
                     <aside id="gantt-detail-panel" class="detail-panel">
-                        <h3>セル詳細</h3>
+                        <div class="detail-panel-header">
+                            <h3>セル詳細</h3>
+                            <button id="detail-panel-toggle" class="btn btn-ghost btn-sm" type="button" title="詳細パネル切替">✕</button>
+                        </div>
                         <p id="detail-empty" class="summary-subtext">セルを選択すると、個別編集や一括更新プレビューが使えます。</p>
                         <div id="detail-form" hidden>
                             <div class="form-field">
