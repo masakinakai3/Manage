@@ -3,6 +3,7 @@ import { getPresetConfig, loadViewState, subscribeViewState, updateViewState } f
 import { addMonths, currentMonth, formatMonthHeader, getVisibleMonths } from '../utils/date-utils.js';
 import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from '../ui.js';
 import { isCellEditorOpen, openCellEditor } from './gantt-editor.js';
+import { initGanttDnD } from './gantt-dnd.js';
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', completed: 'Completed', cancelled: 'Cancelled' };
 
@@ -69,6 +70,7 @@ export async function initGantt() {
         refreshGantt();
     });
     hydrateCollapsed();
+    initGanttDnD({ performMove: performDragAndDropMove });
     await refreshGantt();
 }
 
@@ -306,6 +308,26 @@ async function previewBulkUpdate() {
     const undo = months.map((month) => { const current = allAllocations.find((item) => item.theme_id === selectedCell.themeId && item.member_id === selectedCell.memberId && item.month === month); return { theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month, allocation_rate: current?.allocation_rate || 0, memo: current?.memo || '' }; });
     HistoryManager.push(undo, redo);
     await HistoryManager.perform(redo);
+}
+
+async function performDragAndDropMove({ undo, redo }) {
+    if (!Array.isArray(undo) || !Array.isArray(redo) || undo.length === 0 || redo.length === 0) return;
+
+    HistoryManager.push(undo, redo);
+
+    try {
+        await HistoryManager.perform(redo);
+        setSaveState('saved', 'Allocation move applied.');
+        showToast('Allocation moved. Undo is available with Ctrl+Z.', 'success');
+    } catch (error) {
+        if (HistoryManager.index >= 0) {
+            HistoryManager.stack.splice(HistoryManager.index, 1);
+            HistoryManager.index -= 1;
+        }
+        setSaveState('error', 'Failed to move allocation.');
+        showToast(`Failed to move allocation: ${formatError(error)}`, 'error');
+        throw error;
+    }
 }
 
 function moveSelection(offset) {
