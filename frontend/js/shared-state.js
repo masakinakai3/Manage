@@ -16,6 +16,10 @@ const defaultState = {
     startMonth: addMonths(currentMonth(), -1),
     scale: 1,
     ganttSearch: '',
+    ganttCategory: '',
+    ganttOwner: '',
+    ganttStatus: 'all',
+    ganttPriority: 'all',
     memberSearch: '',
     groupBy: 'none',
 };

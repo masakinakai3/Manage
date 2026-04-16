@@ -61,7 +61,16 @@ vi.mock('../js/ui.js', () => ({
 
 vi.mock('../js/shared-state.js', () => ({
     getPresetConfig: vi.fn(() => ({ startMonth: '2026-04', scale: 1 })),
-    loadViewState: vi.fn(() => ({ startMonth: '2026-04', scale: 1, ganttSearch: '', groupBy: 'none' })),
+    loadViewState: vi.fn(() => ({
+        startMonth: '2026-04',
+        scale: 1,
+        ganttSearch: '',
+        ganttCategory: '',
+        ganttOwner: '',
+        ganttStatus: 'all',
+        ganttPriority: 'all',
+        groupBy: 'none',
+    })),
     subscribeViewState: vi.fn(() => () => {}),
     updateViewState: vi.fn(),
 }));
@@ -277,6 +286,34 @@ describe('gantt-renderer regressions', () => {
         const milestones = Array.from(document.querySelectorAll('.gantt-row-summary .gantt-milestone-chip'));
         expect(milestones).toHaveLength(2);
         expect(milestones.map((item) => item.textContent)).toEqual(['Release', 'Review']);
+    });
+
+    it('creates and syncs multi-filter controls for gantt search', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-04',
+            scale: 1,
+            ganttSearch: 'alice',
+            ganttCategory: 'Delivery',
+            ganttOwner: 'alice',
+            ganttStatus: 'open',
+            ganttPriority: '1',
+            groupBy: 'status',
+        });
+
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        expect(document.getElementById('gantt-category-filter')).not.toBeNull();
+        expect(document.getElementById('gantt-owner-filter')).not.toBeNull();
+        expect(document.getElementById('gantt-status-filter')?.value).toBe('open');
+        expect(document.getElementById('gantt-priority-filter')?.value).toBe('1');
+        expect(document.getElementById('gantt-owner-filter')?.value).toBe('alice');
+
+        document.getElementById('gantt-status-filter').value = 'completed';
+        document.getElementById('gantt-status-filter').dispatchEvent(new Event('change', { bubbles: true }));
+
+        expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttStatus: 'completed' });
     });
 
     it('opens and saves milestone edits from the gantt screen', async () => {

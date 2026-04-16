@@ -41,6 +41,10 @@ let startMonth = addMonths(currentMonth(), -1);
 let scale = 1;
 let visibleCount = 14;
 let searchQuery = '';
+let categoryFilter = '';
+let ownerFilter = '';
+let statusFilter = 'all';
+let priorityFilter = 'all';
 let groupBy = 'none';
 let collapsedThemes = new Set();
 let selectedCell = null;
@@ -54,6 +58,10 @@ export async function initGantt() {
     startMonth = state.startMonth;
     scale = state.scale;
     searchQuery = state.ganttSearch || '';
+    categoryFilter = state.ganttCategory || '';
+    ownerFilter = state.ganttOwner || '';
+    statusFilter = state.ganttStatus || 'all';
+    priorityFilter = state.ganttPriority || 'all';
     groupBy = state.groupBy || 'none';
     bindControls();
     await loadSnapshots();
@@ -61,11 +69,12 @@ export async function initGantt() {
         startMonth = next.startMonth;
         scale = next.scale;
         searchQuery = next.ganttSearch || '';
+        categoryFilter = next.ganttCategory || '';
+        ownerFilter = next.ganttOwner || '';
+        statusFilter = next.ganttStatus || 'all';
+        priorityFilter = next.ganttPriority || 'all';
         groupBy = next.groupBy || 'none';
-        const search = document.getElementById('gantt-search');
-        if (search) search.value = searchQuery;
-        const groupByInput = document.getElementById('gantt-group-by');
-        if (groupByInput) groupByInput.value = groupBy;
+        syncFilterInputs();
         syncScaleButtons();
         refreshGantt();
     });
@@ -100,9 +109,21 @@ export async function refreshGantt() {
 }
 
 function bindControls() {
+    ensureGanttFilterControls();
     document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.addEventListener('click', () => updateViewState({ scale: Number.parseInt(button.dataset.scale, 10) })));
     document.getElementById('gantt-search')?.addEventListener('input', (event) => updateViewState({ ganttSearch: event.target.value.trim().toLowerCase() }));
+    document.getElementById('gantt-category-filter')?.addEventListener('change', (event) => updateViewState({ ganttCategory: event.target.value }));
+    document.getElementById('gantt-owner-filter')?.addEventListener('input', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }));
+    document.getElementById('gantt-status-filter')?.addEventListener('change', (event) => updateViewState({ ganttStatus: event.target.value }));
+    document.getElementById('gantt-priority-filter')?.addEventListener('change', (event) => updateViewState({ ganttPriority: event.target.value }));
     document.getElementById('gantt-group-by')?.addEventListener('change', (event) => updateViewState({ groupBy: event.target.value }));
+    document.getElementById('gantt-filter-reset')?.addEventListener('click', () => updateViewState({
+        ganttSearch: '',
+        ganttCategory: '',
+        ganttOwner: '',
+        ganttStatus: 'all',
+        ganttPriority: 'all',
+    }));
     document.getElementById('gantt-prev')?.addEventListener('click', () => updateViewState({ startMonth: addMonths(startMonth, -scale * 3) }));
     document.getElementById('gantt-next')?.addEventListener('click', () => updateViewState({ startMonth: addMonths(startMonth, scale * 3) }));
     document.getElementById('gantt-today')?.addEventListener('click', () => {
@@ -120,6 +141,39 @@ function bindControls() {
     document.getElementById('detail-next')?.addEventListener('click', () => moveSelection(1));
     document.getElementById('detail-preview-bulk')?.addEventListener('click', previewBulkUpdate);
     bindKeyboardInteractions();
+}
+
+function ensureGanttFilterControls() {
+    const search = document.getElementById('gantt-search');
+    const groupByInput = document.getElementById('gantt-group-by');
+    const controls = search?.parentElement;
+    if (!search || !groupByInput || !controls || document.getElementById('gantt-category-filter')) return;
+
+    controls.classList.add('gantt-filter-bar');
+    search.classList.add('gantt-filter-search');
+
+    groupByInput.insertAdjacentHTML('beforebegin', `
+        <select id="gantt-category-filter" class="view-select">
+            <option value="">カテゴリ: すべて</option>
+        </select>
+        <input type="text" id="gantt-owner-filter" class="view-input" list="gantt-owner-suggestions" placeholder="担当者名で絞り込み" autocomplete="off">
+        <datalist id="gantt-owner-suggestions"></datalist>
+        <select id="gantt-status-filter" class="view-select">
+            <option value="all">ステータス: すべて</option>
+            <option value="open">ステータス: 未完了のみ</option>
+            <option value="planning">Planning</option>
+            <option value="active">Active</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+        </select>
+        <select id="gantt-priority-filter" class="view-select">
+            <option value="all">優先度: すべて</option>
+            <option value="1">優先度: P1以上</option>
+            <option value="2">優先度: P2以上</option>
+            <option value="3">優先度: P3以上</option>
+        </select>
+    `);
+    controls.insertAdjacentHTML('beforeend', '<button id="gantt-filter-reset" class="btn btn-ghost btn-sm" type="button">絞り込み解除</button>');
 }
 
 async function saveSnapshot() {
@@ -1011,8 +1065,7 @@ async function showMilestoneModal(themeId) {
 }
 
 function filterThemes() {
-    if (!searchQuery) return allThemes;
-    return allThemes.filter((theme) => `${theme.name} ${theme.category || ''}`.toLowerCase().includes(searchQuery) || allAllocations.some((item) => item.theme_id === theme.theme_id && `${item.memo || ''} ${(allMembers.find((member) => member.member_id === item.member_id)?.display_name || '')}`.toLowerCase().includes(searchQuery)));
+    return allThemes.filter((theme) => matchesThemeFilters(theme));
 }
 
 function themeMembers(themeId) {
@@ -1037,6 +1090,83 @@ function diffChip(rate, month, themeId, memberId, members = []) { if (snapshotAl
 function hydrateCollapsed() { try { collapsedThemes = new Set(JSON.parse(localStorage.getItem('gantt_collapsed') || '[]')); } catch { collapsedThemes = new Set(); } }
 function persistCollapsed() { localStorage.setItem('gantt_collapsed', JSON.stringify([...collapsedThemes])); }
 function syncScaleButtons() { document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.classList.toggle('active', Number.parseInt(button.dataset.scale, 10) === scale)); }
+
+function syncFilterInputs() {
+    const search = document.getElementById('gantt-search');
+    if (search && search.value !== searchQuery) search.value = searchQuery;
+    const category = document.getElementById('gantt-category-filter');
+    if (category && category.value !== categoryFilter) category.value = categoryFilter;
+    const owner = document.getElementById('gantt-owner-filter');
+    if (owner && owner.value !== ownerFilter) owner.value = ownerFilter;
+    const status = document.getElementById('gantt-status-filter');
+    if (status && status.value !== statusFilter) status.value = statusFilter;
+    const priority = document.getElementById('gantt-priority-filter');
+    if (priority && priority.value !== priorityFilter) priority.value = priorityFilter;
+    const groupByInput = document.getElementById('gantt-group-by');
+    if (groupByInput && groupByInput.value !== groupBy) groupByInput.value = groupBy;
+}
+
+function renderFilterControls() {
+    const categorySelect = document.getElementById('gantt-category-filter');
+    if (categorySelect) {
+        const categories = [...new Set(allThemes.map((theme) => (theme.category || '').trim()).filter(Boolean))]
+            .sort((left, right) => left.localeCompare(right, 'ja'));
+        categorySelect.innerHTML = '<option value="">カテゴリ: すべて</option>'
+            + categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
+    }
+
+    const ownerSuggestions = document.getElementById('gantt-owner-suggestions');
+    if (ownerSuggestions) {
+        const names = [...new Set(allMembers
+            .filter((member) => member.is_active !== false)
+            .map((member) => (member.display_name || '').trim())
+            .filter(Boolean))]
+            .sort((left, right) => left.localeCompare(right, 'ja'));
+        ownerSuggestions.innerHTML = names.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
+    }
+
+    syncFilterInputs();
+}
+
+function themeSearchText(theme) {
+    const members = themeMembers(theme.theme_id);
+    const memberNames = members.map((member) => member.display_name).join(' ');
+    const departments = members.map((member) => member.department || '').join(' ');
+    const memos = allAllocations
+        .filter((item) => item.theme_id === theme.theme_id)
+        .map((item) => item.memo || '')
+        .join(' ');
+    return [
+        theme.name,
+        theme.category || '',
+        STATUS_LABELS[theme.status] || theme.status || '',
+        memberNames,
+        departments,
+        memos,
+    ].join(' ').toLowerCase();
+}
+
+function matchesThemeFilters(theme) {
+    if (searchQuery && !themeSearchText(theme).includes(searchQuery)) return false;
+    if (categoryFilter && (theme.category || '') !== categoryFilter) return false;
+
+    if (ownerFilter) {
+        const normalizedOwner = ownerFilter.toLowerCase();
+        const hasOwnerMatch = themeMembers(theme.theme_id)
+            .some((member) => (member.display_name || '').toLowerCase().includes(normalizedOwner));
+        if (!hasOwnerMatch) return false;
+    }
+
+    if (statusFilter === 'open' && ['completed', 'cancelled'].includes(theme.status)) return false;
+    if (!['all', 'open'].includes(statusFilter) && theme.status !== statusFilter) return false;
+
+    if (priorityFilter !== 'all') {
+        const minimumPriority = Number.parseInt(priorityFilter, 10);
+        if ((theme.priority || 0) < minimumPriority) return false;
+    }
+
+    return true;
+}
 
 export function getGanttExportDataset(selectedColumns = ['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo', 'Category', 'Status', 'Priority', 'Capacity']) {
     const months = getVisibleMonths(startMonth, visibleCount, scale);
@@ -1138,6 +1268,7 @@ function milestoneChips(theme, month) {
 
 function renderTable(months) {
     const current = currentMonth();
+    renderFilterControls();
     document.getElementById('gantt-thead').innerHTML = `<tr><th>テーマ / メンバー</th>${months.map((month) => `<th class="${month === current ? 'month-current' : ''}">${formatMonthHeader(month, scale).replace('\n', '<br>')}</th>`).join('')}</tr>`;
     const rows = [];
     const themes = filterThemes();
