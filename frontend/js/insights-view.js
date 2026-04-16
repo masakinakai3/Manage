@@ -4,6 +4,7 @@ import { addMonths, getVisibleMonths } from './utils/date-utils.js';
 import { formatError, setBusyState } from './ui.js';
 
 let currentState = loadViewState();
+
 const STATUS_LABELS = {
     planning: '計画中',
     active: '進行中',
@@ -58,12 +59,12 @@ function renderSummary(summary) {
         <article class="summary-card">
             <div class="summary-label">警告セル</div>
             <div class="summary-value">${summary.warning_cell_count || 0}</div>
-            <div class="summary-subtext">過負荷メンバー ${summary.overloaded_member_count || 0} 名</div>
+            <div class="summary-subtext">超過メンバー ${summary.overloaded_member_count || 0} 名</div>
         </article>
         <article class="summary-card">
-            <div class="summary-label">割り当て中メンバー</div>
+            <div class="summary-label">配分中メンバー</div>
             <div class="summary-value">${summary.assigned_member_count || 0}</div>
-            <div class="summary-subtext">テーマに割当済み</div>
+            <div class="summary-subtext">テーマに配分あり</div>
         </article>
     `;
 }
@@ -88,7 +89,7 @@ function renderHealthChecks(items) {
     if (!target) return;
 
     if (items.length === 0) {
-        target.innerHTML = '<div class="empty-panel">選択期間では健全性の問題は見つかりませんでした。</div>';
+        target.innerHTML = '<div class="empty-panel">重大な整合性エラーは見つかりませんでした。</div>';
         return;
     }
 
@@ -109,7 +110,7 @@ function renderRecommendations(items) {
     if (!target) return;
 
     if (items.length === 0) {
-        target.innerHTML = '<div class="empty-panel">現在は推奨調整案はありません。</div>';
+        target.innerHTML = '<div class="empty-panel">現時点では再配分候補はありません。</div>';
         return;
     }
 
@@ -130,7 +131,7 @@ function renderRecommendations(items) {
                                     ${escapeHtml(member.display_name)}
                                     (${member.current_load}%/${member.capacity}%)
                                 </span>
-                            `).join('') || '<span class="summary-subtext">候補者は見つかりませんでした</span>'}
+                            `).join('') || '<span class="summary-subtext">移管候補は見つかりませんでした</span>'}
                         </div>
                     </div>
                 `).join('')}
@@ -142,9 +143,10 @@ function renderRecommendations(items) {
 function renderDashboard(dashboard) {
     renderSimpleTable(
         'dashboard-monthly-trend',
-        ['月', '配分合計', '稼働テーマ数'],
+        ['月度', '総配分率', '稼働テーマ数'],
         (dashboard.monthly_trend || []).map((item) => [item.month, `${item.total_allocation}%`, String(item.active_theme_count)]),
     );
+    renderProjectRibbon('dashboard-project-ribbon', dashboard.project_ribbon || {});
     renderSimpleTable(
         'dashboard-department-load',
         ['部署', '平均負荷', '人数'],
@@ -152,9 +154,165 @@ function renderDashboard(dashboard) {
     );
     renderSimpleTable(
         'dashboard-top-themes',
-        ['テーマ', 'ステータス', '累計配分'],
+        ['テーマ', 'ステータス', '総負荷'],
         (dashboard.top_themes || []).map((item) => [item.name, localizeStatus(item.status), `${item.total_allocation}%`]),
     );
+}
+
+function renderProjectRibbon(targetId, ribbonData) {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+
+    const items = ribbonData.items || [];
+    const hasProjects = items.some((item) => (item.projects || []).length > 0);
+    if (!hasProjects) {
+        target.innerHTML = '<div class="empty-panel">表示できるプロジェクト負荷データがありません。</div>';
+        return;
+    }
+
+    const width = Math.max(640, items.length * 140);
+    const height = 340;
+    const padding = { top: 20, right: 24, bottom: 64, left: 24 };
+    const innerWidth = width - padding.left - padding.right;
+    const innerHeight = height - padding.top - padding.bottom;
+    const columnWidth = Math.min(68, Math.max(38, innerWidth / Math.max(items.length * 2.6, 1)));
+    const step = items.length > 1 ? innerWidth / (items.length - 1) : 0;
+    const maxTotalLoad = Math.max(ribbonData.max_total_load || 0, 1);
+
+    const monthSegments = [];
+    const totalsByTheme = new Map();
+
+    items.forEach((item, index) => {
+        const totalLoad = item.total_load || 0;
+        const stackHeight = totalLoad > 0 ? (innerHeight * totalLoad) / maxTotalLoad : 0;
+        const stackTop = padding.top + innerHeight - stackHeight;
+        let cursorY = stackTop;
+        const segments = [];
+
+        (item.projects || []).forEach((project) => {
+            const rawHeight = totalLoad > 0 ? (stackHeight * project.load) / totalLoad : 0;
+            const segmentHeight = Math.max(rawHeight, 2);
+            const segment = {
+                ...project,
+                month: item.month,
+                x: padding.left + (step * index),
+                y0: cursorY,
+                y1: cursorY + segmentHeight,
+            };
+            cursorY += segmentHeight;
+            segments.push(segment);
+            totalsByTheme.set(project.theme_id, (totalsByTheme.get(project.theme_id) || 0) + project.load);
+        });
+
+        monthSegments.push({
+            month: item.month,
+            totalLoad,
+            x: padding.left + (step * index),
+            segments,
+        });
+    });
+
+    const ribbons = [];
+    for (let index = 0; index < monthSegments.length - 1; index += 1) {
+        const current = monthSegments[index];
+        const next = monthSegments[index + 1];
+        const nextMap = new Map(next.segments.map((segment) => [segment.theme_id, segment]));
+
+        current.segments.forEach((segment) => {
+            const nextSegment = nextMap.get(segment.theme_id);
+            if (!nextSegment) return;
+            const color = segment.color || '#6366f1';
+            ribbons.push(`
+                <path
+                    d="${buildRibbonPath(segment, nextSegment, columnWidth)}"
+                    fill="${escapeHtml(color)}"
+                    fill-opacity="0.42"
+                    stroke="${escapeHtml(color)}"
+                    stroke-opacity="0.6"
+                    stroke-width="1"
+                >
+                    <title>${escapeHtml(`${segment.name}: ${segment.month} ${segment.load}% -> ${nextSegment.month} ${nextSegment.load}%`)}</title>
+                </path>
+            `);
+        });
+    }
+
+    const blocks = monthSegments.flatMap((item) => item.segments.map((segment) => {
+        const color = segment.color || '#6366f1';
+        const heightValue = Math.max(segment.y1 - segment.y0, 2);
+        return `
+            <g>
+                <rect
+                    x="${segment.x - (columnWidth / 2)}"
+                    y="${segment.y0}"
+                    width="${columnWidth}"
+                    height="${heightValue}"
+                    rx="8"
+                    ry="8"
+                    fill="${escapeHtml(color)}"
+                    fill-opacity="0.85"
+                >
+                    <title>${escapeHtml(`${segment.month} | ${segment.name} | ${segment.load}%`)}</title>
+                </rect>
+                ${heightValue >= 18 ? `
+                    <text
+                        x="${segment.x}"
+                        y="${segment.y0 + (heightValue / 2) + 4}"
+                        text-anchor="middle"
+                        class="project-ribbon__block-label"
+                    >${escapeHtml(truncateLabel(segment.name, columnWidth > 52 ? 14 : 10))}</text>
+                ` : ''}
+            </g>
+        `;
+    }));
+
+    const monthLabels = monthSegments.map((item) => `
+        <g>
+            <text x="${item.x}" y="${height - 28}" text-anchor="middle" class="project-ribbon__month-label">${escapeHtml(formatRibbonMonth(item.month))}</text>
+            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label">Total ${escapeHtml(String(item.totalLoad))}%</text>
+        </g>
+    `);
+
+    const topThemes = Array.from(totalsByTheme.entries())
+        .sort((left, right) => right[1] - left[1])
+        .slice(0, 6)
+        .map(([themeId]) => monthSegments.flatMap((item) => item.segments).find((segment) => segment.theme_id === themeId))
+        .filter(Boolean);
+
+    target.innerHTML = `
+        <div class="project-ribbon">
+            <div class="project-ribbon__scroll">
+                <svg viewBox="0 0 ${width} ${height}" class="project-ribbon__svg" role="img" aria-label="Project load ribbon chart">
+                    <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>
+                    ${ribbons.join('')}
+                    ${blocks.join('')}
+                    ${monthLabels.join('')}
+                </svg>
+            </div>
+            <div class="project-ribbon__legend">
+                ${topThemes.map((project) => `
+                    <span class="project-ribbon__legend-item">
+                        <span class="project-ribbon__legend-swatch" style="background:${escapeHtml(project.color || '#6366f1')}"></span>
+                        ${escapeHtml(project.name)}
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+function buildRibbonPath(source, target, columnWidth) {
+    const startX = source.x + (columnWidth / 2);
+    const endX = target.x - (columnWidth / 2);
+    const controlOffset = Math.max((endX - startX) * 0.45, 24);
+
+    return [
+        `M ${startX} ${source.y0}`,
+        `C ${startX + controlOffset} ${source.y0}, ${endX - controlOffset} ${target.y0}, ${endX} ${target.y0}`,
+        `L ${endX} ${target.y1}`,
+        `C ${endX - controlOffset} ${target.y1}, ${startX + controlOffset} ${source.y1}, ${startX} ${source.y1}`,
+        'Z',
+    ].join(' ');
 }
 
 function renderSimpleTable(targetId, headers, rows) {
@@ -196,6 +354,7 @@ function renderError(message) {
         'health-check-list',
         'recommendation-list',
         'dashboard-monthly-trend',
+        'dashboard-project-ribbon',
         'dashboard-department-load',
         'dashboard-top-themes',
         'dashboard-department-summary',
@@ -220,6 +379,17 @@ function labelSeverity(severity) {
 
 function localizeStatus(status) {
     return STATUS_LABELS[status] || status;
+}
+
+function formatRibbonMonth(month) {
+    if (!month || month.length < 7) return month;
+    return `${month.slice(0, 4)}/${month.slice(5, 7)}`;
+}
+
+function truncateLabel(value, maxLength) {
+    const text = String(value ?? '');
+    if (text.length <= maxLength) return text;
+    return `${text.slice(0, Math.max(maxLength - 1, 1))}…`;
 }
 
 function escapeHtml(value) {

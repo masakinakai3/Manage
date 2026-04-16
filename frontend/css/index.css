@@ -489,6 +489,12 @@ body {
     display: none;
 }
 
+#view-insights {
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-bottom: var(--space-6);
+}
+
 .view-header {
     display: flex;
     align-items: center;
@@ -1603,6 +1609,10 @@ td.out-period {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
+.insight-card-wide {
+    grid-column: span 2;
+}
+
 .insight-list {
     display: grid;
     gap: var(--space-3);
@@ -1707,6 +1717,74 @@ td.out-period {
     color: var(--color-text-secondary);
 }
 
+.project-ribbon {
+    display: grid;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+}
+
+.project-ribbon__scroll {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background:
+        linear-gradient(180deg, rgba(99, 102, 241, 0.08), transparent 48%),
+        var(--color-bg);
+}
+
+.project-ribbon__svg {
+    display: block;
+    width: 100%;
+    min-width: 640px;
+    height: auto;
+}
+
+.project-ribbon__bg {
+    fill: transparent;
+}
+
+.project-ribbon__block-label {
+    fill: rgba(255, 255, 255, 0.92);
+    font-size: 10px;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+.project-ribbon__month-label {
+    fill: var(--color-text);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.project-ribbon__total-label {
+    fill: var(--color-text-secondary);
+    font-size: 11px;
+}
+
+.project-ribbon__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+}
+
+.project-ribbon__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    font-size: var(--text-xs);
+}
+
+.project-ribbon__legend-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 .shortcut-grid,
 .checkbox-grid {
     display: grid;
@@ -1765,6 +1843,10 @@ kbd {
     .gantt-workspace,
     .insight-layout {
         grid-template-columns: 1fr;
+    }
+
+    .insight-card-wide {
+        grid-column: auto;
     }
 
     .view {

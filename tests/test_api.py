@@ -147,6 +147,9 @@ def test_insights_overview(auth_client, app):
     assert isinstance(data['health_checks'], list)
     assert isinstance(data['recommendations'], list)
     assert 'dashboard' in data
+    assert 'project_ribbon' in data['dashboard']
+    assert data['dashboard']['project_ribbon']['months'] == ['2024-05', '2024-06']
+    assert data['dashboard']['project_ribbon']['items'][1]['projects'][0]['name'] == 'Insight Theme'
     assert any(item['code'] == 'closed_theme_with_remaining_allocation' for item in data['health_checks'])
 
 

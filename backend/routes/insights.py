@@ -27,6 +27,25 @@ def _month_sort_key(month_value):
     return month_value or ""
 
 
+def _month_range(start_month, end_month):
+    if not start_month or not end_month:
+        return []
+
+    start_year, start_mon = map(int, start_month.split("-"))
+    end_year, end_mon = map(int, end_month.split("-"))
+    cursor_year, cursor_mon = start_year, start_mon
+    months = []
+
+    while (cursor_year, cursor_mon) <= (end_year, end_mon):
+        months.append(f"{cursor_year}-{cursor_mon:02d}")
+        cursor_mon += 1
+        if cursor_mon > 12:
+            cursor_year += 1
+            cursor_mon = 1
+
+    return months
+
+
 def _build_health_checks(themes, members, allocations):
     issues = []
     allocations_by_theme = defaultdict(list)
@@ -141,6 +160,16 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
     dept_counts = defaultdict(int)
     category_counts = defaultdict(int)
     status_counts = defaultdict(int)
+    theme_catalog = {
+        theme.theme_id: {
+            "theme_id": theme.theme_id,
+            "name": theme.name,
+            "color": theme.color or "#6366f1",
+            "status": theme.status,
+        }
+        for theme in themes
+    }
+    ribbon_month_projects = defaultdict(list)
 
     for theme in themes:
         category_counts[theme.category or "Uncategorized"] += 1
@@ -157,6 +186,17 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
     for allocation in allocations:
         month_totals[allocation.month] += allocation.allocation_rate
         month_theme_counts[allocation.month].add(allocation.theme_id)
+        theme_meta = theme_catalog.get(allocation.theme_id)
+        if theme_meta and allocation.allocation_rate > 0:
+            ribbon_month_projects[allocation.month].append({
+                **theme_meta,
+                "load": allocation.allocation_rate,
+            })
+
+    if from_month and to_month:
+        dashboard_months = _month_range(from_month, to_month)
+    else:
+        dashboard_months = sorted(month_totals.keys(), key=_month_sort_key)
 
     monthly_trend = [
         {
@@ -164,7 +204,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
             "total_allocation": month_totals[month],
             "active_theme_count": len(month_theme_counts[month]),
         }
-        for month in sorted(month_totals.keys(), key=_month_sort_key)
+        for month in dashboard_months
     ]
 
     department_load = [
@@ -188,12 +228,29 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         })
     top_themes.sort(key=lambda item: item["total_allocation"], reverse=True)
 
+    project_ribbon = []
+    for month in dashboard_months:
+        projects = sorted(
+            ribbon_month_projects.get(month, []),
+            key=lambda item: (-item["load"], item["name"].lower(), item["theme_id"]),
+        )
+        project_ribbon.append({
+            "month": month,
+            "total_load": month_totals[month],
+            "projects": projects,
+        })
+
     return {
         "monthly_trend": monthly_trend,
         "department_load": department_load,
         "category_distribution": [{"label": key, "count": value} for key, value in sorted(category_counts.items())],
         "status_distribution": [{"label": key, "count": value} for key, value in sorted(status_counts.items())],
         "top_themes": top_themes[:5],
+        "project_ribbon": {
+            "months": dashboard_months,
+            "max_total_load": max(month_totals.values(), default=0),
+            "items": project_ribbon,
+        },
     }
 
 

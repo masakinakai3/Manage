@@ -228,9 +228,10 @@ describe('gantt-renderer regressions', () => {
         await Promise.resolve();
 
         expect(themeUpdate).toHaveBeenCalledWith(1, {
+            dev_complete_month: null,
             milestones: [
-                { month: '2026-05', label: 'Launch' },
-                { month: '2026-04', label: 'Review' },
+                { month: '2026-05', label: 'Launch', is_completed: false },
+                { month: '2026-04', label: 'Review', is_completed: false },
             ],
         });
     });
