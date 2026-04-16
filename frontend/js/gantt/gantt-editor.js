@@ -15,19 +15,26 @@ import { formatError, setSaveState, showToast } from '../ui.js';
 let activeEditor = null;
 let saving = false;
 
-export function openCellEditor(cellEl, themeId, memberId, month, currentRate, onSave, onNavigate) {
+export function openCellEditor(cellEl, themeId, memberId, month, currentRate, onSave, onNavigate, options = {}) {
     closeCellEditor();
 
     const editor = document.getElementById('cell-editor');
     const input = document.getElementById('cell-editor-input');
     const rect = cellEl.getBoundingClientRect();
+    const initialValue = options.initialValue ?? currentRate;
+    const selectOnOpen = options.selectOnOpen !== false;
 
     editor.style.left = `${rect.left}px`;
     editor.style.top = `${rect.bottom + 4}px`;
     editor.hidden = false;
-    input.value = currentRate;
+    input.value = initialValue;
     input.focus();
-    input.select();
+    if (selectOnOpen) {
+        input.select();
+    } else {
+        const end = String(input.value).length;
+        input.setSelectionRange(end, end);
+    }
 
     const save = () => {
         if (saving) return;
@@ -140,4 +147,9 @@ export function closeCellEditor() {
         activeEditor.cleanup();
         activeEditor = null;
     }
+}
+
+export function isCellEditorOpen() {
+    const editor = document.getElementById('cell-editor');
+    return Boolean(editor && !editor.hidden);
 }

@@ -3,12 +3,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const openCellEditor = vi.fn();
+const isCellEditorOpen = vi.fn(() => false);
 const setBusyState = vi.fn();
 const setSaveState = vi.fn();
 const showToast = vi.fn();
 const showConfirmDialog = vi.fn();
 const showPromptDialog = vi.fn();
 const formatError = vi.fn((error) => error.message);
+const bulkUpdate = vi.fn(async () => ({}));
+let visibleMonths = ['2026-04'];
+let allocationRows = [{
+    theme_id: 1,
+    member_id: 10,
+    month: '2026-04',
+    allocation_rate: 20,
+    memo: '',
+}];
 
 const themeList = vi.fn(async () => ([{
     theme_id: 1,
@@ -29,13 +39,7 @@ const memberList = vi.fn(async () => ([{
     capacity: 100,
     is_active: true,
 }]));
-const allocationList = vi.fn(async () => ([{
-    theme_id: 1,
-    member_id: 10,
-    month: '2026-04',
-    allocation_rate: 20,
-    memo: '',
-}]));
+const allocationList = vi.fn(async () => allocationRows);
 const warnings = vi.fn(async () => ([]));
 const memberLoads = vi.fn(async () => ({ 10: { '2026-04': 20 } }));
 const snapshotList = vi.fn(async () => ([]));
@@ -43,6 +47,7 @@ const themeUpdate = vi.fn(async () => ({}));
 
 vi.mock('../js/gantt/gantt-editor.js', () => ({
     openCellEditor,
+    isCellEditorOpen,
 }));
 
 vi.mock('../js/ui.js', () => ({
@@ -65,7 +70,7 @@ vi.mock('../js/utils/date-utils.js', () => ({
     addMonths: vi.fn((month) => month),
     currentMonth: vi.fn(() => '2026-04'),
     formatMonthHeader: vi.fn((month) => month),
-    getVisibleMonths: vi.fn(() => ['2026-04']),
+    getVisibleMonths: vi.fn(() => visibleMonths),
 }));
 
 vi.mock('../js/api.js', () => ({
@@ -74,7 +79,7 @@ vi.mock('../js/api.js', () => ({
         warnings,
         memberLoads,
         updateSingle: vi.fn(async () => ({})),
-        bulkUpdate: vi.fn(async () => ({})),
+        bulkUpdate,
     },
     members: {
         list: memberList,
@@ -94,6 +99,7 @@ vi.mock('../js/api.js', () => ({
 function renderBaseDom() {
     document.body.innerHTML = `
         <div id="scale-switcher"><button class="scale-btn" data-scale="1" type="button">1</button></div>
+        <div id="view-gantt" class="view active"></div>
         <input id="gantt-search">
         <select id="gantt-group-by"><option value="none" selected>none</option></select>
         <button id="gantt-prev" type="button"></button>
@@ -144,13 +150,17 @@ function renderBaseDom() {
 
 describe('gantt-renderer regressions', () => {
     beforeEach(() => {
+        vi.resetModules();
         renderBaseDom();
         openCellEditor.mockClear();
+        isCellEditorOpen.mockClear();
+        isCellEditorOpen.mockReturnValue(false);
         setBusyState.mockClear();
         setSaveState.mockClear();
         showToast.mockClear();
         showConfirmDialog.mockClear();
         showPromptDialog.mockClear();
+        bulkUpdate.mockClear();
         themeList.mockClear();
         memberList.mockClear();
         allocationList.mockClear();
@@ -158,6 +168,14 @@ describe('gantt-renderer regressions', () => {
         memberLoads.mockClear();
         snapshotList.mockClear();
         themeUpdate.mockClear();
+        visibleMonths = ['2026-04'];
+        allocationRows = [{
+            theme_id: 1,
+            member_id: 10,
+            month: '2026-04',
+            allocation_rate: 20,
+            memo: '',
+        }];
         localStorage.clear();
     });
 
@@ -173,6 +191,60 @@ describe('gantt-renderer regressions', () => {
 
         expect(openCellEditor).toHaveBeenCalledTimes(1);
         expect(openCellEditor.mock.calls[0][0]).toBe(cell);
+    });
+
+    it('moves the active cell with arrow keys and starts direct numeric entry', async () => {
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 30, memo: '' },
+        ];
+
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cells = Array.from(document.querySelectorAll('.gantt-cell[data-theme]'));
+        cells[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        openCellEditor.mockClear();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+        expect(document.activeElement).toBe(cells[1]);
+        expect(document.getElementById('detail-target')?.textContent).toContain('2026-05');
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: '7', bubbles: true }));
+
+        expect(openCellEditor).toHaveBeenCalledTimes(1);
+        expect(openCellEditor.mock.calls[0][0]).toBe(cells[1]);
+        expect(openCellEditor.mock.calls[0][7]).toEqual({ initialValue: '7', selectOnOpen: false });
+    });
+
+    it('copies and pastes a month range with bulk update', async () => {
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 10, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 20, memo: '' },
+        ];
+
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cells = Array.from(document.querySelectorAll('.gantt-cell[data-theme]'));
+        cells[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, bubbles: true }));
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+
+        const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+        Object.defineProperty(pasteEvent, 'clipboardData', {
+            value: { getData: () => '' },
+        });
+        document.dispatchEvent(pasteEvent);
+        await Promise.resolve();
+
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 10 },
+            { theme_id: 1, member_id: 10, month: '2026-06', allocation_rate: 20 },
+        ]);
     });
 
     it('renders theme summary allocations with percent suffix', async () => {

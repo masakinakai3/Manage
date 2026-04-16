@@ -2,7 +2,7 @@ import { allocations, members as membersApi, snapshots as snapshotsApi, themes a
 import { getPresetConfig, loadViewState, subscribeViewState, updateViewState } from '../shared-state.js';
 import { addMonths, currentMonth, formatMonthHeader, getVisibleMonths } from '../utils/date-utils.js';
 import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from '../ui.js';
-import { openCellEditor } from './gantt-editor.js';
+import { isCellEditorOpen, openCellEditor } from './gantt-editor.js';
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', completed: 'Completed', cancelled: 'Cancelled' };
 
@@ -43,6 +43,10 @@ let searchQuery = '';
 let groupBy = 'none';
 let collapsedThemes = new Set();
 let selectedCell = null;
+let selectionAnchor = null;
+let selectedRange = null;
+let copiedRange = null;
+let ganttKeyboardBound = false;
 
 export async function initGantt() {
     const state = loadViewState();
@@ -113,6 +117,7 @@ function bindControls() {
     document.getElementById('detail-prev')?.addEventListener('click', () => moveSelection(-1));
     document.getElementById('detail-next')?.addEventListener('click', () => moveSelection(1));
     document.getElementById('detail-preview-bulk')?.addEventListener('click', previewBulkUpdate);
+    bindKeyboardInteractions();
 }
 
 async function saveSnapshot() {
@@ -241,12 +246,11 @@ function bindRows() {
             event.target.disabled = false;
         }
     }));
-    document.querySelectorAll('.gantt-cell[data-theme]').forEach((button) => button.addEventListener('click', () => {
-        selectedCell = { themeId: Number.parseInt(button.dataset.theme, 10), memberId: Number.parseInt(button.dataset.member, 10), month: button.dataset.month };
-        renderDetailPanel();
-        button.focus();
+    document.querySelectorAll('.gantt-cell[data-theme]').forEach((button) => button.addEventListener('click', (event) => {
+        selectCellButton(button, { extend: event.shiftKey });
         openEditorForButton(button);
     }));
+    syncSelectionStyles();
 }
 
 function themeStatusSelect(theme) {
@@ -309,12 +313,10 @@ function moveSelection(offset) {
     const index = cells.findIndex((cell) => selectedCell && Number.parseInt(cell.dataset.theme, 10) === selectedCell.themeId && Number.parseInt(cell.dataset.member, 10) === selectedCell.memberId && cell.dataset.month === selectedCell.month);
     const next = cells[index + offset];
     if (!next) return;
-    selectedCell = { themeId: Number.parseInt(next.dataset.theme, 10), memberId: Number.parseInt(next.dataset.member, 10), month: next.dataset.month };
-    renderDetailPanel();
-    next.focus();
+    selectCellButton(next);
 }
 
-function openEditorForButton(button) {
+function openEditorForButton(button, options = {}) {
     const themeId = Number.parseInt(button.dataset.theme, 10);
     const memberId = Number.parseInt(button.dataset.member, 10);
     const month = button.dataset.month;
@@ -328,6 +330,7 @@ function openEditorForButton(button) {
         currentRate,
         (nextRate) => applyCellValue(button, nextRate, button.dataset.memo || ''),
         (direction, changed, newRate) => handleEditorNavigation(button, direction, changed, newRate),
+        options,
     );
 }
 
@@ -379,10 +382,7 @@ function applyCellValue(button, rate, memo = '') {
     const memberId = Number.parseInt(button.dataset.member, 10);
     const month = button.dataset.month;
     const safeRate = Math.max(0, Math.min(100, Number.parseInt(rate || '0', 10)));
-    const previousRate = lookupRate(allAllocations, themeId, memberId, month);
     const allocationIndex = allAllocations.findIndex((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
-    const totalRate = memberMonthTotal(memberId, month) - previousRate + safeRate;
-    const hasWarning = totalRate > 100;
 
     if (allocationIndex >= 0) {
         allAllocations[allocationIndex] = {
@@ -403,8 +403,8 @@ function applyCellValue(button, rate, memo = '') {
     button.dataset.rate = String(safeRate);
     button.dataset.memo = memo;
     button.title = memo || 'No memo';
-    button.className = `gantt-cell ${hasWarning ? 'rate-over' : rateClass(safeRate)}`;
-    button.innerHTML = `${safeRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, themeId, memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
+    renderMemberCellButton(button, safeRate, memberId, month);
+    refreshMemberMonthState(memberId, month);
 
     updateThemeSummaryCell(themeId, month);
     renderSnapshotSummary(getVisibleMonths(startMonth, visibleCount, scale));
@@ -412,6 +412,39 @@ function applyCellValue(button, rate, memo = '') {
     if (selectedCell && selectedCell.themeId === themeId && selectedCell.memberId === memberId && selectedCell.month === month) {
         renderDetailPanel();
     }
+}
+
+function renderMemberCellButton(button, rate, memberId, month) {
+    const safeRate = Math.max(0, Math.min(100, Number.parseInt(rate || '0', 10)));
+    const member = allMembers.find((item) => item.member_id === memberId);
+    const totalRate = memberMonthTotal(memberId, month);
+    const hasWarning = totalRate > (member?.capacity || 100);
+    button.className = `gantt-cell ${hasWarning ? 'rate-over' : rateClass(safeRate)}`;
+    button.innerHTML = `${safeRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, Number.parseInt(button.dataset.theme, 10), memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
+    syncSelectionStyles();
+}
+
+function refreshMemberMonthState(memberId, month) {
+    const totalRate = memberMonthTotal(memberId, month);
+    const member = allMembers.find((item) => item.member_id === memberId);
+    if (!memberLoads[memberId]) memberLoads[memberId] = {};
+    memberLoads[memberId][month] = totalRate;
+
+    warnings = warnings.filter((item) => !(item.member_id === memberId && item.month === month));
+    if (totalRate > (member?.capacity || 100)) {
+        warnings.push({
+            member_id: memberId,
+            display_name: member?.display_name || '',
+            month,
+            load: totalRate,
+            capacity: member?.capacity || 100,
+            excess: totalRate - (member?.capacity || 100),
+        });
+    }
+
+    document.querySelectorAll(`.gantt-cell[data-member="${memberId}"][data-month="${month}"]`).forEach((cell) => {
+        renderMemberCellButton(cell, Number.parseInt(cell.dataset.rate || '0', 10), memberId, month);
+    });
 }
 
 updateThemeSummaryCell = function(themeId, month) {
@@ -454,6 +487,302 @@ function findAdjacentCell(button, direction) {
     }
 
     return null;
+}
+
+function bindKeyboardInteractions() {
+    if (ganttKeyboardBound) return;
+    ganttKeyboardBound = true;
+
+    document.addEventListener('keydown', (event) => {
+        if (!isGanttKeyboardContext(event)) return;
+        if (!selectedCell) return;
+
+        if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'c') {
+            event.preventDefault();
+            copySelectionToInternalClipboard();
+            return;
+        }
+
+        if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'v') {
+            event.preventDefault();
+            pasteFromClipboard();
+            return;
+        }
+
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+            event.preventDefault();
+            moveGridSelection(event.key, event.shiftKey);
+            return;
+        }
+
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const button = getSelectedButton();
+            if (button) openEditorForButton(button);
+            return;
+        }
+
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+            event.preventDefault();
+            clearSelectedRange();
+            return;
+        }
+
+        if (/^\d$/.test(event.key)) {
+            event.preventDefault();
+            const button = getSelectedButton();
+            if (button) openEditorForButton(button, { initialValue: event.key, selectOnOpen: false });
+        }
+    });
+
+    document.addEventListener('copy', (event) => {
+        if (!isGanttKeyboardContext(event) || !selectedCell) return;
+        const text = copySelectionToInternalClipboard();
+        if (text && event.clipboardData) {
+            event.preventDefault();
+            event.clipboardData.setData('text/plain', text);
+        }
+    });
+
+    document.addEventListener('paste', (event) => {
+        if (!isGanttKeyboardContext(event) || !selectedCell) return;
+        event.preventDefault();
+        const text = event.clipboardData?.getData('text/plain') || '';
+        pasteFromClipboard(text);
+    });
+}
+
+function isGanttKeyboardContext(event) {
+    if (!document.getElementById('view-gantt')?.classList.contains('active') && document.getElementById('view-gantt')) return false;
+    if (isCellEditorOpen()) return false;
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return true;
+    return !target.closest('input, textarea, select, [contenteditable="true"]');
+}
+
+function getVisibleMemberRows() {
+    return Array.from(document.querySelectorAll('.gantt-row-member:not(.hidden-row)'));
+}
+
+function getCellPositionFromButton(button) {
+    const row = button?.closest('.gantt-row-member');
+    const cell = button?.closest('td');
+    if (!row || !cell) return null;
+    const rows = getVisibleMemberRows();
+    const rowIndex = rows.indexOf(row);
+    if (rowIndex < 0) return null;
+    return { rowIndex, colIndex: cell.cellIndex - 1 };
+}
+
+function getButtonByPosition(rowIndex, colIndex) {
+    const row = getVisibleMemberRows()[rowIndex];
+    const cell = row?.children[colIndex + 1];
+    return cell?.querySelector('.gantt-cell[data-theme]') || null;
+}
+
+function getSelectedButton() {
+    if (!selectedCell) return null;
+    return document.querySelector(`.gantt-cell[data-theme="${selectedCell.themeId}"][data-member="${selectedCell.memberId}"][data-month="${selectedCell.month}"]`);
+}
+
+function selectCellButton(button, options = {}) {
+    if (!button) return;
+
+    const nextSelected = {
+        themeId: Number.parseInt(button.dataset.theme, 10),
+        memberId: Number.parseInt(button.dataset.member, 10),
+        month: button.dataset.month,
+    };
+    const nextPosition = getCellPositionFromButton(button);
+    if (!nextPosition) return;
+
+    selectedCell = nextSelected;
+    if (!options.extend || !selectionAnchor) selectionAnchor = nextPosition;
+    selectedRange = buildSelectionRange(selectionAnchor || nextPosition, nextPosition);
+    renderDetailPanel();
+    syncSelectionStyles();
+
+    if (options.focus !== false) button.focus();
+}
+
+function buildSelectionRange(start, end) {
+    return {
+        startRow: Math.min(start.rowIndex, end.rowIndex),
+        endRow: Math.max(start.rowIndex, end.rowIndex),
+        startCol: Math.min(start.colIndex, end.colIndex),
+        endCol: Math.max(start.colIndex, end.colIndex),
+    };
+}
+
+function syncSelectionStyles() {
+    const active = getSelectedButton();
+    document.querySelectorAll('.gantt-cell[data-theme]').forEach((button) => {
+        const position = getCellPositionFromButton(button);
+        const inRange = Boolean(position && selectedRange
+            && position.rowIndex >= selectedRange.startRow
+            && position.rowIndex <= selectedRange.endRow
+            && position.colIndex >= selectedRange.startCol
+            && position.colIndex <= selectedRange.endCol);
+        button.classList.toggle('is-range-selected', inRange);
+        button.classList.toggle('is-selected', button === active);
+    });
+}
+
+function moveGridSelection(direction, extendSelection = false) {
+    const currentButton = getSelectedButton();
+    const currentPosition = getCellPositionFromButton(currentButton);
+    if (!currentPosition) return;
+
+    const nextPosition = { ...currentPosition };
+    if (direction === 'ArrowLeft') nextPosition.colIndex -= 1;
+    if (direction === 'ArrowRight') nextPosition.colIndex += 1;
+    if (direction === 'ArrowUp') nextPosition.rowIndex -= 1;
+    if (direction === 'ArrowDown') nextPosition.rowIndex += 1;
+
+    const nextButton = getButtonByPosition(nextPosition.rowIndex, nextPosition.colIndex);
+    if (!nextButton) return;
+    selectCellButton(nextButton, { extend: extendSelection });
+}
+
+function getSelectedRangeButtons() {
+    if (!selectedRange) return [];
+    const buttons = [];
+    for (let rowIndex = selectedRange.startRow; rowIndex <= selectedRange.endRow; rowIndex += 1) {
+        const row = [];
+        for (let colIndex = selectedRange.startCol; colIndex <= selectedRange.endCol; colIndex += 1) {
+            const button = getButtonByPosition(rowIndex, colIndex);
+            if (button) row.push(button);
+        }
+        if (row.length > 0) buttons.push(row);
+    }
+    return buttons;
+}
+
+function copySelectionToInternalClipboard() {
+    const matrix = getSelectedRangeButtons().map((row) => row.map((button) => button.textContent.replace('!', '').trim()));
+    if (matrix.length === 0) return '';
+    copiedRange = matrix.map((row) => row.map((value) => value.replace('%', '')));
+    return copiedRange.map((row) => row.join('\t')).join('\n');
+}
+
+async function pasteFromClipboard(fallbackText = '') {
+    let text = fallbackText;
+    if (!text && navigator.clipboard?.readText) {
+        try {
+            text = await navigator.clipboard.readText();
+        } catch {
+            text = '';
+        }
+    }
+
+    if (!text && copiedRange) {
+        text = copiedRange.map((row) => row.join('\t')).join('\n');
+    }
+
+    const matrix = parseClipboardMatrix(text);
+    if (!selectedCell || matrix.length === 0) return;
+
+    const startButton = getSelectedButton();
+    const startPosition = getCellPositionFromButton(startButton);
+    if (!startPosition) return;
+
+    const redo = [];
+    const undo = [];
+    const affected = [];
+
+    matrix.forEach((row, rowOffset) => {
+        row.forEach((value, colOffset) => {
+            const button = getButtonByPosition(startPosition.rowIndex + rowOffset, startPosition.colIndex + colOffset);
+            if (!button) return;
+
+            const themeId = Number.parseInt(button.dataset.theme, 10);
+            const memberId = Number.parseInt(button.dataset.member, 10);
+            const month = button.dataset.month;
+            const currentAllocation = allAllocations.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
+            const nextRate = Math.max(0, Math.min(100, Number.parseInt(value || '0', 10) || 0));
+
+            undo.push({
+                theme_id: themeId,
+                member_id: memberId,
+                month,
+                allocation_rate: currentAllocation?.allocation_rate || 0,
+                memo: currentAllocation?.memo || '',
+            });
+            redo.push({
+                theme_id: themeId,
+                member_id: memberId,
+                month,
+                allocation_rate: nextRate,
+            });
+            affected.push({ button, memberId, month, memo: currentAllocation?.memo || '', rate: nextRate });
+        });
+    });
+
+    if (redo.length === 0) return;
+
+    affected.forEach(({ button, rate, memo }) => applyCellValue(button, rate, memo));
+    new Set(affected.map(({ memberId, month }) => `${memberId}:${month}`)).forEach((key) => {
+        const [memberId, month] = key.split(':');
+        refreshMemberMonthState(Number.parseInt(memberId, 10), month);
+    });
+
+    HistoryManager.push(undo, redo);
+
+    try {
+        await allocations.bulkUpdate(redo);
+        setSaveState('saved', `${redo.length} cells pasted.`);
+    } catch (error) {
+        setSaveState('error', '貼り付けの保存に失敗しました');
+        showToast(`貼り付けの保存に失敗しました: ${formatError(error)}`, 'error');
+        await refreshGantt();
+    }
+}
+
+function parseClipboardMatrix(text) {
+    if (!text) return [];
+    return text
+        .split(/\r?\n/)
+        .filter((row) => row.length > 0)
+        .map((row) => row.split('\t').map((cell) => cell.replace('%', '').trim()));
+}
+
+async function clearSelectedRange() {
+    const buttons = getSelectedRangeButtons().flat();
+    if (buttons.length === 0) return;
+
+    const redo = [];
+    const undo = [];
+    buttons.forEach((button) => {
+        const themeId = Number.parseInt(button.dataset.theme, 10);
+        const memberId = Number.parseInt(button.dataset.member, 10);
+        const month = button.dataset.month;
+        const currentAllocation = allAllocations.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
+        undo.push({
+            theme_id: themeId,
+            member_id: memberId,
+            month,
+            allocation_rate: currentAllocation?.allocation_rate || 0,
+            memo: currentAllocation?.memo || '',
+        });
+        redo.push({
+            theme_id: themeId,
+            member_id: memberId,
+            month,
+            allocation_rate: 0,
+        });
+        applyCellValue(button, 0, currentAllocation?.memo || '');
+        refreshMemberMonthState(memberId, month);
+    });
+
+    HistoryManager.push(undo, redo);
+    try {
+        await allocations.bulkUpdate(redo);
+        setSaveState('saved', `${redo.length} cells cleared.`);
+    } catch (error) {
+        setSaveState('error', 'セルのクリアに失敗しました');
+        showToast(`セルのクリアに失敗しました: ${formatError(error)}`, 'error');
+        await refreshGantt();
+    }
 }
 
 function exportCsv() {
