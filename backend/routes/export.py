@@ -198,7 +198,12 @@ def export_xlsx():
 @export_bp.route('/json', methods=['GET'])
 @login_required
 def export_json():
-    """Export all application data as JSON."""
+    """Export all application data as JSON.
+
+    The exported themes include the ``milestones`` array and
+    ``dev_complete_month`` so that a full round-trip is possible.
+    """
+    from models import ThemeMilestone  # local import to avoid circular issues
     themes = [theme.to_dict() for theme in Theme.query.order_by(Theme.theme_id).all()]
     members = [member.to_dict() for member in Member.query.order_by(Member.member_id).all()]
     allocations = [allocation.to_dict() for allocation in Allocation.query.all()]
@@ -209,7 +214,7 @@ def export_json():
             theme_members.append({'theme_id': theme.theme_id, 'member_id': member.member_id})
 
     payload = {
-        'version': 1,
+        'version': 2,
         'exported_at': db.session.execute(db.select(db.func.datetime('now'))).scalar(),
         'themes': themes,
         'members': members,

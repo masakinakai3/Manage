@@ -9,7 +9,7 @@
 import json
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
-from models import db, Theme, Member, Allocation, theme_members as theme_members_table
+from models import db, Theme, ThemeMilestone, Member, Allocation, theme_members as theme_members_table
 
 import_data_bp = Blueprint('import_data', __name__)
 
@@ -23,11 +23,13 @@ def import_json():
     JSON file produced by the export endpoint.
 
     The import is performed inside a single transaction:
-    1. Delete all allocations, theme-member associations, themes, and members.
+    1. Delete all allocations, theme-member associations, milestone rows,
+       themes, and members.
     2. Re-create members (mapping old IDs to new DB-assigned IDs).
     3. Re-create themes (mapping old IDs to new DB-assigned IDs).
-    4. Re-create theme-member associations.
-    5. Re-create allocations.
+    4. Re-create theme milestones (from the ``milestones`` array on each theme).
+    5. Re-create theme-member associations.
+    6. Re-create allocations.
     """
     file = request.files.get('file')
     if not file:
@@ -49,6 +51,7 @@ def import_json():
         # --- Delete existing data inside a transaction ---
         db.session.execute(theme_members_table.delete())
         Allocation.query.delete()
+        ThemeMilestone.query.delete()
         Theme.query.delete()
         Member.query.delete()
 
@@ -76,10 +79,25 @@ def import_json():
                 priority=t.get('priority', 0),
                 start_month=t.get('start_month'),
                 end_month=t.get('end_month'),
+                dev_complete_month=t.get('dev_complete_month'),
+                milestone_month=t.get('milestone_month'),
+                milestone_label=t.get('milestone_label'),
             )
             db.session.add(new_theme)
             db.session.flush()
             theme_map[t['theme_id']] = new_theme
+
+            # Restore milestones from the milestones array (v2+ format)
+            for idx, ms in enumerate(t.get('milestones') or []):
+                month = (ms.get('month') or '').strip()
+                if not month:
+                    continue
+                new_theme.milestones.append(ThemeMilestone(
+                    month=month,
+                    label=(ms.get('label') or '').strip() or None,
+                    position=ms.get('position', idx),
+                    is_completed=ms.get('is_completed', False),
+                ))
 
         # --- Re-create theme-member associations ---
         for tm in data['theme_members']:

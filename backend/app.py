@@ -172,6 +172,8 @@ def _migrate_theme_milestones():
         statements.append("ALTER TABLE themes ADD COLUMN milestone_month VARCHAR(7)")
     if 'milestone_label' not in existing_columns:
         statements.append("ALTER TABLE themes ADD COLUMN milestone_label VARCHAR(200)")
+    if 'dev_complete_month' not in existing_columns:
+        statements.append("ALTER TABLE themes ADD COLUMN dev_complete_month VARCHAR(7)")
 
     for statement in statements:
         db.session.execute(text(statement))
@@ -179,6 +181,15 @@ def _migrate_theme_milestones():
     if statements:
         db.session.commit()
         print("[Migration] Added milestone columns to themes table.")
+
+    # Migrate theme_milestones: added is_completed
+    existing_ms_cols = {
+        row[1] for row in db.session.execute(text("PRAGMA table_info(theme_milestones)")).fetchall()
+    }
+    if 'is_completed' not in existing_ms_cols:
+        db.session.execute(text("ALTER TABLE theme_milestones ADD COLUMN is_completed BOOLEAN NOT NULL DEFAULT 0"))
+        db.session.commit()
+        print("[Migration] Added is_completed column to theme_milestones table.")
 
     themes = Theme.query.filter(Theme.milestone_month.isnot(None)).all()
     inserted = 0

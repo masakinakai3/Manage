@@ -33,6 +33,7 @@ def _normalize_milestones(data):
             'month': month,
             'label': label,
             'position': index,
+            'is_completed': item.get('is_completed', False),
         })
     return milestones
 
@@ -43,6 +44,7 @@ def _replace_theme_milestones(theme, items):
             month=item['month'],
             label=item['label'],
             position=item['position'],
+            is_completed=item['is_completed'],
         )
         for item in items
     ]
@@ -92,6 +94,7 @@ def create_theme():
         priority=data.get('priority', 0),
         start_month=data.get('start_month'),
         end_month=data.get('end_month'),
+        dev_complete_month=data.get('dev_complete_month'),
     )
     _replace_theme_milestones(theme, _normalize_milestones(data))
     db.session.add(theme)
@@ -106,7 +109,7 @@ def update_theme(theme_id):
     if not theme:
         return jsonify({'error': 'Not found'}), 404
     data = request.get_json()
-    for field in ('name', 'category', 'status', 'color', 'priority', 'start_month', 'end_month'):
+    for field in ('name', 'category', 'status', 'color', 'priority', 'start_month', 'end_month', 'dev_complete_month'):
         if field in data:
             setattr(theme, field, data[field])
 

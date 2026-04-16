@@ -373,10 +373,11 @@ async function openThemeModal(theme = null) {
         ? theme.milestones.map((item) => ({ month: item.month || '', label: item.label || '' }))
         : (theme?.milestone_month ? [{ month: theme.milestone_month, label: theme.milestone_label || '' }] : [{ month: '', label: '' }]);
 
-    const renderMilestoneRow = (item = { month: '', label: '' }) => `
-        <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
+    const renderMilestoneRow = (item = { month: '', label: '', is_completed: false }) => `
+        <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px;">
             <input class="theme-milestone-month" type="month" value="${item.month || ''}">
             <input class="theme-milestone-label" type="text" value="${item.label || ''}" placeholder="例: リリース">
+            <label style="display:flex;align-items:center;gap:4px;font-size:var(--text-sm);margin:0;"><input class="theme-milestone-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
             <button class="btn btn-ghost btn-sm theme-milestone-remove" type="button">削除</button>
         </div>
     `;
@@ -401,6 +402,13 @@ async function openThemeModal(theme = null) {
         <div class="form-field">
             <label for="modal-theme-priority">優先度</label>
             <input id="modal-theme-priority" type="number" value="${theme?.priority ?? 0}" min="0" max="9">
+        </div>
+        <div class="form-field">
+            <label>開発完了月</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input id="modal-theme-dev-complete" class="milestone-month-input" type="month" value="${theme?.dev_complete_month || ''}" style="flex:1;">
+                <span class="summary-subtext" style="white-space:nowrap;">★ 総計欄に表示されます</span>
+            </div>
         </div>
         <div class="form-field">
             <label>マイルストーン</label>
@@ -459,10 +467,12 @@ async function openThemeModal(theme = null) {
             status: document.getElementById('modal-theme-status').value,
             color: document.getElementById('modal-theme-color').value,
             priority: Number.parseInt(document.getElementById('modal-theme-priority').value || '0', 10),
+            dev_complete_month: document.getElementById('modal-theme-dev-complete')?.value || null,
             milestones: Array.from(document.querySelectorAll('#theme-milestones-editor .theme-milestone-row'))
                 .map((row) => ({
                     month: row.querySelector('.theme-milestone-month')?.value || '',
                     label: row.querySelector('.theme-milestone-label')?.value.trim() || '',
+                    is_completed: row.querySelector('.theme-milestone-completed')?.checked || false,
                 }))
                 .filter((item) => item.month),
         };

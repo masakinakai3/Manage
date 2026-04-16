@@ -582,16 +582,24 @@ async function showMilestoneModal(themeId) {
     const modalFooter = document.getElementById('modal-footer');
     const modalOverlay = document.getElementById('modal-overlay');
 
-    const renderRow = (item = { month: '', label: '' }) => `
-        <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:center;margin-bottom:8px;">
+    const renderRow = (item = { month: '', label: '', is_completed: false }) => `
+        <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px;">
             <input class="theme-milestone-month" type="month" value="${item.month || ''}">
             <input class="theme-milestone-label" type="text" value="${escapeHtml(item.label || '')}" placeholder="例: リリース">
+            <label style="display:flex;align-items:center;gap:4px;font-size:var(--text-sm);margin:0;"><input class="theme-milestone-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
             <button class="btn btn-ghost btn-sm theme-milestone-remove" type="button">削除</button>
         </div>
     `;
 
     modalTitle.textContent = `${theme.name} のマイルストーン`;
     modalBody.innerHTML = `
+        <div class="form-field">
+            <label>開発完了月</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <input id="theme-dev-complete-month" class="milestone-month-input" type="month" value="${escapeHtml(theme.dev_complete_month || '')}" style="flex:1;">
+                <span class="summary-subtext" style="white-space:nowrap;">★ 総計欄に表示されます</span>
+            </div>
+        </div>
         <div class="form-field">
             <label>マイルストーン</label>
             <div id="theme-milestones-editor">${themeMilestonesForEdit(theme).map((item) => renderRow(item)).join('')}</div>
@@ -632,12 +640,14 @@ async function showMilestoneModal(themeId) {
             .map((row) => ({
                 month: row.querySelector('.theme-milestone-month')?.value || '',
                 label: row.querySelector('.theme-milestone-label')?.value.trim() || '',
+                is_completed: row.querySelector('.theme-milestone-completed')?.checked || false,
             }))
             .filter((item) => item.month);
+        const devCompleteMonth = document.getElementById('theme-dev-complete-month')?.value || null;
 
         try {
             setSaveState('saving', 'マイルストーンを保存しています...');
-            await themesApi.update(themeId, { milestones });
+            await themesApi.update(themeId, { milestones, dev_complete_month: devCompleteMonth || null });
             closeSharedModal();
             setSaveState('saved', 'マイルストーンを保存しました');
             showToast('マイルストーンを保存しました。', 'success');
@@ -668,7 +678,7 @@ function memberMonthTotal(memberId, month) { return allAllocations.filter((item)
 function sumThemeRate(themeId, month, members) { return members.reduce((sum, member) => sum + lookupRate(allAllocations, themeId, member.member_id, month), 0); }
 function lookupRate(source, themeId, memberId, month) { return source.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month)?.allocation_rate || 0; }
 function countBy(items, selector) { const map = new Map(); items.forEach((item) => map.set(selector(item), (map.get(selector(item)) || 0) + 1)); return map; }
-function getGroupKey(theme) { return groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : groupBy === 'priority' ? `優先度 ${theme.priority ?? 0}` : theme.category || 'Uncategorized'; }
+function getGroupKey(theme) { return groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized'; }
 function rateClass(rate) { if (rate <= 0) return ''; if (rate <= 30) return 'rate-low'; if (rate <= 60) return 'rate-mid'; if (rate < 100) return 'rate-high'; if (rate === 100) return 'rate-full'; return 'rate-over'; }
 function csvEscape(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
@@ -769,7 +779,8 @@ function milestoneChips(theme, month) {
     if (matches.length === 0) return '';
     const chips = matches.map((item) => {
         const label = escapeHtml(item.label || 'Milestone');
-        return `<div class="gantt-milestone-chip" title="${label}">${label}</div>`;
+        const completedClass = item.is_completed ? 'completed' : '';
+        return `<div class="gantt-milestone-chip ${completedClass}" title="${label}">${label}</div>`;
     }).join('');
     return `<div class="gantt-milestones">${chips}</div>`;
 }
@@ -788,7 +799,10 @@ function renderTable(months) {
         if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
-            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(sumThemeRate(theme.theme_id, month, members))}">${formatRateValue(sumThemeRate(theme.theme_id, month, members))}${diffChip(sumThemeRate(theme.theme_id, month, members), month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`).join('')}</tr>`);
+            const priorityBadge = theme.priority > 0
+                ? `<span class="theme-priority-badge" title="優先度 ${theme.priority}">P${theme.priority}</span>`
+                : '';
+            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${priorityBadge}${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => { const total = sumThemeRate(theme.theme_id, month, members); const isDevComplete = theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale); const starLabel = isDevComplete ? `<span class="gantt-star-label" title="開発完了月">★${total || ''}</span>` : ''; return `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(total)}">${isDevComplete ? starLabel : formatRateValue(total)}${diffChip(total, month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`; }).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });

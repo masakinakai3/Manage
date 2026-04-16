@@ -81,6 +81,7 @@ class Theme(db.Model):
     end_month = db.Column(db.String(7), nullable=True)    # 'YYYY-MM'
     milestone_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
     milestone_label = db.Column(db.String(200), nullable=True)
+    dev_complete_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
 
     allocations = db.relationship('Allocation', backref='theme', lazy='dynamic',
                                   cascade='all, delete-orphan')
@@ -104,6 +105,7 @@ class Theme(db.Model):
             'priority': self.priority,
             'start_month': self.start_month,
             'end_month': self.end_month,
+            'dev_complete_month': self.dev_complete_month,
             'milestones': milestones,
             'milestone_month': self.milestone_month,
             'milestone_label': self.milestone_label,
@@ -120,6 +122,7 @@ class ThemeMilestone(db.Model):
     month = db.Column(db.String(7), nullable=False)  # 'YYYY-MM'
     label = db.Column(db.String(200), nullable=True)
     position = db.Column(db.Integer, nullable=False, default=0)
+    is_completed = db.Column(db.Boolean, nullable=False, default=False)
 
     def to_dict(self):
         return {
@@ -127,6 +130,7 @@ class ThemeMilestone(db.Model):
             'month': self.month,
             'label': self.label,
             'position': self.position,
+            'is_completed': self.is_completed,
         }
 
 class Snapshot(db.Model):

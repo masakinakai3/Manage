@@ -641,3 +641,76 @@
     background: rgba(37, 99, 235, 0.15);
     color: #60a5fa;
 }
+
+/* ==========================================
+   Priority Badge (Gantt theme row)
+   ========================================== */
+
+.theme-priority-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(139, 92, 246, 0.35));
+    color: #c4c6ff;
+    border: 1px solid rgba(99, 102, 241, 0.5);
+    flex-shrink: 0;
+    letter-spacing: 0.02em;
+}
+
+/* ==========================================
+   Dev-Complete Month star cell label
+   ========================================== */
+
+.gantt-star-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: #fbbf24;
+    text-shadow: 0 0 8px rgba(251, 191, 36, 0.5);
+}
+
+/* ==========================================
+   Calendar icon fix for dark mode month inputs
+   ========================================== */
+
+input[type="month"],
+.milestone-month-input {
+    color-scheme: dark;
+}
+
+[data-theme="light"] input[type="month"],
+[data-theme="light"] .milestone-month-input {
+    color-scheme: light;
+}
+
+/* Make the calendar/spinner icon bright enough in dark mode */
+input[type="month"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.85) brightness(1.5);
+    cursor: pointer;
+    opacity: 0.85;
+    transition: opacity var(--transition-fast);
+}
+
+input[type="month"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+}
+
+[data-theme="light"] input[type="month"]::-webkit-calendar-picker-indicator {
+    filter: none;
+    opacity: 0.65;
+}
+
+/* grey out completed milestones */
+.gantt-milestone-chip.completed {
+    opacity: 0.4;
+    text-decoration: line-through;
+    background: var(--color-bg-elevated);
+    border-color: var(--color-border);
+    color: var(--color-text-secondary);
+}
