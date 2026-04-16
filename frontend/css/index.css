@@ -1785,6 +1785,61 @@ td.out-period {
     flex-shrink: 0;
 }
 
+.project-ribbon--interactive {
+    cursor: zoom-in;
+}
+
+.ribbon-fullscreen-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(8, 10, 18, 0.82);
+    backdrop-filter: blur(10px);
+    padding: var(--space-6);
+}
+
+.ribbon-fullscreen-overlay[hidden] {
+    display: none;
+}
+
+.ribbon-fullscreen-dialog {
+    width: min(1440px, 100%);
+    height: min(92vh, 100%);
+    margin: 0 auto;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.ribbon-fullscreen-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.ribbon-fullscreen-header h3 {
+    font-size: var(--text-lg);
+    font-weight: 600;
+}
+
+.ribbon-fullscreen-content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--space-5);
+}
+
+.ribbon-fullscreen-content .project-ribbon__svg {
+    min-width: 1100px;
+}
+
 .shortcut-grid,
 .checkbox-grid {
     display: grid;
@@ -1902,5 +1957,13 @@ kbd {
     .toast {
         min-width: 0;
         max-width: none;
+    }
+
+    .ribbon-fullscreen-overlay {
+        padding: var(--space-3);
+    }
+
+    .ribbon-fullscreen-content {
+        padding: var(--space-3);
     }
 }

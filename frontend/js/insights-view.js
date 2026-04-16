@@ -4,6 +4,8 @@ import { addMonths, getVisibleMonths } from './utils/date-utils.js';
 import { formatError, setBusyState } from './ui.js';
 
 let currentState = loadViewState();
+let ribbonOverlayInitialized = false;
+let activeRibbonData = null;
 
 const STATUS_LABELS = {
     planning: '計画中',
@@ -13,6 +15,7 @@ const STATUS_LABELS = {
 };
 
 export async function initInsightsView() {
+    initRibbonFullscreen();
     subscribeViewState((nextState) => {
         currentState = nextState;
         refreshInsightsView();
@@ -170,12 +173,27 @@ function renderProjectRibbon(targetId, ribbonData) {
         return;
     }
 
-    const width = Math.max(640, items.length * 140);
-    const height = 340;
+    activeRibbonData = ribbonData;
+    target.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: false });
+
+    const interactiveRibbon = target.querySelector('.project-ribbon--interactive');
+    interactiveRibbon?.addEventListener('click', () => openRibbonFullscreen(ribbonData));
+    interactiveRibbon?.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openRibbonFullscreen(ribbonData);
+        }
+    });
+}
+
+function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
+    const items = ribbonData.items || [];
+    const width = Math.max(fullscreen ? 1200 : 640, items.length * (fullscreen ? 180 : 140));
+    const height = fullscreen ? 560 : 340;
     const padding = { top: 20, right: 24, bottom: 64, left: 24 };
     const innerWidth = width - padding.left - padding.right;
     const innerHeight = height - padding.top - padding.bottom;
-    const columnWidth = Math.min(68, Math.max(38, innerWidth / Math.max(items.length * 2.6, 1)));
+    const columnWidth = Math.min(fullscreen ? 80 : 68, Math.max(38, innerWidth / Math.max(items.length * 2.6, 1)));
     const step = items.length > 1 ? innerWidth / (items.length - 1) : 0;
     const maxTotalLoad = Math.max(ribbonData.max_total_load || 0, 1);
 
@@ -240,6 +258,7 @@ function renderProjectRibbon(targetId, ribbonData) {
     const blocks = monthSegments.flatMap((item) => item.segments.map((segment) => {
         const color = segment.color || '#6366f1';
         const heightValue = Math.max(segment.y1 - segment.y0, 2);
+        const labelLimit = fullscreen ? 18 : (columnWidth > 52 ? 14 : 10);
         return `
             <g>
                 <rect
@@ -260,7 +279,7 @@ function renderProjectRibbon(targetId, ribbonData) {
                         y="${segment.y0 + (heightValue / 2) + 4}"
                         text-anchor="middle"
                         class="project-ribbon__block-label"
-                    >${escapeHtml(truncateLabel(segment.name, columnWidth > 52 ? 14 : 10))}</text>
+                    >${escapeHtml(truncateLabel(segment.name, labelLimit))}</text>
                 ` : ''}
             </g>
         `;
@@ -279,8 +298,8 @@ function renderProjectRibbon(targetId, ribbonData) {
         .map(([themeId]) => monthSegments.flatMap((item) => item.segments).find((segment) => segment.theme_id === themeId))
         .filter(Boolean);
 
-    target.innerHTML = `
-        <div class="project-ribbon">
+    return `
+        <div class="project-ribbon ${fullscreen ? '' : 'project-ribbon--interactive'}" ${fullscreen ? '' : 'role="button" tabindex="0" aria-label="Open project load ribbon fullscreen"'}>
             <div class="project-ribbon__scroll">
                 <svg viewBox="0 0 ${width} ${height}" class="project-ribbon__svg" role="img" aria-label="Project load ribbon chart">
                     <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>
@@ -299,6 +318,47 @@ function renderProjectRibbon(targetId, ribbonData) {
             </div>
         </div>
     `;
+}
+
+function initRibbonFullscreen() {
+    if (ribbonOverlayInitialized) return;
+    ribbonOverlayInitialized = true;
+
+    const overlay = document.getElementById('ribbon-fullscreen-overlay');
+    const closeButton = document.getElementById('ribbon-fullscreen-close');
+
+    closeButton?.addEventListener('click', closeRibbonFullscreen);
+    overlay?.addEventListener('click', (event) => {
+        if (event.target === overlay) {
+            closeRibbonFullscreen();
+        }
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && overlay && !overlay.hidden) {
+            event.preventDefault();
+            closeRibbonFullscreen();
+        }
+    });
+}
+
+function openRibbonFullscreen(ribbonData = activeRibbonData) {
+    const overlay = document.getElementById('ribbon-fullscreen-overlay');
+    const content = document.getElementById('ribbon-fullscreen-content');
+    if (!overlay || !content || !ribbonData) return;
+
+    activeRibbonData = ribbonData;
+    content.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: true });
+    overlay.hidden = false;
+}
+
+function closeRibbonFullscreen() {
+    const overlay = document.getElementById('ribbon-fullscreen-overlay');
+    const content = document.getElementById('ribbon-fullscreen-content');
+    if (!overlay || !content) return;
+
+    overlay.hidden = true;
+    content.innerHTML = '';
 }
 
 function buildRibbonPath(source, target, columnWidth) {
@@ -339,10 +399,12 @@ function renderSimpleTable(targetId, headers, rows) {
 function renderPillList(targetId, items) {
     const target = document.getElementById(targetId);
     if (!target) return;
+
     if (items.length === 0) {
         target.innerHTML = '<div class="empty-panel">表示できるデータがありません。</div>';
         return;
     }
+
     target.innerHTML = items.map((item) => `
         <span class="dashboard-pill">${escapeHtml(item.label)}: ${escapeHtml(item.value ?? item.count)}</span>
     `).join('');
@@ -366,6 +428,8 @@ function renderError(message) {
             target.innerHTML = `<div class="empty-panel">${escapeHtml(message)}</div>`;
         }
     });
+
+    closeRibbonFullscreen();
 }
 
 function labelSeverity(severity) {
