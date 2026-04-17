@@ -14,7 +14,7 @@ from datetime import date
 from flask import Blueprint, Response, request
 from flask_login import login_required
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from models import Allocation, Member, Theme, db
@@ -50,15 +50,27 @@ def _parse_rate(value):
         return None
 
 
-def _configure_header(worksheet, headers):
+def _configure_header(worksheet, headers, header_labels=None, current_columns=None):
     header_fill = PatternFill(start_color='1F497D', end_color='1F497D', fill_type='solid')
     header_font = Font(color='FFFFFF', bold=True)
+    current_fill = PatternFill(start_color='8C6A00', end_color='8C6A00', fill_type='solid')
+    current_border = Border(
+        left=Side(style='thin', color='D9A300'),
+        right=Side(style='thin', color='D9A300'),
+        top=Side(style='thin', color='D9A300'),
+        bottom=Side(style='thin', color='D9A300'),
+    )
 
-    worksheet.append(headers)
+    worksheet.append(header_labels or headers)
     for cell in worksheet[1]:
         cell.fill = header_fill
         cell.font = header_font
-        cell.alignment = Alignment(horizontal='center', vertical='center')
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    for column_index in current_columns or []:
+        cell = worksheet.cell(row=1, column=column_index)
+        cell.fill = current_fill
+        cell.border = current_border
 
 
 def _export_list_layout(workbook, headers, rows):
@@ -89,10 +101,26 @@ def _export_list_layout(workbook, headers, rows):
         worksheet.column_dimensions[get_column_letter(index)].width = 12
 
 
-def _export_gantt_layout(workbook, headers, rows):
+def _apply_current_border(cell):
+    current_border = Border(
+        left=Side(style='thin', color='D9A300'),
+        right=Side(style='thin', color='D9A300'),
+        top=Side(style='thin', color='D9A300'),
+        bottom=Side(style='thin', color='D9A300'),
+    )
+    cell.border = current_border
+
+
+def _export_gantt_layout(workbook, headers, rows, header_labels=None):
     worksheet = workbook.active
     worksheet.title = 'Gantt'
-    _configure_header(worksheet, headers)
+    current_columns = {
+        column_offset
+        for row_data in rows
+        for column_offset, value in enumerate(row_data.get('values', []), start=2)
+        if isinstance(value, dict) and value.get('is_current')
+    }
+    _configure_header(worksheet, headers, header_labels=header_labels, current_columns=current_columns)
 
     group_fill = PatternFill(start_color='D9E2F3', end_color='D9E2F3', fill_type='solid')
     summary_fill = PatternFill(start_color='EAF2F8', end_color='EAF2F8', fill_type='solid')
@@ -121,15 +149,28 @@ def _export_gantt_layout(workbook, headers, rows):
 
         for column_index, value in enumerate(values, start=2):
             cell = worksheet.cell(row=row_index, column=column_index)
-            cell.alignment = Alignment(horizontal='center', vertical='center')
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
 
-            rate = _parse_rate(value)
+            payload = value if isinstance(value, dict) else {'text': value}
+            text = payload.get('text', '')
+            rate = payload.get('rate')
+            has_special_text = payload.get('has_special_text', False)
+
             if rate is None:
-                continue
+                rate = _parse_rate(text)
 
-            cell.value = rate / 100
-            cell.number_format = '0%'
-            cell.fill = _rate_fill(rate)
+            if rate is not None:
+                cell.fill = _rate_fill(rate)
+
+            if rate is not None and not has_special_text and (text in ('', f'{rate}%')):
+                cell.value = rate / 100
+                cell.number_format = '0%'
+            else:
+                cell.value = text
+
+            if payload.get('is_current'):
+                _apply_current_border(cell)
+
             if row_type == 'summary':
                 cell.font = Font(bold=True)
 
@@ -175,12 +216,13 @@ def export_xlsx():
         return {'error': 'No data'}, 400
 
     headers = data.get('headers', [])
+    header_labels = data.get('header_labels', headers)
     rows = data.get('rows', [])
     filename = re.sub(r'[^\w\-.]', '_', data.get('filename', 'gantt_export.xlsx'))
 
     workbook = Workbook()
     if data.get('layout') == 'gantt':
-        _export_gantt_layout(workbook, headers, rows)
+        _export_gantt_layout(workbook, headers, rows, header_labels=header_labels)
     else:
         _export_list_layout(workbook, headers, rows)
 

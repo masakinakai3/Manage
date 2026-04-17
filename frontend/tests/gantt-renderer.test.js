@@ -110,7 +110,12 @@ function renderBaseDom() {
         <div id="scale-switcher"><button class="scale-btn" data-scale="1" type="button">1</button></div>
         <div id="view-gantt" class="view active"></div>
         <select id="gantt-theme-filter"><option value="">all</option></select>
+        <select id="gantt-category-filter"><option value="">all categories</option></select>
+        <select id="gantt-owner-filter"><option value="">all members</option></select>
+        <select id="gantt-status-filter"><option value="all">all statuses</option><option value="open">open</option><option value="completed">completed</option></select>
+        <select id="gantt-priority-filter"><option value="all">all priorities</option><option value="1">p1</option></select>
         <select id="gantt-group-by"><option value="none" selected>none</option></select>
+        <button id="gantt-filter-reset" type="button"></button>
         <button id="gantt-prev" type="button"></button>
         <button id="gantt-next" type="button"></button>
         <button id="gantt-today" type="button"></button>
@@ -328,7 +333,7 @@ describe('gantt-renderer regressions', () => {
         expect(document.getElementById('gantt-owner-filter')).not.toBeNull();
         expect(document.getElementById('gantt-status-filter')?.value).toBe('open');
         expect(document.getElementById('gantt-priority-filter')?.value).toBe('1');
-        expect(document.getElementById('gantt-owner-filter')?.value).toBe('alice');
+        expect(document.getElementById('gantt-owner-filter')?.value).toBe('Alice');
 
         document.getElementById('gantt-status-filter').value = 'completed';
         document.getElementById('gantt-status-filter').dispatchEvent(new Event('change', { bubbles: true }));

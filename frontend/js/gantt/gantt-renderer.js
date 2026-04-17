@@ -113,7 +113,7 @@ function bindControls() {
     document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.addEventListener('click', () => updateViewState({ scale: Number.parseInt(button.dataset.scale, 10) })));
     document.getElementById('gantt-theme-filter')?.addEventListener('change', (event) => updateViewState({ ganttSearch: event.target.value }));
     document.getElementById('gantt-category-filter')?.addEventListener('change', (event) => updateViewState({ ganttCategory: event.target.value }));
-    document.getElementById('gantt-owner-filter')?.addEventListener('input', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }));
+    document.getElementById('gantt-owner-filter')?.addEventListener('change', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }));
     document.getElementById('gantt-status-filter')?.addEventListener('change', (event) => updateViewState({ ganttStatus: event.target.value }));
     document.getElementById('gantt-priority-filter')?.addEventListener('change', (event) => updateViewState({ ganttPriority: event.target.value }));
     document.getElementById('gantt-group-by')?.addEventListener('change', (event) => updateViewState({ groupBy: event.target.value }));
@@ -1085,7 +1085,11 @@ function syncFilterInputs() {
     const category = document.getElementById('gantt-category-filter');
     if (category && category.value !== categoryFilter) category.value = categoryFilter;
     const owner = document.getElementById('gantt-owner-filter');
-    if (owner && owner.value !== ownerFilter) owner.value = ownerFilter;
+    if (owner) {
+        const matchingOption = [...owner.options].find((option) => option.value.toLowerCase() === ownerFilter.toLowerCase());
+        const nextOwnerValue = matchingOption?.value || '';
+        if (owner.value !== nextOwnerValue) owner.value = nextOwnerValue;
+    }
     const status = document.getElementById('gantt-status-filter');
     if (status && status.value !== statusFilter) status.value = statusFilter;
     const priority = document.getElementById('gantt-priority-filter');
@@ -1113,14 +1117,15 @@ function renderFilterControls() {
             + categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join('');
     }
 
-    const ownerSuggestions = document.getElementById('gantt-owner-suggestions');
-    if (ownerSuggestions) {
+    const ownerSelect = document.getElementById('gantt-owner-filter');
+    if (ownerSelect) {
         const names = [...new Set(allMembers
             .filter((member) => member.is_active !== false)
             .map((member) => (member.display_name || '').trim())
             .filter(Boolean))]
             .sort((left, right) => left.localeCompare(right, 'ja'));
-        ownerSuggestions.innerHTML = names.map((name) => `<option value="${escapeHtml(name)}"></option>`).join('');
+        ownerSelect.innerHTML = '<option value="">メンバー名: すべて</option>'
+            + names.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
     }
 
     syncFilterInputs();
