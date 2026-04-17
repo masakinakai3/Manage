@@ -98,7 +98,12 @@
                         </select>
 
                         <div class="search-filter-controls gantt-filter-bar">
-                            <input type="text" id="gantt-search" class="view-input" placeholder="テーマ名、カテゴリ、メモ、メンバー名で検索" autocomplete="off">
+                            <input type="text" id="gantt-theme-filter" class="view-input" placeholder="テーマ名で絞り込み" autocomplete="off">
+                            <div class="month-nav">
+                                <button id="gantt-prev" class="btn btn-icon" type="button">前へ</button>
+                                <button id="gantt-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
+                                <button id="gantt-next" class="btn btn-icon" type="button">次へ</button>
+                            </div>
                             <select id="gantt-group-by" class="view-select">
                                 <option value="none">グループなし</option>
                                 <option value="category">カテゴリ</option>
@@ -110,7 +115,6 @@
                             <select id="saved-view-select" class="view-select">
                                 <option value="">Saved views</option>
                             </select>
-                            <button id="saved-view-apply-btn" class="btn btn-ghost btn-sm" type="button">Apply</button>
                             <button id="saved-view-save-btn" class="btn btn-ghost btn-sm" type="button">Save View</button>
                             <button id="saved-view-delete-btn" class="btn btn-ghost btn-sm" type="button">Delete</button>
                         </div>
@@ -131,14 +135,6 @@
                             <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたみ</button>
                             <button id="gantt-export-csv" class="btn btn-ghost btn-sm" type="button">CSV 出力</button>
-                            <button id="gantt-export-xlsx" class="btn btn-ghost btn-sm" type="button">Excel 出力</button>
-                            <button id="gantt-export-advanced" class="btn btn-ghost btn-sm" type="button">高度な出力</button>
-                        </div>
-
-                        <div class="month-nav">
-                            <button id="gantt-prev" class="btn btn-icon" type="button">前へ</button>
-                            <button id="gantt-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
-                            <button id="gantt-next" class="btn btn-icon" type="button">次へ</button>
                         </div>
                     </div>
                 </div>

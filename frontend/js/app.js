@@ -5,7 +5,7 @@
  */
 
 import { auth, themes as themesApi, members as membersApi, allocations, dataBackup, savedViews as savedViewsApi } from './api.js';
-import { initGantt, refreshGantt, HistoryManager, getGanttExportDataset } from './gantt/gantt-renderer.js';
+import { initGantt, refreshGantt, HistoryManager } from './gantt/gantt-renderer.js';
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
@@ -56,7 +56,6 @@ async function showApp() {
     await initSavedViews();
     initOnboarding();
     initKeyboardShortcuts();
-    initAdvancedExport();
     initThemeManagement();
     initMemberManagement();
 
@@ -673,7 +672,7 @@ function presetLabel(value) {
 }
 
 async function initSavedViews() {
-    document.getElementById('saved-view-apply-btn')?.addEventListener('click', applySelectedSavedView);
+    document.getElementById('saved-view-select')?.addEventListener('change', applySelectedSavedView);
     document.getElementById('saved-view-save-btn')?.addEventListener('click', saveCurrentView);
     document.getElementById('saved-view-delete-btn')?.addEventListener('click', deleteCurrentSavedView);
     await syncSavedViewsFromLocal();
@@ -917,12 +916,12 @@ function showShortcutHelp() {
 
 function focusCurrentSearch() {
     const targets = {
-        gantt: 'gantt-search',
+        gantt: 'gantt-theme-filter',
         'member-load': 'member-search',
         themes: 'theme-list-search',
         members: 'member-list-search',
     };
-    const input = document.getElementById(targets[currentView] || 'gantt-search');
+    const input = document.getElementById(targets[currentView] || 'gantt-theme-filter');
     input?.focus();
     input?.select?.();
 }
@@ -935,93 +934,6 @@ function shouldIgnoreShortcut(event) {
     );
 }
 
-function initAdvancedExport() {
-    document.getElementById('gantt-export-advanced')?.addEventListener('click', openAdvancedExportModal);
-    document.getElementById('shortcut-help-btn')?.addEventListener('click', showShortcutHelp);
-}
-
-function openAdvancedExportModal() {
-    const columns = ['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo', 'Category', 'Status', 'Priority', 'Capacity'];
-    document.getElementById('modal-title').textContent = 'Advanced export';
-    document.getElementById('modal-body').innerHTML = `
-        <div class="form-field">
-            <label for="export-template">Template</label>
-            <select id="export-template">
-                <option value="standard">Standard list</option>
-                <option value="meeting">Meeting deck</option>
-                <option value="review">Monthly review</option>
-            </select>
-        </div>
-        <div class="form-field">
-            <label for="export-format">Format</label>
-            <select id="export-format">
-                <option value="csv">CSV</option>
-                <option value="xlsx">Excel</option>
-            </select>
-        </div>
-        <div class="form-field">
-            <label>Columns</label>
-            <div class="checkbox-grid">
-                ${columns.map((column) => `
-                    <label class="check-item">
-                        <input type="checkbox" value="${column}" checked>
-                        <span>${column}</span>
-                    </label>
-                `).join('')}
-            </div>
-        </div>
-    `;
-    document.getElementById('modal-footer').innerHTML = `
-        <button class="btn btn-ghost" id="modal-cancel-btn" type="button">Cancel</button>
-        <button class="btn btn-primary" id="modal-save-btn" type="button">Export</button>
-    `;
-    document.getElementById('modal-overlay').hidden = false;
-    document.getElementById('modal-close').onclick = closeModal;
-    document.getElementById('modal-cancel-btn').onclick = closeModal;
-    document.getElementById('modal-save-btn').onclick = runAdvancedExport;
-}
-
-async function runAdvancedExport() {
-    const template = document.getElementById('export-template').value;
-    const format = document.getElementById('export-format').value;
-    let columns = Array.from(document.querySelectorAll('.checkbox-grid input:checked')).map((input) => input.value);
-    if (columns.length === 0) {
-        showToast('Select at least one column.', 'warning');
-        return;
-    }
-
-    if (template === 'meeting') {
-        columns = ['Theme', 'Member', 'Month', 'Allocation', 'Status'];
-    } else if (template === 'review') {
-        columns = ['Department', 'Theme', 'Member', 'Month', 'Allocation', 'Category', 'Priority'];
-    }
-
-    const { headers, rows } = getGanttExportDataset(columns);
-    const filename = `manage_${template}_${new Date().toISOString().slice(0, 10)}.${format}`;
-
-    if (format === 'csv') {
-        const csv = [headers, ...rows].map((row) => row.map(csvEscapeLocal).join(',')).join('\r\n');
-        downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }), filename);
-        closeModal();
-        showToast('Advanced CSV export completed.', 'success');
-        return;
-    }
-
-    const response = await fetch('/api/export/xlsx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            headers,
-            rows: rows.map((row) => row.map((value, index) => (headers[index] === 'Allocation' ? `${value}%` : value))),
-            filename,
-        }),
-    });
-    const blob = await response.blob();
-    downloadBlob(blob, filename);
-    closeModal();
-    showToast('Advanced Excel export completed.', 'success');
-}
-
 function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -1029,9 +941,4 @@ function downloadBlob(blob, filename) {
     anchor.download = filename;
     anchor.click();
     URL.revokeObjectURL(url);
-}
-
-function csvEscapeLocal(value) {
-    const text = String(value ?? '');
-    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }

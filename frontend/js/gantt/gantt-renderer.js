@@ -111,7 +111,7 @@ export async function refreshGantt() {
 function bindControls() {
     ensureGanttFilterControls();
     document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.addEventListener('click', () => updateViewState({ scale: Number.parseInt(button.dataset.scale, 10) })));
-    document.getElementById('gantt-search')?.addEventListener('input', (event) => updateViewState({ ganttSearch: event.target.value.trim().toLowerCase() }));
+    document.getElementById('gantt-theme-filter')?.addEventListener('input', (event) => updateViewState({ ganttSearch: event.target.value.trim().toLowerCase() }));
     document.getElementById('gantt-category-filter')?.addEventListener('change', (event) => updateViewState({ ganttCategory: event.target.value }));
     document.getElementById('gantt-owner-filter')?.addEventListener('input', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }));
     document.getElementById('gantt-status-filter')?.addEventListener('change', (event) => updateViewState({ ganttStatus: event.target.value }));
@@ -133,7 +133,6 @@ function bindControls() {
     document.getElementById('gantt-expand-all')?.addEventListener('click', () => { collapsedThemes.clear(); persistCollapsed(); refreshGantt(); });
     document.getElementById('gantt-collapse-all')?.addEventListener('click', () => { allThemes.forEach((theme) => collapsedThemes.add(theme.theme_id)); persistCollapsed(); refreshGantt(); });
     document.getElementById('gantt-export-csv')?.addEventListener('click', exportCsv);
-    document.getElementById('gantt-export-xlsx')?.addEventListener('click', exportXlsx);
     document.getElementById('snapshot-save-btn')?.addEventListener('click', saveSnapshot);
     document.getElementById('snapshot-select')?.addEventListener('change', loadSelectedSnapshot);
     document.getElementById('detail-save')?.addEventListener('click', saveSelectedCell);
@@ -144,7 +143,7 @@ function bindControls() {
 }
 
 function ensureGanttFilterControls() {
-    const search = document.getElementById('gantt-search');
+    const search = document.getElementById('gantt-theme-filter');
     const groupByInput = document.getElementById('gantt-group-by');
     const controls = search?.parentElement;
     if (!search || !groupByInput || !controls || document.getElementById('gantt-category-filter')) return;
@@ -168,6 +167,7 @@ function ensureGanttFilterControls() {
         </select>
         <select id="gantt-priority-filter" class="view-select">
             <option value="all">優先度: すべて</option>
+            <option value="0">優先度: P0以上</option>
             <option value="1">優先度: P1以上</option>
             <option value="2">優先度: P2以上</option>
             <option value="3">優先度: P3以上</option>
@@ -875,19 +875,6 @@ function exportCsv() {
     showToast('CSV exported.', 'success');
 }
 
-exportXlsx = async function() {
-    const { headers, rows } = getGanttExportDataset(['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo']);
-    const response = await fetch('/api/export/xlsx', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ headers, rows: rows.map((row) => row.map((value, index) => (headers[index] === 'Allocation' ? `${value}%` : value))), filename: 'gantt_export.xlsx' }) });
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'gantt_export.xlsx';
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('Excel exported.', 'success');
-};
-
 async function showAssignMemberModal(themeId) {
     const theme = allThemes.find((item) => item.theme_id === themeId);
     if (!theme) return;
@@ -1092,7 +1079,7 @@ function persistCollapsed() { localStorage.setItem('gantt_collapsed', JSON.strin
 function syncScaleButtons() { document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.classList.toggle('active', Number.parseInt(button.dataset.scale, 10) === scale)); }
 
 function syncFilterInputs() {
-    const search = document.getElementById('gantt-search');
+    const search = document.getElementById('gantt-theme-filter');
     if (search && search.value !== searchQuery) search.value = searchQuery;
     const category = document.getElementById('gantt-category-filter');
     if (category && category.value !== categoryFilter) category.value = categoryFilter;
@@ -1129,21 +1116,7 @@ function renderFilterControls() {
 }
 
 function themeSearchText(theme) {
-    const members = themeMembers(theme.theme_id);
-    const memberNames = members.map((member) => member.display_name).join(' ');
-    const departments = members.map((member) => member.department || '').join(' ');
-    const memos = allAllocations
-        .filter((item) => item.theme_id === theme.theme_id)
-        .map((item) => item.memo || '')
-        .join(' ');
-    return [
-        theme.name,
-        theme.category || '',
-        STATUS_LABELS[theme.status] || theme.status || '',
-        memberNames,
-        departments,
-        memos,
-    ].join(' ').toLowerCase();
+    return String(theme.name || '').toLowerCase();
 }
 
 function matchesThemeFilters(theme) {
@@ -1194,6 +1167,7 @@ export function getGanttExportDataset(selectedColumns = ['Theme', 'Member', 'Dep
 
 export function getGanttGridExportDataset() {
     const months = getVisibleMonths(startMonth, visibleCount, scale);
+    const current = currentMonth();
     const themes = filterThemes();
     const rows = [];
     const groups = groupBy === 'none'
@@ -1214,16 +1188,17 @@ export function getGanttGridExportDataset() {
             const members = themeMembers(theme.theme_id);
             rows.push({
                 type: 'summary',
-                label: theme.name,
+                label: formatThemeExportLabel(theme),
                 color: theme.color || '',
-                values: months.map((month) => formatRateValue(sumThemeRate(theme.theme_id, month, members))),
+                values: months.map((month) => buildSummaryExportCell(theme, month, members, current)),
             });
 
+            if (collapsedThemes.has(theme.theme_id)) return;
             members.forEach((member) => {
                 rows.push({
                     type: 'member',
-                    label: `${member.display_name}${member.department ? ` (${member.department})` : ''}`,
-                    values: months.map((month) => formatRateValue(lookupRate(allAllocations, theme.theme_id, member.member_id, month))),
+                    label: formatMemberExportLabel(member),
+                    values: months.map((month) => buildMemberExportCell(theme, member, month, current)),
                 });
             });
         });
@@ -1231,7 +1206,64 @@ export function getGanttGridExportDataset() {
 
     return {
         headers: ['Theme / Member', ...months],
+        header_labels: ['Theme / Member', ...months.map((month) => formatMonthHeader(month, scale))],
         rows,
+    };
+}
+
+function formatThemeExportLabel(theme) {
+    const parts = [theme.name];
+    if (theme.priority != null) parts.push(`P${theme.priority}`);
+    if (theme.status) parts.push(STATUS_LABELS[theme.status] || theme.status);
+    return parts.join(' / ');
+}
+
+function formatMemberExportLabel(member) {
+    const details = [];
+    if (member.department) details.push(member.department);
+    if (member.capacity != null) details.push(`Capacity ${member.capacity}%`);
+    return details.length ? `${member.display_name} (${details.join(' / ')})` : member.display_name;
+}
+
+function buildSummaryExportCell(theme, month, members, current) {
+    const rate = sumThemeRate(theme.theme_id, month, members);
+    const isDevComplete = Boolean(theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale));
+    const milestones = getThemeMilestones(theme)
+        .filter((item) => monthBucketIncludes(item.month, month, scale))
+        .map((item) => item.label || 'Milestone');
+    const textParts = [];
+    const rateText = formatRateValue(rate);
+
+    if (isDevComplete) {
+        textParts.push(rateText ? `★${rateText}` : '★');
+    } else if (rateText) {
+        textParts.push(rateText);
+    }
+
+    if (milestones.length > 0) {
+        textParts.push(...milestones);
+    }
+
+    return {
+        text: textParts.join('\n'),
+        rate,
+        is_current: month === current,
+        has_special_text: isDevComplete || milestones.length > 0,
+    };
+}
+
+function buildMemberExportCell(theme, member, month, current) {
+    const allocation = allAllocations.find((item) => item.theme_id === theme.theme_id && item.member_id === member.member_id && item.month === month);
+    const rate = allocation?.allocation_rate || 0;
+    const hasWarning = warnings.some((item) => item.member_id === member.member_id && item.month === month);
+    const text = `${rate ? `${rate}%` : ''}${hasWarning ? (rate ? '\n!' : '!') : ''}`;
+
+    return {
+        text,
+        rate,
+        is_current: month === current,
+        has_warning: hasWarning,
+        has_special_text: hasWarning,
     };
 }
 
@@ -1281,9 +1313,8 @@ function renderTable(months) {
         if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
-            const priorityBadge = theme.priority > 0
-                ? `<span class="theme-priority-badge" title="優先度 ${theme.priority}">P${theme.priority}</span>`
-                : '';
+            const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
+            const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
             rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${priorityBadge}${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => { const total = sumThemeRate(theme.theme_id, month, members); const isDevComplete = theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale); const starLabel = isDevComplete ? `<span class="gantt-star-label" title="開発完了月">★${total || ''}</span>` : ''; return `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(total)}">${isDevComplete ? starLabel : formatRateValue(total)}${diffChip(total, month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`; }).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
@@ -1307,25 +1338,4 @@ function updateThemeSummaryCell(themeId, month) {
     if (!targetCell) return;
 
     targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${formatRateValue(totalRate)}${diffChip(totalRate, month, themeId, null, members)}</div>`;
-}
-
-async function exportXlsx() {
-    const dataset = getGanttGridExportDataset();
-    const response = await fetch('/api/export/xlsx', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            layout: 'gantt',
-            ...dataset,
-            filename: 'gantt_export.xlsx',
-        }),
-    });
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'gantt_export.xlsx';
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast('Excel exported.', 'success');
 }

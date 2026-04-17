@@ -109,7 +109,7 @@ function renderBaseDom() {
     document.body.innerHTML = `
         <div id="scale-switcher"><button class="scale-btn" data-scale="1" type="button">1</button></div>
         <div id="view-gantt" class="view active"></div>
-        <input id="gantt-search">
+        <input id="gantt-theme-filter">
         <select id="gantt-group-by"><option value="none" selected>none</option></select>
         <button id="gantt-prev" type="button"></button>
         <button id="gantt-next" type="button"></button>
@@ -118,7 +118,6 @@ function renderBaseDom() {
         <button id="gantt-expand-all" type="button"></button>
         <button id="gantt-collapse-all" type="button"></button>
         <button id="gantt-export-csv" type="button"></button>
-        <button id="gantt-export-xlsx" type="button"></button>
         <button id="snapshot-save-btn" type="button"></button>
         <select id="snapshot-select"></select>
         <div id="gantt-summary"></div>
@@ -272,9 +271,30 @@ describe('gantt-renderer regressions', () => {
 
         const dataset = getGanttGridExportDataset();
         expect(dataset.headers).toEqual(['Theme / Member', '2026-04']);
+        expect(dataset.header_labels).toEqual(['Theme / Member', '2026-04']);
         expect(dataset.rows).toEqual([
-            { type: 'summary', label: 'Theme A', color: '#00aaff', values: ['20%'] },
-            { type: 'member', label: 'Alice (Dev)', values: ['20%'] },
+            {
+                type: 'summary',
+                label: 'Theme A / Active',
+                color: '#00aaff',
+                values: [{
+                    text: '20%\nRelease\nReview',
+                    rate: 20,
+                    is_current: true,
+                    has_special_text: true,
+                }],
+            },
+            {
+                type: 'member',
+                label: 'Alice (Dev / Capacity 100%)',
+                values: [{
+                    text: '20%',
+                    rate: 20,
+                    is_current: true,
+                    has_warning: false,
+                    has_special_text: false,
+                }],
+            },
         ]);
     });
 
@@ -314,6 +334,15 @@ describe('gantt-renderer regressions', () => {
         document.getElementById('gantt-status-filter').dispatchEvent(new Event('change', { bubbles: true }));
 
         expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttStatus: 'completed' });
+    });
+
+    it('renders a P0 badge for zero-priority themes', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const badge = document.querySelector('.theme-priority-badge');
+        expect(badge?.textContent).toBe('P0');
     });
 
     it('opens and saves milestone edits from the gantt screen', async () => {
