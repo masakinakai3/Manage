@@ -80,61 +80,87 @@
                     </div>
                 </section>
 
-                <div class="view-header">
+                <div class="view-header view-header-gantt">
                     <h2>ガントチャート</h2>
-                    <div class="view-controls">
-                        <div class="scale-switcher" id="scale-switcher">
-                            <button class="scale-btn active" data-scale="1" type="button">1M</button>
-                            <button class="scale-btn" data-scale="3" type="button">3M</button>
-                            <button class="scale-btn" data-scale="6" type="button">6M</button>
-                            <button class="scale-btn" data-scale="12" type="button">1Y</button>
-                        </div>
-
-                        <select id="shared-period-preset" class="view-select">
-                            <option value="rolling-6">直近 6 か月</option>
-                            <option value="rolling-12">直近 12 か月</option>
-                            <option value="current-quarter">現在四半期</option>
-                            <option value="current-year">今年</option>
-                        </select>
-
-                        <div class="search-filter-controls gantt-filter-bar">
-                            <input type="text" id="gantt-theme-filter" class="view-input" placeholder="テーマ名で絞り込み" autocomplete="off">
+                    <div class="view-controls gantt-view-controls">
+                        <div class="gantt-control-row gantt-control-row-primary">
+                            <div class="scale-switcher" id="scale-switcher">
+                                <button class="scale-btn active" data-scale="1" type="button">1M</button>
+                                <button class="scale-btn" data-scale="3" type="button">3M</button>
+                                <button class="scale-btn" data-scale="6" type="button">6M</button>
+                                <button class="scale-btn" data-scale="12" type="button">1Y</button>
+                            </div>
+                            <select id="shared-period-preset" class="view-select">
+                                <option value="rolling-6">直近 6 か月</option>
+                                <option value="rolling-12">直近 12 か月</option>
+                                <option value="current-quarter">現在四半期</option>
+                                <option value="current-year">今年</option>
+                            </select>
                             <div class="month-nav">
                                 <button id="gantt-prev" class="btn btn-icon" type="button">前へ</button>
                                 <button id="gantt-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
                                 <button id="gantt-next" class="btn btn-icon" type="button">次へ</button>
                             </div>
-                            <select id="gantt-group-by" class="view-select">
+                        </div>
+
+                        <div class="search-filter-controls gantt-filter-bar">
+                            <select id="gantt-theme-filter" class="view-select" aria-label="テーマ名で絞り込み">
+                                <option value="">テーマ名: すべて</option>
+                            </select>
+                            <select id="gantt-category-filter" class="view-select" aria-label="カテゴリで絞り込み">
+                                <option value="">カテゴリ: すべて</option>
+                            </select>
+                            <input id="gantt-owner-filter" class="view-input" type="text" list="gantt-owner-suggestions" placeholder="メンバー名で絞り込み" autocomplete="off" aria-label="メンバー名で絞り込み">
+                            <datalist id="gantt-owner-suggestions"></datalist>
+                            <select id="gantt-status-filter" class="view-select" aria-label="ステータスで絞り込み">
+                                <option value="all">ステータス: すべて</option>
+                                <option value="open">ステータス: 未完了のみ</option>
+                                <option value="planning">Planning</option>
+                                <option value="active">Active</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                            <select id="gantt-priority-filter" class="view-select" aria-label="優先度で絞り込み">
+                                <option value="all">優先度: すべて</option>
+                                <option value="0">優先度: P0以上</option>
+                                <option value="1">優先度: P1以上</option>
+                                <option value="2">優先度: P2以上</option>
+                                <option value="3">優先度: P3以上</option>
+                            </select>
+                            <select id="gantt-group-by" class="view-select" aria-label="グループ化">
                                 <option value="none">グループなし</option>
                                 <option value="category">カテゴリ</option>
                                 <option value="status">ステータス</option>
                             </select>
+                            <button id="gantt-filter-reset" class="btn btn-ghost btn-sm" type="button">絞り込み解除</button>
                         </div>
 
-                        <div class="saved-view-controls">
-                            <select id="saved-view-select" class="view-select">
-                                <option value="">Saved views</option>
-                            </select>
-                            <button id="saved-view-save-btn" class="btn btn-ghost btn-sm" type="button">Save View</button>
-                            <button id="saved-view-delete-btn" class="btn btn-ghost btn-sm" type="button">Delete</button>
-                        </div>
+                        <div class="gantt-control-row gantt-control-row-actions">
+                            <div class="saved-view-controls">
+                                <select id="saved-view-select" class="view-select">
+                                    <option value="">Saved views</option>
+                                </select>
+                                <button id="saved-view-save-btn" class="btn btn-ghost btn-sm" type="button">Save View</button>
+                                <button id="saved-view-delete-btn" class="btn btn-ghost btn-sm" type="button">Delete</button>
+                            </div>
 
-                        <div class="zoom-controls">
-                            <button id="gantt-zoom-in" class="btn btn-ghost btn-sm" type="button">拡大</button>
-                            <button id="gantt-zoom-out" class="btn btn-ghost btn-sm" type="button">縮小</button>
-                        </div>
+                            <div class="zoom-controls">
+                                <button id="gantt-zoom-in" class="btn btn-ghost btn-sm" type="button">拡大</button>
+                                <button id="gantt-zoom-out" class="btn btn-ghost btn-sm" type="button">縮小</button>
+                            </div>
 
-                        <div class="snapshot-controls">
-                            <select id="snapshot-select" class="view-select">
-                                <option value="">スナップショット比較なし</option>
-                            </select>
-                            <button id="snapshot-save-btn" class="btn btn-primary btn-sm" type="button">スナップショット保存</button>
-                        </div>
+                            <div class="snapshot-controls">
+                                <select id="snapshot-select" class="view-select">
+                                    <option value="">スナップショット比較なし</option>
+                                </select>
+                                <button id="snapshot-save-btn" class="btn btn-primary btn-sm" type="button">スナップショット保存</button>
+                            </div>
 
-                        <div class="toggle-nav">
-                            <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
-                            <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたみ</button>
-                            <button id="gantt-export-csv" class="btn btn-ghost btn-sm" type="button">CSV 出力</button>
+                            <div class="toggle-nav">
+                                <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
+                                <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたみ</button>
+                                <button id="gantt-export-csv" class="btn btn-ghost btn-sm" type="button">CSV 出力</button>
+                            </div>
                         </div>
                     </div>
                 </div>

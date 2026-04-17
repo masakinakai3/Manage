@@ -109,7 +109,7 @@ function renderBaseDom() {
     document.body.innerHTML = `
         <div id="scale-switcher"><button class="scale-btn" data-scale="1" type="button">1</button></div>
         <div id="view-gantt" class="view active"></div>
-        <input id="gantt-theme-filter">
+        <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-group-by"><option value="none" selected>none</option></select>
         <button id="gantt-prev" type="button"></button>
         <button id="gantt-next" type="button"></button>

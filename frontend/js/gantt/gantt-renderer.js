@@ -111,7 +111,7 @@ export async function refreshGantt() {
 function bindControls() {
     ensureGanttFilterControls();
     document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.addEventListener('click', () => updateViewState({ scale: Number.parseInt(button.dataset.scale, 10) })));
-    document.getElementById('gantt-theme-filter')?.addEventListener('input', (event) => updateViewState({ ganttSearch: event.target.value.trim().toLowerCase() }));
+    document.getElementById('gantt-theme-filter')?.addEventListener('change', (event) => updateViewState({ ganttSearch: event.target.value }));
     document.getElementById('gantt-category-filter')?.addEventListener('change', (event) => updateViewState({ ganttCategory: event.target.value }));
     document.getElementById('gantt-owner-filter')?.addEventListener('input', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }));
     document.getElementById('gantt-status-filter')?.addEventListener('change', (event) => updateViewState({ ganttStatus: event.target.value }));
@@ -146,10 +146,11 @@ function ensureGanttFilterControls() {
     const search = document.getElementById('gantt-theme-filter');
     const groupByInput = document.getElementById('gantt-group-by');
     const controls = search?.parentElement;
-    if (!search || !groupByInput || !controls || document.getElementById('gantt-category-filter')) return;
+    if (!search || !groupByInput || !controls) return;
 
     controls.classList.add('gantt-filter-bar');
     search.classList.add('gantt-filter-search');
+    return;
 
     groupByInput.insertAdjacentHTML('beforebegin', `
         <select id="gantt-category-filter" class="view-select">
@@ -1094,6 +1095,16 @@ function syncFilterInputs() {
 }
 
 function renderFilterControls() {
+    const themeSelect = document.getElementById('gantt-theme-filter');
+    if (themeSelect) {
+        const themeNames = [...new Set(allThemes
+            .map((theme) => (theme.name || '').trim())
+            .filter(Boolean))]
+            .sort((left, right) => left.localeCompare(right, 'ja'));
+        themeSelect.innerHTML = '<option value="">テーマ名: すべて</option>'
+            + themeNames.map((name) => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+    }
+
     const categorySelect = document.getElementById('gantt-category-filter');
     if (categorySelect) {
         const categories = [...new Set(allThemes.map((theme) => (theme.category || '').trim()).filter(Boolean))]
@@ -1116,11 +1127,11 @@ function renderFilterControls() {
 }
 
 function themeSearchText(theme) {
-    return String(theme.name || '').toLowerCase();
+    return String(theme.name || '').trim();
 }
 
 function matchesThemeFilters(theme) {
-    if (searchQuery && !themeSearchText(theme).includes(searchQuery)) return false;
+    if (searchQuery && themeSearchText(theme) !== searchQuery) return false;
     if (categoryFilter && (theme.category || '') !== categoryFilter) return false;
 
     if (ownerFilter) {
