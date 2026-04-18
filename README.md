@@ -1,42 +1,42 @@
 # Resource Manager
 
-Resource Manager is a desktop-oriented resource planning tool for managing themes, members, allocations, insights, saved views, snapshots, and data import/export in one place.
+Resource Manager は、テーマ、メンバー、アロケーション、インサイト、保存ビュー、スナップショット、データ入出力をひとつの画面群で扱える、デスクトップ指向のリソース計画ツールです。
 
-The backend uses Flask + SQLite, the frontend uses Vite + Vanilla JavaScript, and Windows packaging is handled with PyInstaller. In development you can run the backend and frontend separately, while for desktop distribution you can build a packaged executable.
+バックエンドは Flask + SQLite、フロントエンドは Vite + Vanilla JavaScript で構成されており、Windows 向け配布は PyInstaller で行います。開発時は backend / frontend を別々に起動でき、配布時は EXE としてビルドできます。
 
-## Main Features
+## 主な機能
 
-- Gantt-based allocation management by theme and month
-- Member load visualization and warning checks
-- Saved views for period, scale, and filter conditions
-- Snapshot save and diff review
-- Dashboard-style insights and recommendations
-- JSON backup import/export
-- CSV / XLSX export
-- Undo / redo and keyboard shortcut support
+- テーマ別・月別の Gantt ベース配員管理
+- メンバー負荷の可視化と過負荷警告
+- 期間、表示粒度、各種フィルタ条件の保存ビュー
+- スナップショット保存と差分確認
+- ダッシュボード形式のインサイトと推奨表示
+- JSON バックアップのエクスポート / インポート
+- CSV / XLSX エクスポート
+- Undo / Redo とキーボードショートカット
 
-## Tech Stack
+## 技術スタック
 
 - Backend: Python 3.10+, Flask, Flask-Login, Flask-SQLAlchemy, SQLite
 - Frontend: Vite, Vanilla JavaScript, HTML, CSS
 - Build: PyInstaller
 - Test: pytest, Vitest
 
-## Directory Layout
+## ディレクトリ構成
 
 ```text
-backend/      Flask API, models, services, migrations
-frontend/     HTML, CSS, JavaScript, Vitest tests
-tests/        pytest tests
-tools/        lint / format / check scripts
-docs/         development and operational documents
-build_exe.py  EXE build script
-manage_app.spec  PyInstaller build definition
+backend/      Flask API、モデル、サービス、マイグレーション
+frontend/     HTML、CSS、JavaScript、Vitest テスト
+tests/        pytest テスト
+tools/        lint / format / check 用スクリプト
+docs/         開発・運用・設計関連ドキュメント
+build_exe.py  EXE ビルドスクリプト
+manage_app.spec  PyInstaller 定義
 ```
 
-Generated artifacts such as `frontend/node_modules/`, `frontend/dist/`, `dist/`, `build/`, `.pytest_cache/`, and local test output files are intentionally excluded from version control.
+`frontend/node_modules/`、`frontend/dist/`、`dist/`、`build/`、`.pytest_cache/`、ローカルのテスト出力ファイルなどの生成物は、意図的にバージョン管理対象外にしています。
 
-## Setup
+## セットアップ
 
 ### Backend
 
@@ -55,35 +55,35 @@ npm install
 cd ..
 ```
 
-## Local Development
+## ローカル開発
 
-### 1. Start the Flask server
+### 1. Flask サーバーを起動
 
 ```powershell
 cd backend
 ..\.venv\Scripts\python.exe app.py
 ```
 
-Access:
+アクセス先:
 
-- Backend API and static serving: `http://127.0.0.1:5001`
+- Backend API / 静的配信: `http://127.0.0.1:5001`
 
-### 2. Start the Vite dev server
+### 2. Vite 開発サーバーを起動
 
-Open another terminal and run:
+別ターミナルで次を実行します。
 
 ```powershell
 cd frontend
 npm run dev
 ```
 
-Access:
+アクセス先:
 
-- Frontend dev server: `http://localhost:5173`
+- Frontend 開発サーバー: `http://localhost:5173`
 
-Vite proxies `/api` to `http://127.0.0.1:5001`.
+Vite は `/api` を `http://127.0.0.1:5001` にプロキシします。
 
-## Tests and Checks
+## テストとチェック
 
 ### Backend
 
@@ -100,83 +100,83 @@ npm run lint
 npm run format:check
 ```
 
-### Windows All-in-One Check
+### Windows 一括チェック
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\run_checks.ps1
 ```
 
-## EXE Build
+## EXE ビルド
 
-`build_exe.py` supports incremental builds. If neither frontend nor backend inputs changed, the previous build result is reused.
+`build_exe.py` はインクリメンタルビルドに対応しています。frontend / backend の入力に変更がなければ、前回のビルド成果物を再利用します。
 
-### Release Build
+### Release ビルド
 
-Use this for distribution or final verification. This creates a single-file EXE:
+配布や最終確認にはこちらを使います。単一ファイルの EXE を生成します。
 
 ```powershell
 .\.venv\Scripts\python.exe build_exe.py
 ```
 
-Output:
+出力:
 
 - `dist/manage_app.exe`
 
-### Dev Build
+### Dev ビルド
 
-Use this during everyday implementation when you want faster packaging. This creates an `onedir` bundle:
+日常の実装中に、より高速にパッケージ確認したいときはこちらを使います。`onedir` 形式で出力します。
 
 ```powershell
 .\.venv\Scripts\python.exe build_exe.py --profile dev
 ```
 
-Output:
+出力:
 
 - `dist/manage_app/manage_app.exe`
 
-Notes:
+補足:
 
-- `dev` prefers `.\.venv\Scripts\python.exe` automatically when it exists so iterative packaging runs against a stable environment.
-- `dev` is faster to rebuild because it skips the final single-file packaging step.
-- When only frontend files changed, `dev` now reuses the existing EXE and refreshes `dist/manage_app/dist` instead of rerunning PyInstaller.
-- `release` now removes stale `onedir` artifacts before packaging so old `_internal` / `_release_bundle` leftovers do not leak into the final output directory.
-- `release` remains the default, so existing build commands continue to work unchanged.
+- `dev` は `.\.venv\Scripts\python.exe` が存在する場合、自動的にそれを優先して使います。
+- `dev` は最終的な単一 EXE 化を省くため、再ビルドが高速です。
+- frontend のみ変更された場合、`dev` は PyInstaller を再実行せず `dist/manage_app/dist` を更新します。
+- `release` はパッケージング前に古い `onedir` 成果物を掃除するため、`_internal` や `_release_bundle` の残骸が最終出力に混ざりません。
+- `release` がデフォルトなので、従来のビルドコマンドはそのまま使えます。
 
-### Force Rebuild
+### 強制リビルド
 
 ```powershell
 .\.venv\Scripts\python.exe build_exe.py --force
 ```
 
-- Rebuilds both the frontend bundle and the packaged app even when the incremental cache says nothing changed.
+- キャッシュ上は変更なしでも、frontend とパッケージの両方を再ビルドします。
 
-You can combine it with the dev profile:
+`dev` プロファイルと組み合わせることもできます。
 
 ```powershell
 .\.venv\Scripts\python.exe build_exe.py --profile dev --force
 ```
 
-### Clean Rebuild
+### クリーンリビルド
 
 ```powershell
 .\.venv\Scripts\python.exe build_exe.py --clean
 ```
 
-- Removes `dist/`, `build/`, and `.build_exe_state.json`, then rebuilds from scratch.
+- `dist/`、`build/`、`.build_exe_state.json` を削除したうえで、最初から再ビルドします。
 
-## Recommended Build Usage
+## 推奨ビルド運用
 
-- Use `--profile dev` while iterating on implementation and checking packaging frequently.
-- Use the default `release` build before sharing binaries, doing final smoke tests, or handing over deliverables.
-- If build behavior looks suspicious after dependency or packaging changes, run `--clean`.
+- 実装中の確認には `--profile dev` を使う
+- バイナリ共有前、最終スモークテスト前、納品前にはデフォルトの `release` ビルドを使う
+- 依存やパッケージ定義変更後に挙動が怪しい場合は `--clean` を使う
 
-## Security Notes
+## セキュリティ上の注意
 
-- On first launch, a default `admin` user is created if none exists.
-- Auto-login is limited to loopback access only.
-- The API is intended for local desktop use.
+- 初回起動時、管理者ユーザーが存在しなければデフォルトの `admin` ユーザーを作成します
+- 自動ログインは loopback アクセスのみに制限されています
+- API はローカルデスクトップ利用を前提にしています
 
-## Main API Routes
+## 主な API ルート
 
 - `/api/auth/*`
 - `/api/themes`
@@ -188,9 +188,10 @@ You can combine it with the dev profile:
 - `/api/export/*`
 - `/api/import/json`
 
-## Related Documents
+## 関連ドキュメント
 
-- [docs/APIContract.md](docs/APIContract.md)
-- [docs/DevelopmentWorkflow.md](docs/DevelopmentWorkflow.md)
-- [docs/DocumentationOperations.md](docs/DocumentationOperations.md)
-- [docs/AcceptanceCriteria.md](docs/AcceptanceCriteria.md)
+- [SoftwareDesign.md](SoftwareDesign.md): ソフトウェア全体の設計、アーキテクチャ、主要ファイル、データモデル、API、ビルド運用の全体像をまとめた主設計書です。
+- [docs/APIContract.md](docs/APIContract.md): フロントエンドとバックエンドの間でやり取りする API の入出力契約を整理した資料です。
+- [docs/DevelopmentWorkflow.md](docs/DevelopmentWorkflow.md): 実装、レビュー、検証、ビルド確認までを含む日常開発の進め方を定義したガイドです。
+- [docs/DocumentationOperations.md](docs/DocumentationOperations.md): どの変更でどの文書を更新すべきか、ドキュメント保守のルールをまとめた運用資料です。
+- [docs/AcceptanceCriteria.md](docs/AcceptanceCriteria.md): 期待する完成条件や受け入れ基準を整理した、確認観点の一覧です。
