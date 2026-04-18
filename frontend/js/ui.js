@@ -39,19 +39,23 @@ export function showToast(message, type = 'info', timeout = 3200) {
 }
 
 export function setSaveState(state, message) {
-    const badge = document.getElementById('save-state');
-    if (!badge) return;
+    const badges = document.querySelectorAll('[data-role="save-state"], #save-state');
+    if (badges.length === 0) return;
 
-    badge.dataset.state = state;
-    badge.textContent = message;
+    badges.forEach((badge) => {
+        badge.dataset.state = state;
+        badge.textContent = message;
+    });
 }
 
 export function setBusyState(isBusy, message = '') {
-    const badge = document.getElementById('busy-state');
-    if (!badge) return;
+    const badges = document.querySelectorAll('[data-role="busy-state"], #busy-state');
+    if (badges.length === 0) return;
 
-    badge.hidden = !isBusy;
-    badge.textContent = message || '処理中...';
+    badges.forEach((badge) => {
+        badge.hidden = !isBusy;
+        badge.textContent = message || '処理中...';
+    });
 }
 
 export function formatError(error, fallback = '処理に失敗しました。') {

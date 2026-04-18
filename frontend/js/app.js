@@ -56,6 +56,8 @@ async function showApp() {
     await initSavedViews();
     initOnboarding();
     initKeyboardShortcuts();
+    document.getElementById('shortcut-help-btn')?.addEventListener('click', showShortcutHelp);
+    document.getElementById('shortcut-help-header-btn')?.addEventListener('click', showShortcutHelp);
     initThemeManagement();
     initMemberManagement();
 
@@ -205,6 +207,23 @@ function initUiConfig() {
 
     document.getElementById('shared-period-preset').addEventListener('change', (event) => updatePreset(event.target.value));
     document.getElementById('member-period-preset').addEventListener('change', (event) => updatePreset(event.target.value));
+
+    const ganttControls = document.getElementById('gantt-controls-body');
+    const ganttControlsToggle = document.getElementById('gantt-controls-toggle');
+    const applyGanttControlsCollapsed = (collapsed) => {
+        ganttControls?.classList.toggle('is-collapsed', collapsed);
+        if (ganttControlsToggle) {
+            ganttControlsToggle.setAttribute('aria-expanded', String(!collapsed));
+            ganttControlsToggle.textContent = collapsed ? 'コントロールを開く' : 'コントロールを閉じる';
+        }
+    };
+    const ganttControlsCollapsed = localStorage.getItem('gantt_controls_collapsed') === 'true';
+    applyGanttControlsCollapsed(ganttControlsCollapsed);
+    ganttControlsToggle?.addEventListener('click', () => {
+        const collapsed = !ganttControls?.classList.contains('is-collapsed');
+        applyGanttControlsCollapsed(collapsed);
+        localStorage.setItem('gantt_controls_collapsed', String(collapsed));
+    });
 
     // Sidebar toggle
     const sidebar = document.getElementById('sidebar');
@@ -714,7 +733,7 @@ function refreshSavedViewOptions(selectedId = '') {
     const select = document.getElementById('saved-view-select');
     if (!select) return;
 
-    select.innerHTML = '<option value="">Saved views</option>' + savedViewsCache.map((view) => `<option value="${view.id}">${view.name}</option>`).join('');
+    select.innerHTML = '<option value="">表示プリセット</option>' + savedViewsCache.map((view) => `<option value="${view.id}">${view.name}</option>`).join('');
     if (selectedId && savedViewsCache.some((view) => view.id === selectedId)) {
         select.value = selectedId;
     }
@@ -722,14 +741,14 @@ function refreshSavedViewOptions(selectedId = '') {
 
 async function saveCurrentView() {
     const defaultName = currentView === 'member-load'
-        ? `Member review ${new Date().toLocaleString('ja-JP')}`
-        : `Planning ${new Date().toLocaleString('ja-JP')}`;
+        ? `メンバー確認 ${new Date().toLocaleString('ja-JP')}`
+        : `計画確認 ${new Date().toLocaleString('ja-JP')}`;
     const name = (await showPromptDialog({
-        title: 'Save current view',
-        message: 'Enter a name for this view.',
+        title: '表示プリセットを保存',
+        message: '現在の表示条件に名前を付けて保存します。',
         defaultValue: defaultName,
-        confirmText: 'Save',
-        cancelText: 'Cancel',
+        confirmText: '保存',
+        cancelText: 'キャンセル',
     })) || defaultName;
 
     const viewState = loadViewState();
@@ -756,7 +775,7 @@ async function saveCurrentView() {
         refreshSavedViewOptions(savedView.id);
         console.warn('Saved view API unavailable, used local storage fallback', error);
     }
-    showToast('Saved view was added.', 'success');
+    showToast('表示プリセットを保存しました。', 'success');
 }
 
 function applySelectedSavedView() {
@@ -771,7 +790,7 @@ function applySelectedSavedView() {
         if (groupByInput) groupByInput.value = view.state.groupBy;
     }
     switchView(view.view || 'gantt');
-    showToast(`Applied saved view: ${view.name}`, 'info');
+    showToast(`表示プリセットを適用しました: ${view.name}`, 'info');
 }
 
 async function deleteCurrentSavedView() {
@@ -786,7 +805,7 @@ async function deleteCurrentSavedView() {
 
     deleteSavedView(select.value);
     await reloadSavedViews();
-    showToast('Saved view was deleted.', 'info');
+    showToast('表示プリセットを削除しました。', 'info');
 }
 
 function parseSavedViewState(rawState) {
@@ -894,21 +913,21 @@ function initKeyboardShortcuts() {
 }
 
 function showShortcutHelp() {
-    document.getElementById('modal-title').textContent = 'Keyboard shortcuts';
+    document.getElementById('modal-title').textContent = 'ショートカット一覧';
     document.getElementById('modal-body').innerHTML = `
         <div class="shortcut-grid">
-            <div><kbd>?</kbd> Open help</div>
-            <div><kbd>/</kbd> Focus search</div>
-            <div><kbd>g</kbd> Gantt view</div>
-            <div><kbd>l</kbd> Member load view</div>
-            <div><kbd>i</kbd> Insights view</div>
-            <div><kbd>t</kbd> Themes</div>
-            <div><kbd>u</kbd> Members</div>
-            <div><kbd>Ctrl/Cmd + Z</kbd> Undo</div>
-            <div><kbd>Ctrl/Cmd + Shift + Z</kbd> Redo</div>
+            <div><kbd>?</kbd> 一覧を開く</div>
+            <div><kbd>/</kbd> 現在の検索欄へ移動</div>
+            <div><kbd>g</kbd> ガントチャートへ移動</div>
+            <div><kbd>l</kbd> メンバー負荷へ移動</div>
+            <div><kbd>i</kbd> インサイトへ移動</div>
+            <div><kbd>t</kbd> テーマ一覧へ移動</div>
+            <div><kbd>u</kbd> メンバー一覧へ移動</div>
+            <div><kbd>Ctrl/Cmd + Z</kbd> 元に戻す</div>
+            <div><kbd>Ctrl/Cmd + Shift + Z</kbd> やり直す</div>
         </div>
     `;
-    document.getElementById('modal-footer').innerHTML = '<button class="btn btn-primary" id="modal-save-btn" type="button">Close</button>';
+    document.getElementById('modal-footer').innerHTML = '<button class="btn btn-primary" id="modal-save-btn" type="button">閉じる</button>';
     document.getElementById('modal-overlay').hidden = false;
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-save-btn').onclick = closeModal;

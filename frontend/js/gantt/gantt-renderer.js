@@ -178,17 +178,24 @@ function ensureGanttFilterControls() {
 }
 
 async function saveSnapshot() {
-    const name = await showPromptDialog({ title: 'Save snapshot', message: 'Enter a snapshot name.', defaultValue: Snap_, confirmText: 'Save', cancelText: 'Cancel' });
+    const name = await showPromptDialog({
+        title: '比較スナップショットを保存',
+        message: '比較に使う現在の状態へ名前を付けて保存します。',
+        defaultValue: `比較 ${new Date().toLocaleString('ja-JP')}`,
+        confirmText: '保存',
+        cancelText: 'キャンセル',
+    });
     if (!name) return;
     await snapshotsApi.create({ name, data: allAllocations });
     await loadSnapshots();
-    showToast('Snapshot saved.', 'success');
+    showToast('比較スナップショットを保存しました。', 'success');
 }
 
 async function loadSnapshots() {
     const select = document.getElementById('snapshot-select');
     if (!select) return;
     select.innerHTML = '<option value="">スナップショット比較なし</option>';
+    select.innerHTML = '<option value="">比較スナップショット</option>';
     const snapshots = await snapshotsApi.list().catch(() => []);
     snapshots.forEach((snapshot) => select.insertAdjacentHTML('beforeend', `<option value="${snapshot.id}">${snapshot.name}</option>`));
 }
@@ -293,7 +300,7 @@ function bindRows() {
             await themesApi.update(themeId, { status });
             theme.status = status;
             setSaveState('saved', 'テーマステータスを保存しました');
-            showToast('Theme status updated.', 'success');
+            showToast('テーマのステータスを更新しました。', 'success');
             await refreshGantt();
         } catch (error) {
             event.target.value = theme.status;
@@ -338,7 +345,7 @@ function renderDetailPanel() {
     document.getElementById('detail-rate').value = allocation?.allocation_rate || 0;
     document.getElementById('detail-memo').value = allocation?.memo || '';
     document.getElementById('detail-bulk-rate').value = allocation?.allocation_rate || 0;
-    document.getElementById('detail-message').textContent = allocation?.memo ? 'Memo will be included in search and CSV export.' : 'Add a memo to include it in search.';
+    document.getElementById('detail-message').textContent = allocation?.memo ? 'メモは検索結果と CSV 出力にも含まれます。' : 'メモを追加すると検索や CSV 出力に含められます。';
 }
 
 async function saveSelectedCell() {
@@ -347,7 +354,7 @@ async function saveSelectedCell() {
     const memo = document.getElementById('detail-memo').value.trim();
     await allocations.updateSingle({ theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month: selectedCell.month, allocation_rate: rate, memo });
     setSaveState('saved', 'セルを保存しました');
-    showToast('Cell saved.', 'success');
+    showToast('セルを保存しました。', 'success');
     await refreshGantt();
 }
 
@@ -373,7 +380,7 @@ async function performDragAndDropMove({ undo, redo }) {
     try {
         await HistoryManager.perform(redo);
         setSaveState('saved', 'Allocation move applied.');
-        showToast('Allocation moved. Undo is available with Ctrl+Z.', 'success');
+        showToast('配分を移動しました。Ctrl/Cmd + Z で元に戻せます。', 'success');
     } catch (error) {
         if (HistoryManager.index >= 0) {
             HistoryManager.stack.splice(HistoryManager.index, 1);
@@ -873,7 +880,7 @@ function exportCsv() {
     link.download = 'gantt_export.csv';
     link.click();
     URL.revokeObjectURL(url);
-    showToast('CSV exported.', 'success');
+    showToast('CSV を書き出しました。', 'success');
 }
 
 async function showAssignMemberModal(themeId) {
@@ -1096,6 +1103,50 @@ function syncFilterInputs() {
     if (priority && priority.value !== priorityFilter) priority.value = priorityFilter;
     const groupByInput = document.getElementById('gantt-group-by');
     if (groupByInput && groupByInput.value !== groupBy) groupByInput.value = groupBy;
+    renderActiveFilterChips();
+}
+
+function renderActiveFilterChips() {
+    const container = document.getElementById('gantt-active-filters');
+    if (!container) return;
+
+    const chips = [];
+    if (searchQuery) chips.push({ label: `テーマ: ${searchQuery}`, update: { ganttSearch: '' } });
+    if (categoryFilter) chips.push({ label: `カテゴリ: ${categoryFilter}`, update: { ganttCategory: '' } });
+    if (ownerFilter) chips.push({ label: `担当者: ${ownerFilter}`, update: { ganttOwner: '' } });
+    if (statusFilter !== 'all') {
+        const statusLabel = statusFilter === 'open' ? '未完了のみ' : STATUS_LABELS[statusFilter] || statusFilter;
+        chips.push({ label: `ステータス: ${statusLabel}`, update: { ganttStatus: 'all' } });
+    }
+    if (priorityFilter !== 'all') chips.push({ label: `優先度: P${priorityFilter}以上`, update: { ganttPriority: 'all' } });
+
+    if (chips.length === 0) {
+        container.hidden = true;
+        container.innerHTML = '';
+        return;
+    }
+
+    container.hidden = false;
+    container.innerHTML = chips.map((chip, index) => `
+        <span class="filter-chip">
+            <span>${escapeHtml(chip.label)}</span>
+            <button type="button" data-chip-index="${index}" aria-label="${escapeHtml(chip.label)} を解除">×</button>
+        </span>
+    `).join('') + '<span class="filter-chip filter-chip-reset"><button type="button" id="gantt-chip-reset-all">すべて解除</button></span>';
+
+    container.querySelectorAll('[data-chip-index]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const chip = chips[Number.parseInt(button.dataset.chipIndex, 10)];
+            if (chip) updateViewState(chip.update);
+        });
+    });
+    container.querySelector('#gantt-chip-reset-all')?.addEventListener('click', () => updateViewState({
+        ganttSearch: '',
+        ganttCategory: '',
+        ganttOwner: '',
+        ganttStatus: 'all',
+        ganttPriority: 'all',
+    }));
 }
 
 function renderFilterControls() {
@@ -1129,6 +1180,9 @@ function renderFilterControls() {
     }
 
     syncFilterInputs();
+    if (themeSelect?.options[0]) themeSelect.options[0].textContent = 'テーマ: すべて';
+    if (categorySelect?.options[0]) categorySelect.options[0].textContent = 'カテゴリ: すべて';
+    if (ownerSelect?.options[0]) ownerSelect.options[0].textContent = '担当者: すべて';
 }
 
 function themeSearchText(theme) {
