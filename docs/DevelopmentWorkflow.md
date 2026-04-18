@@ -5,6 +5,7 @@
 - Feature behavior is implemented and manually smoke-checked.
 - Backend tests and frontend tests pass locally.
 - Build succeeds for the frontend bundle.
+- Packaging workflow is verified with the appropriate build profile for the task.
 - User-facing text, empty states, and error handling are present.
 - Related docs are updated according to `docs/DocumentationOperations.md`.
 - Regression risks and follow-up items are called out in the PR.
@@ -34,6 +35,15 @@
 - Insights view loads health checks, dashboard tables, and recommendations.
 - CSV and Excel advanced exports honor chosen templates and columns.
 - Keyboard shortcuts do not interfere with text input fields.
+
+## Build Profiles
+
+- Use `.\.venv\Scripts\python.exe build_exe.py --profile dev` during everyday development when you want the fastest packaged smoke check.
+- Prefer `.\.venv\Scripts\python.exe` over the Windows Store `python` launcher so PyInstaller runs against a stable environment.
+- In `dev`, frontend-only changes refresh `dist/manage_app/dist` without rerunning PyInstaller, so HTML/CSS/JS tweaks should rebuild much faster.
+- Use `.\.venv\Scripts\python.exe build_exe.py` for release verification and whenever you need the final single-file `dist/manage_app.exe`.
+- Use `--force` after build-script or packaging-definition changes when you want to bypass the incremental cache.
+- Use `--clean` when dependency or artifact drift is suspected and you want a full rebuild from scratch.
 
 ## Branch and Merge Guidance
 

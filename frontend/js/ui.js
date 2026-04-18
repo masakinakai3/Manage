@@ -10,16 +10,23 @@
 
 let activeDialogResolver = null;
 let toastSeed = 0;
+let lastFocusedElement = null;
 
 export function initUi() {
     const dialog = document.getElementById('dialog-overlay');
     if (dialog) {
         dialog.addEventListener('click', (event) => {
-            if (event.target === dialog) {
-                resolveDialog(false);
-            }
+            if (event.target === dialog) resolveDialog(false);
         });
     }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (!document.getElementById('dialog-overlay')?.hidden) {
+            event.preventDefault();
+            resolveDialog(false);
+        }
+    });
 }
 
 export function showToast(message, type = 'info', timeout = 3200) {
@@ -81,6 +88,7 @@ export function showConfirmDialog({
         return Promise.resolve(window.confirm(message));
     }
 
+    rememberFocus();
     titleEl.textContent = title;
     messageEl.textContent = message;
     confirmBtn.textContent = confirmText;
@@ -90,9 +98,9 @@ export function showConfirmDialog({
 
     return new Promise((resolve) => {
         activeDialogResolver = resolve;
-
         cancelBtn.onclick = () => resolveDialog(false);
         confirmBtn.onclick = () => resolveDialog(true);
+        window.setTimeout(() => confirmBtn.focus(), 0);
     });
 }
 
@@ -114,6 +122,7 @@ export function showPromptDialog({
         return Promise.resolve(window.prompt(message, defaultValue));
     }
 
+    rememberFocus();
     titleEl.textContent = title;
     messageEl.textContent = message;
     input.hidden = false;
@@ -134,6 +143,17 @@ export function showPromptDialog({
     });
 }
 
+function rememberFocus() {
+    lastFocusedElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+}
+
+function restoreFocus() {
+    if (lastFocusedElement && document.contains(lastFocusedElement)) {
+        lastFocusedElement.focus();
+    }
+    lastFocusedElement = null;
+}
+
 function resolveDialog(result) {
     const overlay = document.getElementById('dialog-overlay');
     const input = document.getElementById('dialog-input');
@@ -146,5 +166,6 @@ function resolveDialog(result) {
         input.value = '';
     }
 
+    restoreFocus();
     if (resolver) resolver(result);
 }

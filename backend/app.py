@@ -14,15 +14,20 @@ from flask_login import LoginManager
 from models import db, User, Theme, ThemeMilestone
 
 
+def _resolve_dist_folder():
+    if getattr(sys, 'frozen', False):
+        external_dist = os.path.join(os.path.dirname(sys.executable), 'dist')
+        bundled_dist = os.path.join(sys._MEIPASS, 'dist')
+        if os.path.exists(os.path.join(external_dist, 'index.html')):
+            return external_dist
+        return bundled_dist
+
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
+
+
 def create_app(test_config=None):
     # Determine paths
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
-        bundle_dir = sys._MEIPASS
-        dist_folder = os.path.join(bundle_dir, 'dist')
-    else:
-        # Running dev
-        dist_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'frontend', 'dist')
+    dist_folder = _resolve_dist_folder()
 
     app = Flask(__name__, static_folder=dist_folder, static_url_path='', template_folder=dist_folder)
 

@@ -71,11 +71,12 @@
             <div id="view-gantt" class="view active">
                 <section id="onboarding-panel" class="onboarding-panel" hidden>
                     <div class="onboarding-copy">
-                        <strong>初回利用オンボーディング</strong>
-                        <p>サンプルデータを作成すると、テーマや配分の見え方をすぐ確認できます。</p>
+                        <strong id="onboarding-title">初回利用オンボーディング</strong>
+                        <p id="onboarding-description">サンプルデータを作成すると、テーマや配分の見え方をすぐ確認できます。</p>
                     </div>
                     <div class="onboarding-actions">
                         <button id="onboarding-sample-btn" class="btn btn-primary btn-sm" type="button">サンプルデータ作成</button>
+                        <button id="onboarding-secondary-btn" class="btn btn-ghost btn-sm" type="button" hidden>次のアクション</button>
                         <button id="onboarding-dismiss-btn" class="btn btn-ghost btn-sm" type="button">閉じる</button>
                     </div>
                 </section>
@@ -88,10 +89,7 @@
                         </div>
                         <div class="gantt-header-status">
                             <button id="gantt-controls-toggle" class="btn btn-ghost btn-sm gantt-controls-toggle" type="button" aria-expanded="true" aria-controls="gantt-controls-body">コントロールを閉じる</button>
-                            <div class="header-status-stack">
-                                <span class="save-state-pill save-state-pill-inline" data-role="save-state" data-state="idle">待機中</span>
-                                <span class="sidebar-busy header-busy" data-role="busy-state" hidden>処理中...</span>
-                            </div>
+                            <span class="sidebar-busy header-busy" data-role="busy-state" hidden>処理中...</span>
                             <button id="shortcut-help-header-btn" class="btn btn-ghost btn-sm" type="button">ショートカット一覧</button>
                         </div>
                     </div>
@@ -205,6 +203,7 @@
 
                 <div class="gantt-workspace">
                     <div class="gantt-container" id="gantt-container">
+                        <div id="gantt-mobile-theme-list" class="gantt-mobile-theme-list" hidden></div>
                         <table class="gantt-table" id="gantt-table">
                             <thead id="gantt-thead"></thead>
                             <tbody id="gantt-tbody"></tbody>
@@ -218,6 +217,21 @@
                         </div>
                         <p id="detail-empty" class="summary-subtext">セルを選択すると、個別編集や一括更新プレビューをここで操作できます。</p>
                         <div id="detail-form" hidden>
+                            <section class="detail-summary-grid">
+                                <article class="detail-summary-card">
+                                    <span class="detail-summary-label">テーマ</span>
+                                    <strong id="detail-theme-name" class="detail-summary-value">-</strong>
+                                </article>
+                                <article class="detail-summary-card">
+                                    <span class="detail-summary-label">担当者</span>
+                                    <strong id="detail-member-name" class="detail-summary-value">-</strong>
+                                </article>
+                                <article class="detail-summary-card">
+                                    <span class="detail-summary-label">対象月</span>
+                                    <strong id="detail-month-name" class="detail-summary-value">-</strong>
+                                </article>
+                            </section>
+
                             <div class="form-field">
                                 <label>対象</label>
                                 <div id="detail-target" class="detail-target"></div>
@@ -237,6 +251,8 @@
                             <div class="detail-actions">
                                 <button id="detail-prev" class="btn btn-ghost btn-sm" type="button">前のセル</button>
                                 <button id="detail-next" class="btn btn-ghost btn-sm" type="button">次のセル</button>
+                                <button id="detail-next-empty" class="btn btn-ghost btn-sm" type="button">次の未入力へ</button>
+                                <button id="detail-next-warning" class="btn btn-ghost btn-sm" type="button">次の超過へ</button>
                                 <button id="detail-preview-bulk" class="btn btn-ghost btn-sm" type="button">一括更新プレビュー</button>
                                 <button id="detail-save" class="btn btn-primary btn-sm" type="button">保存</button>
                             </div>
@@ -256,16 +272,13 @@
                             <button class="scale-btn" data-scale="6" type="button">6M</button>
                             <button class="scale-btn" data-scale="12" type="button">1Y</button>
                         </div>
-
                         <select id="member-period-preset" class="view-select">
                             <option value="rolling-6">直近6か月</option>
                             <option value="rolling-12">直近12か月</option>
                             <option value="current-quarter">現在四半期</option>
                             <option value="current-year">今年</option>
                         </select>
-
                         <input type="text" id="member-search" class="view-input" placeholder="メンバー名、部署、テーマ名で検索" autocomplete="off">
-
                         <div class="month-nav">
                             <button id="member-prev" class="btn btn-icon" type="button">前へ</button>
                             <button id="member-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
@@ -273,9 +286,7 @@
                         </div>
                     </div>
                 </div>
-
                 <section id="member-load-summary" class="summary-grid"></section>
-
                 <div class="member-load-container" id="member-load-container">
                     <table class="member-load-table" id="member-load-table">
                         <thead id="member-load-thead"></thead>
@@ -291,24 +302,21 @@
                         <p class="summary-subtext">過負荷チェック、提案候補、月次レビュー向けの要約を確認できます。</p>
                     </div>
                 </div>
-
                 <section id="insights-summary" class="summary-grid"></section>
-
                 <section class="aggregate-panels">
                     <article class="summary-card">
                         <div class="summary-label">カテゴリ分布</div>
-                        <div id="dashboard-category-distribution" class="dashboard-pill-list"></div>
+                        <div id="insights-gap-overview" class="dashboard-pill-list"></div>
                     </article>
                     <article class="summary-card">
                         <div class="summary-label">ステータス分布</div>
-                        <div id="dashboard-status-distribution" class="dashboard-pill-list"></div>
+                        <div id="insights-department-imbalance" class="dashboard-pill-list"></div>
                     </article>
                     <article class="summary-card">
                         <div class="summary-label">部署別平均負荷</div>
-                        <div id="dashboard-department-summary" class="dashboard-pill-list"></div>
+                        <div id="insights-forecast-watch" class="dashboard-pill-list"></div>
                     </article>
                 </section>
-
                 <section class="insight-layout">
                     <article class="summary-card">
                         <div class="summary-label">データ健全性チェック</div>
@@ -319,7 +327,6 @@
                         <div id="recommendation-list" class="insight-list"></div>
                     </article>
                 </section>
-
                 <section class="insight-layout insight-layout--dashboard">
                     <article class="summary-card">
                         <div class="summary-label">月次推移</div>
@@ -335,7 +342,15 @@
                     </article>
                     <article class="summary-card">
                         <div class="summary-label">負荷上位テーマ</div>
-                        <div id="dashboard-top-themes"></div>
+                        <div id="dashboard-impact-themes"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">将来逼迫フォーキャスト</div>
+                        <div id="dashboard-forecast-table"></div>
+                    </article>
+                    <article class="summary-card">
+                        <div class="summary-label">リスク分類サマリー</div>
+                        <div id="dashboard-health-groups"></div>
                     </article>
                 </section>
             </div>
@@ -377,10 +392,10 @@
     </div>
 
     <div id="modal-overlay" class="modal-overlay" hidden>
-        <div class="modal" id="modal">
+        <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <div class="modal-header">
                 <h3 id="modal-title"></h3>
-                <button class="modal-close" id="modal-close" type="button">&times;</button>
+                <button class="modal-close" id="modal-close" type="button" aria-label="閉じる">&times;</button>
             </div>
             <div class="modal-body" id="modal-body"></div>
             <div class="modal-footer" id="modal-footer"></div>
@@ -388,7 +403,7 @@
     </div>
 
     <div id="dialog-overlay" class="modal-overlay" hidden>
-        <div class="modal dialog-modal">
+        <div class="modal dialog-modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
             <div class="modal-header">
                 <h3 id="dialog-title"></h3>
             </div>

@@ -1,5 +1,5 @@
 import { insights } from './api.js';
-import { loadViewState, subscribeViewState } from './shared-state.js';
+import { loadViewState, subscribeViewState, updateViewState } from './shared-state.js';
 import { addMonths, getVisibleMonths } from './utils/date-utils.js';
 import { formatError, setBusyState } from './ui.js';
 
@@ -7,11 +7,10 @@ let currentState = loadViewState();
 let ribbonOverlayInitialized = false;
 let activeRibbonData = null;
 
-const STATUS_LABELS = {
-    planning: '計画中',
-    active: '進行中',
-    completed: '完了',
-    cancelled: '中止',
+const HEALTH_CATEGORY_LABELS = {
+    resource_operations: '配員運営',
+    future_risk: '将来逼迫',
+    data_quality: 'データ整合性',
 };
 
 export async function initInsightsView() {
@@ -33,10 +32,10 @@ export async function refreshInsightsView() {
         setBusyState(true, 'インサイトを読み込み中...');
         const overview = await insights.overview(from, toEnd);
         renderSummary(overview.summary || {});
-        renderAggregates(overview.dashboard || {});
-        renderHealthChecks(overview.health_checks || []);
+        renderFocusPanels(overview.summary || {}, overview.dashboard || {}, overview.health_groups || []);
+        renderHealthChecks(overview.health_checks || [], overview.health_groups || []);
         renderRecommendations(overview.recommendations || []);
-        renderDashboard(overview.dashboard || {});
+        renderDashboard(overview.dashboard || {}, overview.health_groups || []);
     } catch (error) {
         renderError(formatError(error, 'インサイトの読み込みに失敗しました。'));
     } finally {
@@ -50,62 +49,112 @@ function renderSummary(summary) {
 
     target.innerHTML = `
         <article class="summary-card">
-            <div class="summary-label">テーマ数</div>
-            <div class="summary-value">${summary.theme_count || 0}</div>
-            <div class="summary-subtext">進行中 ${summary.active_theme_count || 0} 件</div>
+            <div class="summary-label">不足工数</div>
+            <div class="summary-value">${summary.total_shortage || 0}%</div>
+            <div class="summary-subtext">超過セル ${summary.warning_cell_count || 0} 件</div>
         </article>
         <article class="summary-card">
-            <div class="summary-label">平均メンバー負荷</div>
-            <div class="summary-value">${summary.average_member_load || 0}%</div>
-            <div class="summary-subtext">全メンバー平均</div>
+            <div class="summary-label">余剰工数</div>
+            <div class="summary-value">${summary.total_spare || 0}%</div>
+            <div class="summary-subtext">低稼働メンバー ${summary.underutilized_member_count || 0} 名</div>
         </article>
         <article class="summary-card">
-            <div class="summary-label">警告セル</div>
-            <div class="summary-value">${summary.warning_cell_count || 0}</div>
-            <div class="summary-subtext">超過メンバー ${summary.overloaded_member_count || 0} 名</div>
+            <div class="summary-label">逼迫部門</div>
+            <div class="summary-value">${summary.bottleneck_department_count || 0}</div>
+            <div class="summary-subtext">平均負荷 ${summary.average_member_load || 0}%</div>
         </article>
         <article class="summary-card">
-            <div class="summary-label">配分中メンバー</div>
-            <div class="summary-value">${summary.assigned_member_count || 0}</div>
-            <div class="summary-subtext">テーマに配分あり</div>
+            <div class="summary-label">先行警戒月</div>
+            <div class="summary-value">${summary.upcoming_shortage_months || 0}</div>
+            <div class="summary-subtext">過負荷メンバー ${summary.overloaded_member_count || 0} 名</div>
         </article>
     `;
 }
 
-function renderAggregates(dashboard) {
-    renderPillList(
-        'dashboard-category-distribution',
-        (dashboard.category_distribution || []).map((item) => ({ label: item.label, value: `${item.count}件` })),
-    );
-    renderPillList(
-        'dashboard-status-distribution',
-        (dashboard.status_distribution || []).map((item) => ({ label: localizeStatus(item.label), value: `${item.count}件` })),
-    );
-    renderPillList(
-        'dashboard-department-summary',
-        (dashboard.department_load || []).map((item) => ({ label: item.department, value: `${item.average_load}%` })),
-    );
+function renderFocusPanels(summary, dashboard, healthGroups) {
+    const forecast = dashboard.forecast || [];
+    const departmentLoad = dashboard.department_load || [];
+
+    renderPillList('insights-gap-overview', [
+        { label: '不足', value: `${summary.total_shortage || 0}%` },
+        { label: '余剰', value: `${summary.total_spare || 0}%` },
+        { label: '改善候補', value: `${summary.recommendation_count || 0} 件` },
+        { label: '稼働中テーマ', value: `${summary.active_theme_count || 0} 件` },
+    ]);
+
+    const imbalancedDepartments = departmentLoad
+        .filter((item) => item.overloaded_member_count > 0 || item.spread >= 40 || item.shortage_total > 0)
+        .sort((left, right) => (right.shortage_total + right.spread) - (left.shortage_total + left.spread))
+        .slice(0, 4)
+        .map((item) => ({
+            label: item.department,
+            value: `不足${item.shortage_total}% / ばらつき${item.spread}%`,
+        }));
+    renderPillList('insights-department-imbalance', imbalancedDepartments);
+
+    const forecastAlerts = forecast
+        .filter((item) => item.shortage > 0 || item.overloaded_member_count > 0)
+        .slice(0, 4)
+        .map((item) => ({
+            label: item.month,
+            value: item.shortage > 0
+                ? `不足${item.shortage}% / 過負荷${item.overloaded_member_count}名`
+                : `過負荷${item.overloaded_member_count}名`,
+        }));
+    if (!forecastAlerts.length && forecast[0]) {
+        forecastAlerts.push({
+            label: forecast[0].month,
+            value: `余剰${forecast[0].spare}%`,
+        });
+    }
+    renderPillList('insights-forecast-watch', forecastAlerts.length ? forecastAlerts : healthGroups.map((group) => ({
+        label: group.label,
+        value: `${group.count} 件`,
+    })).slice(0, 3));
 }
 
-function renderHealthChecks(items) {
+function renderHealthChecks(items, healthGroups) {
     const target = document.getElementById('health-check-list');
     if (!target) return;
 
     if (items.length === 0) {
-        target.innerHTML = '<div class="empty-panel">重大な整合性エラーは見つかりませんでした。</div>';
+        target.innerHTML = '<div class="empty-panel">重大な健全性リスクは見つかりませんでした。</div>';
         return;
     }
 
-    target.innerHTML = items.map((item) => `
+    const groupedMarkup = healthGroups.map((group) => `
+        <article class="insight-item insight-group-card">
+            <div class="insight-header">
+                <strong>${escapeHtml(group.label)}</strong>
+                <span>${group.count} 件 / 高 ${group.high_count} 件</span>
+            </div>
+            <div class="candidate-body">
+                ${(group.items || []).slice(0, 3).map((item) => `
+                    <span class="dashboard-pill">${escapeHtml(item.entity_name || item.code)} / ${labelSeverity(item.severity)}</span>
+                `).join('') || '<span class="summary-subtext">該当なし</span>'}
+            </div>
+        </article>
+    `).join('');
+
+    const topItemsMarkup = items.slice(0, 8).map((item) => `
         <article class="insight-item insight-${item.severity}">
             <div class="insight-header">
                 <strong>${labelSeverity(item.severity)}</strong>
                 <span>${escapeHtml(item.entity_name || item.code)}</span>
             </div>
+            <div class="insight-meta-row">
+                <span class="dashboard-pill">${escapeHtml(HEALTH_CATEGORY_LABELS[item.category] || item.category || '未分類')}</span>
+                <span class="summary-subtext">${escapeHtml(item.code)}</span>
+            </div>
             <p>${escapeHtml(item.message || '')}</p>
-            <div class="insight-meta">${escapeHtml(item.code)}</div>
+            <div class="insight-actions">
+                ${buildHealthAction(item)}
+            </div>
         </article>
     `).join('');
+
+    target.innerHTML = `${groupedMarkup}${topItemsMarkup}`;
+    bindActionButtons(target);
 }
 
 function renderRecommendations(items) {
@@ -113,53 +162,146 @@ function renderRecommendations(items) {
     if (!target) return;
 
     if (items.length === 0) {
-        target.innerHTML = '<div class="empty-panel">現時点では再配分候補はありません。</div>';
+        target.innerHTML = '<div class="empty-panel">現時点では再配置が必要な超過はありません。</div>';
         return;
     }
 
-    target.innerHTML = items.map((item) => `
-        <article class="insight-item">
-            <div class="insight-header">
-                <strong>${escapeHtml(item.display_name)}</strong>
-                <span>${escapeHtml(item.month)} / ${item.load}% / 上限 ${item.capacity}%</span>
-            </div>
-            <p>超過負荷: ${item.excess}%</p>
-            <div class="candidate-list">
-                ${item.themes.map((theme) => `
-                    <div class="candidate-card">
-                        <div class="candidate-title">${escapeHtml(theme.theme_name)}: ${theme.suggested_shift}% を移管候補</div>
-                        <div class="candidate-body">
-                            ${(theme.candidate_members || []).map((member) => `
-                                <span class="candidate-chip">
-                                    ${escapeHtml(member.display_name)}
-                                    (${member.current_load}%/${member.capacity}%)
-                                </span>
-                            `).join('') || '<span class="summary-subtext">移管候補は見つかりませんでした</span>'}
+    target.innerHTML = items.slice(0, 6).map((item) => {
+        const best = item.best_option;
+        return `
+            <article class="insight-item">
+                <div class="insight-header">
+                    <strong>${escapeHtml(item.display_name)}</strong>
+                    <span>${escapeHtml(item.month)} / ${item.load}% / 容量 ${item.capacity}%</span>
+                </div>
+                <div class="insight-meta-row">
+                    <span class="dashboard-pill">超過 ${item.excess}%</span>
+                    ${best ? `<span class="dashboard-pill">最大解消 ${best.resolution_ratio}% </span>` : ''}
+                </div>
+                ${best ? `
+                    <p>
+                        ${escapeHtml(best.theme_name)} を ${escapeHtml(best.display_name)} に ${best.feasible_shift}% 移すと、
+                        元の負荷は ${best.source_load_after_shift}% まで下がります。
+                    </p>
+                ` : '<p>受け手候補が見つかりませんでした。優先順位の再調整かテーマ分割が必要です。</p>'}
+                <div class="candidate-list">
+                    ${item.themes.map((theme) => `
+                        <div class="candidate-card">
+                            <div class="candidate-title">${escapeHtml(theme.theme_name)} / 移管候補 ${theme.suggested_shift}% / 解消率 ${theme.recommended_resolution_ratio}%</div>
+                            <div class="candidate-body">
+                                ${(theme.candidate_members || []).map((member) => `
+                                    <span class="candidate-chip">
+                                        ${escapeHtml(member.display_name)}
+                                        (${member.current_load}% -> ${member.target_load_after_shift}% / 解消 ${member.resolution_ratio}%)
+                                    </span>
+                                `).join('') || '<span class="summary-subtext">受け手候補なし</span>'}
+                            </div>
                         </div>
-                    </div>
-                `).join('')}
-            </div>
-        </article>
-    `).join('');
+                    `).join('')}
+                </div>
+                <div class="insight-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load" data-member-search="${escapeHtmlAttr(item.display_name)}">負荷表で確認</button>
+                    ${best ? `<button class="btn btn-ghost btn-sm" type="button" data-open-view="gantt" data-theme-filter="${escapeHtmlAttr(best.theme_name)}">テーマを開く</button>` : ''}
+                </div>
+            </article>
+        `;
+    }).join('');
+
+    bindActionButtons(target);
 }
 
-function renderDashboard(dashboard) {
+function renderDashboard(dashboard, healthGroups) {
     renderSimpleTable(
         'dashboard-monthly-trend',
-        ['月度', '総配分率', '稼働テーマ数'],
-        (dashboard.monthly_trend || []).map((item) => [item.month, `${item.total_allocation}%`, String(item.active_theme_count)]),
+        ['月', '需要', '余剰', '不足', '稼働テーマ'],
+        (dashboard.monthly_trend || []).map((item) => [
+            item.month,
+            `${item.total_allocation}%`,
+            `${item.spare || 0}%`,
+            `${item.shortage || 0}%`,
+            String(item.active_theme_count),
+        ]),
     );
+
     renderProjectRibbon('dashboard-project-ribbon', dashboard.project_ribbon || {});
+
     renderSimpleTable(
         'dashboard-department-load',
-        ['部署', '平均負荷', '人数'],
-        (dashboard.department_load || []).map((item) => [item.department, `${item.average_load}%`, String(item.member_count)]),
+        ['部門', '平均', '最大', '偏在', '不足', '過負荷人数'],
+        (dashboard.department_load || []).map((item) => [
+            item.department,
+            `${item.average_load}%`,
+            `${item.peak_load}%`,
+            `${item.spread}%`,
+            `${item.shortage_total}%`,
+            String(item.overloaded_member_count),
+        ]),
     );
+
     renderSimpleTable(
-        'dashboard-top-themes',
-        ['テーマ', 'ステータス', '総負荷'],
-        (dashboard.top_themes || []).map((item) => [item.name, localizeStatus(item.status), `${item.total_allocation}%`]),
+        'dashboard-impact-themes',
+        ['テーマ', '影響', '超過寄与', '集中度', '終了リスク'],
+        (dashboard.impact_themes || []).map((item) => [
+            item.name,
+            String(item.impact_score),
+            `${item.overload_contribution}%`,
+            `${item.concentration_risk}%`,
+            `${item.deadline_risk}%`,
+        ]),
     );
+
+    renderSimpleTable(
+        'dashboard-forecast-table',
+        ['月', '需要', '容量', '不足', '余剰', '過負荷人数'],
+        (dashboard.forecast || []).map((item) => [
+            item.month,
+            `${item.demand}%`,
+            `${item.capacity}%`,
+            `${item.shortage}%`,
+            `${item.spare}%`,
+            String(item.overloaded_member_count),
+        ]),
+    );
+
+    renderSimpleTable(
+        'dashboard-health-groups',
+        ['分類', '件数', '高優先度', '代表例'],
+        (healthGroups || []).map((group) => [
+            group.label,
+            String(group.count),
+            String(group.high_count),
+            (group.items || []).slice(0, 1).map((item) => item.entity_name || item.code).join(', ') || '-',
+        ]),
+    );
+}
+
+function buildHealthAction(item) {
+    if (item.entity_type === 'member') {
+        return `<button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load" data-member-search="${escapeHtmlAttr(item.entity_name || '')}">負荷表で確認</button>`;
+    }
+    if (item.entity_type === 'theme' || item.entity_type === 'allocation') {
+        return `<button class="btn btn-ghost btn-sm" type="button" data-open-view="gantt" data-theme-filter="${escapeHtmlAttr(item.entity_name || '')}">ガントで確認</button>`;
+    }
+    if (item.entity_type === 'department') {
+        return `<button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load">メンバー負荷を見る</button>`;
+    }
+    return '';
+}
+
+function bindActionButtons(root) {
+    root.querySelectorAll('[data-open-view]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const nextState = {};
+            if (button.dataset.memberSearch) {
+                nextState.memberSearch = button.dataset.memberSearch.trim().toLowerCase();
+            }
+            if (button.dataset.themeFilter) {
+                nextState.ganttSearch = button.dataset.themeFilter;
+            }
+            updateViewState(nextState);
+            document.querySelector(`.nav-item[data-view="${button.dataset.openView}"]`)?.click();
+        });
+    });
 }
 
 function renderProjectRibbon(targetId, ribbonData) {
@@ -169,7 +311,7 @@ function renderProjectRibbon(targetId, ribbonData) {
     const items = ribbonData.items || [];
     const hasProjects = items.some((item) => (item.projects || []).length > 0);
     if (!hasProjects) {
-        target.innerHTML = '<div class="empty-panel">表示できるプロジェクト負荷データがありません。</div>';
+        target.innerHTML = '<div class="empty-panel">表示できるテーマ負荷データがありません。</div>';
         return;
     }
 
@@ -302,9 +444,9 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
 
     const fullscreenControls = fullscreen ? `
         <div class="project-ribbon__toolbar">
-            <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="prev">前の月</button>
-            <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="next">次の月</button>
-            <span class="project-ribbon__toolbar-hint">横スクロールでも移動できます</span>
+            <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="prev">前へ</button>
+            <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="next">次へ</button>
+            <span class="project-ribbon__toolbar-hint">横スクロールで推移を確認できます。</span>
         </div>
     ` : '';
 
@@ -443,7 +585,7 @@ function renderPillList(targetId, items) {
     const target = document.getElementById(targetId);
     if (!target) return;
 
-    if (items.length === 0) {
+    if (!items.length) {
         target.innerHTML = '<div class="empty-panel">表示できるデータがありません。</div>';
         return;
     }
@@ -456,15 +598,17 @@ function renderPillList(targetId, items) {
 function renderError(message) {
     [
         'insights-summary',
+        'insights-gap-overview',
+        'insights-department-imbalance',
+        'insights-forecast-watch',
         'health-check-list',
         'recommendation-list',
         'dashboard-monthly-trend',
         'dashboard-project-ribbon',
         'dashboard-department-load',
-        'dashboard-top-themes',
-        'dashboard-department-summary',
-        'dashboard-category-distribution',
-        'dashboard-status-distribution',
+        'dashboard-impact-themes',
+        'dashboard-forecast-table',
+        'dashboard-health-groups',
     ].forEach((targetId) => {
         const target = document.getElementById(targetId);
         if (target) {
@@ -482,10 +626,6 @@ function labelSeverity(severity) {
         low: '低',
     };
     return labels[severity] || severity;
-}
-
-function localizeStatus(status) {
-    return STATUS_LABELS[status] || status;
 }
 
 function formatRibbonMonth(month) {
@@ -506,4 +646,8 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
+}
+
+function escapeHtmlAttr(value) {
+    return escapeHtml(value).replaceAll('`', '&#96;');
 }

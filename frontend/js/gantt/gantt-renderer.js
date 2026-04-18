@@ -97,9 +97,9 @@ export async function refreshGantt() {
             allocations.warnings(from, toEnd),
             allocations.memberLoads(from, toEnd),
         ]);
-        renderSnapshotSummary(months);
+        renderSnapshotSummaryCards(months);
         renderTable(months);
-        renderDetailPanel();
+        renderDetailPanelV2();
     } catch (error) {
         setSaveState('error', 'ガントの読み込みに失敗しました');
         showToast(`ガントの読み込みに失敗しました: ${formatError(error)}`, 'error');
@@ -138,6 +138,8 @@ function bindControls() {
     document.getElementById('detail-save')?.addEventListener('click', saveSelectedCell);
     document.getElementById('detail-prev')?.addEventListener('click', () => moveSelection(-1));
     document.getElementById('detail-next')?.addEventListener('click', () => moveSelection(1));
+    document.getElementById('detail-next-empty')?.addEventListener('click', () => jumpToMatchingCell((button) => Number.parseInt(button.dataset.rate || '0', 10) === 0));
+    document.getElementById('detail-next-warning')?.addEventListener('click', () => jumpToMatchingCell((button) => button.classList.contains('rate-over')));
     document.getElementById('detail-preview-bulk')?.addEventListener('click', previewBulkUpdate);
     bindKeyboardInteractions();
 }
@@ -348,6 +350,149 @@ function renderDetailPanel() {
     document.getElementById('detail-message').textContent = allocation?.memo ? 'メモは検索結果と CSV 出力にも含まれます。' : 'メモを追加すると検索や CSV 出力に含められます。';
 }
 
+function renderDetailPanelV2() {
+    const empty = document.getElementById('detail-empty');
+    const form = document.getElementById('detail-form');
+    const panel = document.getElementById('gantt-detail-panel');
+    if (!selectedCell) {
+        empty.hidden = false;
+        form.hidden = true;
+        panel?.classList.remove('is-warning');
+        return;
+    }
+
+    const theme = allThemes.find((item) => item.theme_id === selectedCell.themeId);
+    const member = allMembers.find((item) => item.member_id === selectedCell.memberId);
+    const allocation = allAllocations.find((item) => item.theme_id === selectedCell.themeId && item.member_id === selectedCell.memberId && item.month === selectedCell.month);
+    const totalLoad = memberMonthTotal(selectedCell.memberId, selectedCell.month);
+    const capacity = member?.capacity || 100;
+    const isWarning = totalLoad > capacity;
+
+    empty.hidden = true;
+    form.hidden = false;
+    panel?.classList.toggle('is-warning', isWarning);
+    const themeName = document.getElementById('detail-theme-name');
+    const memberName = document.getElementById('detail-member-name');
+    const monthName = document.getElementById('detail-month-name');
+    const detailTarget = document.getElementById('detail-target');
+    const detailRate = document.getElementById('detail-rate');
+    const detailMemo = document.getElementById('detail-memo');
+    const detailBulkRate = document.getElementById('detail-bulk-rate');
+    const detailMessage = document.getElementById('detail-message');
+
+    if (themeName) themeName.textContent = theme?.name || '-';
+    if (memberName) memberName.textContent = member?.display_name || '-';
+    if (monthName) monthName.textContent = selectedCell.month;
+    if (detailTarget) detailTarget.textContent = `${theme?.name || ''} / ${member?.display_name || ''} / ${selectedCell.month}`;
+    if (detailRate) detailRate.value = allocation?.allocation_rate || 0;
+    if (detailMemo) detailMemo.value = allocation?.memo || '';
+    if (detailBulkRate) detailBulkRate.value = allocation?.allocation_rate || 0;
+    if (detailMessage) {
+        detailMessage.textContent = isWarning
+            ? `この月の合計負荷は ${totalLoad}% で、担当者の上限 ${capacity}% を超えています。`
+            : allocation?.memo
+                ? 'メモは検索結果と CSV 出力にも含まれます。'
+                : 'メモを追加すると検索や CSV 出力に含められます。';
+    }
+}
+
+function jumpToMatchingCell(predicate) {
+    const cells = Array.from(document.querySelectorAll('.gantt-cell[data-theme]'));
+    if (cells.length === 0) return;
+    const currentIndex = cells.findIndex((cell) => selectedCell
+        && Number.parseInt(cell.dataset.theme, 10) === selectedCell.themeId
+        && Number.parseInt(cell.dataset.member, 10) === selectedCell.memberId
+        && cell.dataset.month === selectedCell.month);
+    const ordered = currentIndex >= 0 ? [...cells.slice(currentIndex + 1), ...cells.slice(0, currentIndex + 1)] : cells;
+    const next = ordered.find(predicate);
+    if (!next) return;
+    selectCellButton(next);
+    next.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+}
+
+function collectSnapshotDiffs(months) {
+    return months.flatMap((month) => allAllocations
+        .filter((item) => item.month === month)
+        .map((item) => {
+            const oldRate = lookupRate(snapshotAllocations, item.theme_id, item.member_id, month);
+            if (oldRate === item.allocation_rate) return null;
+            const theme = allThemes.find((row) => row.theme_id === item.theme_id);
+            const member = allMembers.find((row) => row.member_id === item.member_id);
+            return {
+                ...item,
+                old_rate: oldRate,
+                new_rate: item.allocation_rate,
+                theme_name: theme?.name || '',
+                member_name: member?.display_name || '',
+            };
+        })
+        .filter(Boolean))
+        .sort((left, right) => Math.abs(right.new_rate - right.old_rate) - Math.abs(left.new_rate - left.old_rate));
+}
+
+function renderSnapshotSummaryCards(months) {
+    const target = document.getElementById('snapshot-diff-summary');
+    if (!target) return;
+    if (snapshotAllocations.length === 0) {
+        target.innerHTML = '';
+        return;
+    }
+
+    const diffs = collectSnapshotDiffs(months);
+    const themes = new Set(diffs.map((item) => item.theme_id));
+    const members = new Set(diffs.map((item) => item.member_id));
+    const topDiffs = diffs.slice(0, 5);
+
+    target.innerHTML = `
+        <article class="summary-card">
+            <div class="summary-label">差分セル数</div>
+            <div class="summary-value">${diffs.length}</div>
+            <div class="summary-subtext">表示中の月だけを集計</div>
+        </article>
+        <article class="summary-card">
+            <div class="summary-label">差分テーマ数</div>
+            <div class="summary-value">${themes.size}</div>
+            <div class="summary-subtext">変更が入ったテーマ</div>
+        </article>
+        <article class="summary-card">
+            <div class="summary-label">差分メンバー数</div>
+            <div class="summary-value">${members.size}</div>
+            <div class="summary-subtext">変更が入った担当者</div>
+        </article>
+        <article class="summary-card">
+            <div class="summary-label">ジャンプ候補</div>
+            <div class="snapshot-diff-list">
+                ${topDiffs.map((item, index) => `
+                    <div class="snapshot-diff-item">
+                        <strong>${escapeHtml(item.theme_name)}</strong>
+                        <div class="snapshot-diff-meta">${escapeHtml(item.member_name)} / ${item.month} / ${item.old_rate}% → ${item.new_rate}%</div>
+                        <div class="snapshot-diff-actions">
+                            <button class="btn btn-ghost btn-sm" type="button" data-diff-index="${index}">ここへ移動</button>
+                        </div>
+                    </div>
+                `).join('') || '<div class="summary-subtext">差分候補はありません。</div>'}
+            </div>
+        </article>
+    `;
+
+    target.querySelectorAll('[data-diff-index]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const diff = topDiffs[Number.parseInt(button.dataset.diffIndex, 10)];
+            if (diff) jumpToCell(diff.theme_id, diff.member_id, diff.month);
+        });
+    });
+}
+
+function jumpToCell(themeId, memberId, month) {
+    collapsedThemes.delete(themeId);
+    persistCollapsed();
+    renderTable(getVisibleMonths(startMonth, visibleCount, scale));
+    const button = document.querySelector(`.gantt-cell[data-theme="${themeId}"][data-member="${memberId}"][data-month="${month}"]`);
+    if (!button) return;
+    selectCellButton(button);
+    button.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+}
+
 async function saveSelectedCell() {
     if (!selectedCell) return;
     const rate = Number.parseInt(document.getElementById('detail-rate').value || '0', 10);
@@ -433,7 +578,7 @@ function handleEditorNavigation(button, direction, changed, newRate) {
             memberId: Number.parseInt(nextButton.dataset.member, 10),
             month: nextButton.dataset.month,
         };
-        renderDetailPanel();
+        renderDetailPanelV2();
         openEditorForButton(nextButton);
     };
 
@@ -491,10 +636,10 @@ function applyCellValue(button, rate, memo = '') {
     refreshMemberMonthState(memberId, month);
 
     updateThemeSummaryCell(themeId, month);
-    renderSnapshotSummary(getVisibleMonths(startMonth, visibleCount, scale));
+    renderSnapshotSummaryCards(getVisibleMonths(startMonth, visibleCount, scale));
 
     if (selectedCell && selectedCell.themeId === themeId && selectedCell.memberId === memberId && selectedCell.month === month) {
-        renderDetailPanel();
+        renderDetailPanelV2();
     }
 }
 
@@ -683,7 +828,7 @@ function selectCellButton(button, options = {}) {
     selectedCell = nextSelected;
     if (!options.extend || !selectionAnchor) selectionAnchor = nextPosition;
     selectedRange = buildSelectionRange(selectionAnchor || nextPosition, nextPosition);
-    renderDetailPanel();
+    renderDetailPanelV2();
     syncSelectionStyles();
 
     if (options.focus !== false) button.focus();
@@ -1368,6 +1513,53 @@ function milestoneChips(theme, month) {
     return `<div class="gantt-milestones">${chips}</div>`;
 }
 
+function renderMobileThemeList(themes, months) {
+    const container = document.getElementById('gantt-mobile-theme-list');
+    if (!container) return;
+
+    if (window.innerWidth > 720) {
+        container.hidden = true;
+        container.innerHTML = '';
+        return;
+    }
+
+    const items = themes.map((theme) => {
+        const members = themeMembers(theme.theme_id);
+        const firstMonth = months[0];
+        const currentTotal = sumThemeRate(theme.theme_id, firstMonth, members);
+        const isActive = selectedCell?.themeId === theme.theme_id;
+        return `
+            <button class="gantt-mobile-theme-card ${isActive ? 'is-active' : ''}" type="button" data-mobile-theme-id="${theme.theme_id}">
+                <span class="gantt-mobile-theme-title">
+                    <span class="theme-color-bar" style="background:${theme.color}"></span>
+                    <span>${escapeHtml(theme.name)}</span>
+                </span>
+                <span class="gantt-mobile-theme-meta">担当 ${members.length}名 / 今月 ${currentTotal}% / ${STATUS_LABELS[theme.status] || theme.status}</span>
+            </button>
+        `;
+    }).join('');
+
+    container.hidden = false;
+    container.innerHTML = items || '<div class="summary-subtext">表示できるテーマはありません。</div>';
+    container.querySelectorAll('[data-mobile-theme-id]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const themeId = Number.parseInt(button.dataset.mobileThemeId, 10);
+            collapsedThemes = new Set();
+            allThemes.forEach((theme) => {
+                if (theme.theme_id !== themeId) collapsedThemes.add(theme.theme_id);
+            });
+            collapsedThemes.delete(themeId);
+            persistCollapsed();
+            refreshGantt();
+            const firstCell = document.querySelector(`.gantt-cell[data-theme="${themeId}"]`);
+            if (firstCell) {
+                selectCellButton(firstCell);
+                firstCell.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        });
+    });
+}
+
 function renderTable(months) {
     const current = currentMonth();
     renderFilterControls();
@@ -1385,13 +1577,14 @@ function renderTable(months) {
             const members = themeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
-            rows.push(`<tr class="gantt-row-summary"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${priorityBadge}${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => { const total = sumThemeRate(theme.theme_id, month, members); const isDevComplete = theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale); const starLabel = isDevComplete ? `<span class="gantt-star-label" title="開発完了月">★${total || ''}</span>` : ''; return `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(total)}">${isDevComplete ? starLabel : formatRateValue(total)}${diffChip(total, month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`; }).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${priorityBadge}${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => { const total = sumThemeRate(theme.theme_id, month, members); const isDevComplete = theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale); const starLabel = isDevComplete ? `<span class="gantt-star-label" title="開発完了月">★${total || ''}</span>` : ''; return `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(total)}">${isDevComplete ? starLabel : formatRateValue(total)}${diffChip(total, month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`; }).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
 
     document.getElementById('gantt-tbody').innerHTML = rows.join('') || `<tr><td colspan="${months.length + 1}" class="summary-subtext">条件に一致するテーマがありません。</td></tr>`;
     bindRows();
+    renderMobileThemeList(themes, months);
 }
 
 function updateThemeSummaryCell(themeId, month) {

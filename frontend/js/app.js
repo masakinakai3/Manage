@@ -30,6 +30,7 @@ const STATUS_LABELS = {
 let currentUser = null;
 let currentView = 'gantt';
 let savedViewsCache = [];
+let lastModalTrigger = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     initUi();
@@ -101,6 +102,11 @@ function initNavigation() {
         if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'y') {
             event.preventDefault();
             HistoryManager.redo();
+        }
+
+        if (event.key === 'Escape' && !document.getElementById('modal-overlay')?.hidden) {
+            event.preventDefault();
+            closeModal();
         }
     });
 }
@@ -259,6 +265,11 @@ function switchView(viewName) {
 
     document.querySelectorAll('.nav-item').forEach((item) => {
         item.classList.toggle('active', item.dataset.view === viewName);
+        if (item.dataset.view === viewName) {
+            item.setAttribute('aria-current', 'page');
+        } else {
+            item.removeAttribute('aria-current');
+        }
     });
 
     document.querySelectorAll('.view').forEach((view) => {
@@ -475,6 +486,7 @@ async function openThemeModal(theme = null) {
         <button class="btn btn-primary" id="modal-save-btn" type="button">${isEdit ? '更新する' : '追加する'}</button>
     `;
 
+    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.getElementById('modal-overlay').hidden = false;
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-cancel-btn').onclick = closeModal;
@@ -637,6 +649,7 @@ function openMemberModal(member = null) {
         <button class="btn btn-primary" id="modal-save-btn" type="button">${isEdit ? '更新する' : '追加する'}</button>
     `;
 
+    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.getElementById('modal-overlay').hidden = false;
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-cancel-btn').onclick = closeModal;
@@ -678,6 +691,10 @@ function openMemberModal(member = null) {
 
 function closeModal() {
     document.getElementById('modal-overlay').hidden = true;
+    if (lastModalTrigger && document.contains(lastModalTrigger)) {
+        lastModalTrigger.focus();
+    }
+    lastModalTrigger = null;
 }
 
 function presetLabel(value) {
@@ -826,14 +843,62 @@ function mergeSavedView(views, savedView) {
 function initOnboarding() {
     const onboarding = loadOnboardingState();
     const banner = document.getElementById('onboarding-panel');
+    const title = document.getElementById('onboarding-title');
+    const description = document.getElementById('onboarding-description');
+    const primaryButton = document.getElementById('onboarding-sample-btn');
+    const secondaryButton = document.getElementById('onboarding-secondary-btn');
     if (!banner) return;
+
+    const syncOnboarding = async () => {
+        const [themes, members, allocationRows] = await Promise.all([
+            themesApi.list().catch(() => []),
+            membersApi.list(false).catch(() => []),
+            allocations.list().catch(() => []),
+        ]);
+        const activeMembers = members.filter((member) => member.is_active !== false);
+
+        title.textContent = '次にやること';
+        primaryButton.textContent = 'サンプルデータ作成';
+        primaryButton.onclick = createSampleData;
+        secondaryButton.hidden = true;
+        secondaryButton.onclick = null;
+
+        if (themes.length === 0 && activeMembers.length === 0) {
+            description.textContent = 'まずはサンプルデータを作成するか、テーマとメンバーを登録して計画を始められます。';
+            secondaryButton.hidden = false;
+            secondaryButton.textContent = 'テーマを追加';
+            secondaryButton.onclick = () => switchView('themes');
+        } else if (activeMembers.length === 0) {
+            description.textContent = 'テーマは登録済みです。次はメンバーを追加すると配分計画へ進めます。';
+            primaryButton.textContent = 'メンバー一覧へ';
+            primaryButton.onclick = () => switchView('members');
+        } else if (themes.length === 0) {
+            description.textContent = 'メンバーは登録済みです。次はテーマを追加して配分対象を作りましょう。';
+            primaryButton.textContent = 'テーマ一覧へ';
+            primaryButton.onclick = () => switchView('themes');
+        } else if (allocationRows.length === 0) {
+            description.textContent = 'テーマとメンバーの準備はできています。ガントでセルを選んで最初の配分を入力しましょう。';
+            primaryButton.textContent = 'ガントで編集開始';
+            primaryButton.onclick = () => switchView('gantt');
+            secondaryButton.hidden = false;
+            secondaryButton.textContent = 'サンプルデータ追加';
+            secondaryButton.onclick = createSampleData;
+        } else {
+            description.textContent = 'データ入力は進んでいます。必要ならサンプルデータを追加し、比較やレビュー導線も試せます。';
+            primaryButton.textContent = 'インサイトを見る';
+            primaryButton.onclick = () => switchView('insights');
+            secondaryButton.hidden = false;
+            secondaryButton.textContent = 'サンプルデータ追加';
+            secondaryButton.onclick = createSampleData;
+        }
+    };
 
     banner.hidden = onboarding.dismissed;
     document.getElementById('onboarding-dismiss-btn')?.addEventListener('click', () => {
         updateOnboardingState({ dismissed: true });
         banner.hidden = true;
     });
-    document.getElementById('onboarding-sample-btn')?.addEventListener('click', createSampleData);
+    syncOnboarding();
 }
 
 async function createSampleData() {
@@ -928,6 +993,7 @@ function showShortcutHelp() {
         </div>
     `;
     document.getElementById('modal-footer').innerHTML = '<button class="btn btn-primary" id="modal-save-btn" type="button">閉じる</button>';
+    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.getElementById('modal-overlay').hidden = false;
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-save-btn').onclick = closeModal;

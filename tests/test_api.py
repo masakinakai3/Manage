@@ -144,13 +144,22 @@ def test_insights_overview(auth_client, app):
     assert response.status_code == 200
     data = response.json
     assert data['summary']['theme_count'] >= 1
+    assert data['summary']['total_shortage'] >= 0
+    assert data['summary']['total_spare'] >= 0
     assert isinstance(data['health_checks'], list)
+    assert isinstance(data['health_groups'], list)
     assert isinstance(data['recommendations'], list)
     assert 'dashboard' in data
     assert 'project_ribbon' in data['dashboard']
+    assert 'forecast' in data['dashboard']
+    assert 'department_load' in data['dashboard']
+    assert 'impact_themes' in data['dashboard']
     assert data['dashboard']['project_ribbon']['months'] == ['2024-05', '2024-06']
     assert data['dashboard']['project_ribbon']['items'][1]['projects'][0]['name'] == 'Insight Theme'
     assert any(item['code'] == 'closed_theme_with_remaining_allocation' for item in data['health_checks'])
+    assert any(group['category'] == 'resource_operations' for group in data['health_groups'])
+    assert data['dashboard']['forecast'][0]['month'] == '2024-05'
+    assert data['dashboard']['department_load'][0]['department'] == 'Platform'
 
 
 def test_saved_views_crud(auth_client, app):
