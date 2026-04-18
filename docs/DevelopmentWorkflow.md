@@ -42,6 +42,7 @@
 - Prefer `.\.venv\Scripts\python.exe` for `--profile dev`; keep using the release Python/toolchain that you trust for final onefile packaging.
 - In `dev`, frontend-only changes refresh `dist/manage_app/dist` without rerunning PyInstaller, so HTML/CSS/JS tweaks should rebuild much faster.
 - Use `.\.venv\Scripts\python.exe build_exe.py` for release verification and whenever you need the final single-file `dist/manage_app.exe`.
+- The release build now deletes stale `onedir` leftovers before packaging, which keeps `dist/` consistent when switching between profiles.
 - Use `--force` after build-script or packaging-definition changes when you want to bypass the incremental cache.
 - Use `--clean` when dependency or artifact drift is suspected and you want a full rebuild from scratch.
 

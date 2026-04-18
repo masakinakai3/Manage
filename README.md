@@ -34,6 +34,8 @@ build_exe.py  EXE build script
 manage_app.spec  PyInstaller build definition
 ```
 
+Generated artifacts such as `frontend/node_modules/`, `frontend/dist/`, `dist/`, `build/`, `.pytest_cache/`, and local test output files are intentionally excluded from version control.
+
 ## Setup
 
 ### Backend
@@ -137,6 +139,7 @@ Notes:
 - `dev` prefers `.\.venv\Scripts\python.exe` automatically when it exists so iterative packaging runs against a stable environment.
 - `dev` is faster to rebuild because it skips the final single-file packaging step.
 - When only frontend files changed, `dev` now reuses the existing EXE and refreshes `dist/manage_app/dist` instead of rerunning PyInstaller.
+- `release` now removes stale `onedir` artifacts before packaging so old `_internal` / `_release_bundle` leftovers do not leak into the final output directory.
 - `release` remains the default, so existing build commands continue to work unchanged.
 
 ### Force Rebuild

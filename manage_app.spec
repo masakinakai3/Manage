@@ -87,8 +87,9 @@ else:
     exe = EXE(
         pyz,
         a.scripts,
-        [],
-        exclude_binaries=True,
+        a.binaries,
+        a.datas,
+        exclude_binaries=False,
         name="manage_app",
         debug=False,
         bootloader_ignore_signals=False,
@@ -102,15 +103,5 @@ else:
         target_arch=None,
         codesign_identity=None,
         entitlements_file=None,
-        contents_directory="_internal",
-    )
-
-    coll = COLLECT(
-        exe,
-        a.binaries,
-        a.datas,
-        strip=False,
-        upx=True,
-        upx_exclude=[],
-        name="_release_bundle",
+        onefile=True,
     )

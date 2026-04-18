@@ -3,27 +3,31 @@
   Released under the MIT license
   https://opensource.org/licenses/mit-license.php
 -->
-# バックエンド単体テスト
+# Backend Test Guide
 
-## 前提条件
-- Python 3.10以上
-- 依存関係のインストール (`pip install -r backend/requirements.txt`)
-- `pytest` のインストール (`pip install pytest`)
+## Prerequisites
 
-## テストの実行
-プロジェクトのルートディレクトリから以下のコマンドを実行してください：
+- Python 3.10 or later
+- Backend dependencies installed with `pip install -r backend/requirements.txt`
+- `pytest` installed with `pip install pytest`
+
+## Running Tests
+
+Run all backend tests from the repository root:
 
 ```bash
 python -m pytest
 ```
 
-詳細な出力を表示する場合：
+Use verbose output when you want the full case-by-case result:
 
 ```bash
 python -m pytest -v
 ```
 
-## 構成
-- `conftest.py`: アプリセットアップ、テストクライアント、データベースのフィクスチャ定義。
-- `test_models.py`: データベースモデル (User, Member, Theme, Allocation) のテスト。
-- `test_api.py`: APIエンドポイント (認証, テーマ管理, アサイン管理) のテスト。
+## Test Files
+
+- `conftest.py`: shared fixtures, app setup, and test database configuration
+- `test_models.py`: model-level behavior for `User`, `Member`, `Theme`, and `Allocation`
+- `test_api.py`: API endpoint behavior including authentication and CRUD flows
+- `test_priority.py`: priority-related behavior and regression coverage

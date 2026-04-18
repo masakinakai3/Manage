@@ -118,31 +118,20 @@ def sync_directory(source_dir, target_dir):
     shutil.copytree(source_dir, target_dir)
 
 
-def sync_release_bundle(dist_dir):
-    bundle_dir = dist_dir / "_release_bundle"
-    bundle_exe = bundle_dir / "manage_app.exe"
-    bundle_internal = bundle_dir / "_internal"
-
-    if not bundle_exe.exists() or not bundle_internal.exists():
-        print("Release packaging failed: expected onedir bundle contents were not created.")
-        sys.exit(1)
-
-    final_exe = dist_dir / "manage_app.exe"
-    final_internal = dist_dir / "_internal"
-    stale_runtime = dist_dir / "_runtime"
-
-    if final_exe.exists():
-        final_exe.unlink()
-    if final_internal.exists():
-        shutil.rmtree(final_internal)
-    if stale_runtime.exists():
-        try:
-            shutil.rmtree(stale_runtime)
-        except OSError:
-            print(f"Skipping cleanup of stale runtime cache: {stale_runtime}")
-
-    shutil.copy2(bundle_exe, final_exe)
-    shutil.copytree(bundle_internal, final_internal)
+def cleanup_release_artifacts(dist_dir):
+    legacy_paths = [
+        dist_dir / "_internal",
+        dist_dir / "_release_bundle",
+        dist_dir / "_runtime",
+        dist_dir / "manage_app",
+    ]
+    for legacy_path in legacy_paths:
+        if legacy_path.exists():
+            print(f"Removing stale release artifact: {legacy_path}")
+            try:
+                remove_path(legacy_path)
+            except OSError as exc:
+                print(f"Skipping cleanup of locked artifact {legacy_path}: {exc}")
 
 
 def build_frontend(frontend_dir, state, force=False):
@@ -271,6 +260,8 @@ def build_backend(root_dir, backend_dir, frontend_dist, frontend_input_hash, sta
         print(f"Building backend executable because {reason}.")
         build_work_dir.mkdir(exist_ok=True)
         dist_dir.mkdir(exist_ok=True)
+        if profile == "release":
+            cleanup_release_artifacts(dist_dir)
 
         build_env = os.environ.copy()
         build_env["MANAGE_BUILD_PROFILE"] = profile
@@ -288,8 +279,6 @@ def build_backend(root_dir, backend_dir, frontend_dist, frontend_input_hash, sta
         ]
         print(f"PyInstaller command: {' '.join(cmd)}")
         run_command(cmd, cwd=root_dir, env=build_env)
-        if profile == "release":
-            sync_release_bundle(dist_dir)
     else:
         print("Skipping backend build because inputs are unchanged and the existing EXE can be reused.")
 

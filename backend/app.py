@@ -8,10 +8,16 @@
 
 import os
 import sys
+import time
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager
 from models import db, User, Theme, ThemeMilestone
+
+APP_HOST = "127.0.0.1"
+APP_PORT = 5001
+APP_URL = f"http://{APP_HOST}:{APP_PORT}/"
+LOOPBACK_ORIGINS = [APP_URL.rstrip("/"), f"http://localhost:{APP_PORT}"]
 
 
 def _resolve_dist_folder():
@@ -47,7 +53,7 @@ def create_app(test_config=None):
         app.config.update(test_config)
 
     # Extensions
-    CORS(app, supports_credentials=True, origins=['http://127.0.0.1:5001', 'http://localhost:5001'])
+    CORS(app, supports_credentials=True, origins=LOOPBACK_ORIGINS)
     db.init_app(app)
 
     # Login manager
@@ -83,7 +89,7 @@ def create_app(test_config=None):
     app.register_blueprint(insights_bp, url_prefix='/api/insights')
     app.register_blueprint(saved_views_bp, url_prefix='/api/saved-views')
 
-    # Serve React App
+    # Serve the bundled single-page app.
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve(path):
@@ -104,7 +110,7 @@ def create_app(test_config=None):
         db.create_all()
         _migrate_allocations_unique_index()
         _migrate_theme_milestones()
-        _seed_admin(app)
+        _seed_admin()
 
     @app.before_request
     def auto_login():
@@ -213,7 +219,7 @@ def _migrate_theme_milestones():
         print(f"[Migration] Backfilled {inserted} legacy theme milestones.")
 
 
-def _seed_admin(app):
+def _seed_admin():
     """Create default admin user if none exists."""
     if User.query.filter_by(role='admin').first() is None:
         admin = User(username='admin', role='admin')
@@ -222,18 +228,47 @@ def _seed_admin(app):
         db.session.commit()
 
 
+def _open_browser_when_ready(url, timeout_seconds=20):
+    """Wait for the local server, then open the default browser."""
+    import socket
+    import webbrowser
+
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((APP_HOST, APP_PORT), timeout=1):
+                break
+        except OSError:
+            time.sleep(0.25)
+    else:
+        print(f"[Startup] Timed out waiting for server before opening browser: {url}")
+        return
+
+    try:
+        if os.name == 'nt':
+            os.startfile(url)
+        else:
+            webbrowser.open(url)
+        print(f"[Startup] Opened browser for {url}")
+    except OSError as exc:
+        print(f"[Startup] Failed to open browser automatically: {exc}")
+        webbrowser.open(url)
+
+
 if __name__ == '__main__':
     app = create_app()
     
     # When running as an executable, open the browser automatically
     if getattr(sys, 'frozen', False):
-        import webbrowser
         import threading
         # Ensure debug is False when frozen to avoid reloader issues
         debug_mode = False
-        # Open browser after a small delay to let server start
-        threading.Timer(1.5, lambda: webbrowser.open('http://127.0.0.1:5001/')).start()
+        threading.Thread(
+            target=_open_browser_when_ready,
+            args=(APP_URL,),
+            daemon=True,
+        ).start()
     else:
         debug_mode = True
 
-    app.run(debug=debug_mode, port=5001)
+    app.run(debug=debug_mode, host=APP_HOST, port=APP_PORT)
