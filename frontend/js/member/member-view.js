@@ -247,12 +247,8 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
 
             months.forEach((month) => {
                 const rate = aggregateRate(themeLoads, month, scale);
-                const className = getLoadClass(rate, member.capacity, false);
-
                 html += `<td class="member-theme-cell ${month === current ? 'month-current' : ''}" data-member="${member.member_id}" data-theme="${themeId}" data-month="${month}" data-rate="${rate}">`;
-                if (rate > 0) {
-                    html += `<div class="theme-cell-inner"><span class="theme-row-load ${className}">${rate}%</span><div class="theme-cell-bar" style="width:${Math.min(rate, 100)}%;background:${themeColor}"></div></div>`;
-                }
+                html += renderMemberThemeCellContent(theme, member, month, rate);
                 html += `</td>`;
             });
 
@@ -390,13 +386,9 @@ function updateThemeCell(cell, memberId, themeId, month, newRate) {
     const rate = Number.parseInt(String(newRate || 0), 10);
     cell.dataset.rate = String(rate);
     const theme = allThemes.find((item) => item.theme_id === themeId);
-    const themeColor = theme ? theme.color : '#888888';
     const member = allMembers.find((item) => item.member_id === memberId);
-    const className = getLoadClass(rate, member?.capacity || 100, false);
 
-    cell.innerHTML = rate > 0
-        ? `<div class="theme-cell-inner"><span class="theme-row-load ${className}">${rate}%</span><div class="theme-cell-bar" style="width:${Math.min(rate, 100)}%;background:${themeColor}"></div></div>`
-        : '';
+    cell.innerHTML = renderMemberThemeCellContent(theme, member, month, rate);
 
     const allocation = lastAllocations.find((item) => item.member_id === memberId && item.theme_id === themeId && item.month === month);
     if (allocation) {
@@ -464,6 +456,67 @@ function getLoadClass(load, capacity, isOver) {
     if (load <= 60) return 'load-mid';
     if (load < 100) return 'load-high';
     return 'load-full';
+}
+
+function renderMemberThemeCellContent(theme, member, month, rate) {
+    const themeColor = theme?.color || '#888888';
+    const className = getLoadClass(rate, member?.capacity || 100, false);
+    const milestones = milestoneBadges(theme, month);
+    const devCompleteMarkup = devCompleteBadge(theme, month, rate);
+    const hasRate = rate > 0;
+
+    if (!hasRate && !milestones && !devCompleteMarkup) return '';
+
+    const rateMarkup = hasRate
+        ? `<span class="theme-row-load ${className}">${rate}%</span><div class="theme-cell-bar" style="width:${Math.min(rate, 100)}%;background:${themeColor}"></div>`
+        : '<span class="theme-row-load theme-row-load-empty"></span>';
+
+    return `<div class="theme-cell-inner">${devCompleteMarkup}${rateMarkup}${milestones}</div>`;
+}
+
+function monthBucketIncludes(targetMonth, periodStart, step) {
+    if (!targetMonth || !periodStart) return false;
+    if (step <= 1) return targetMonth === periodStart;
+
+    const periodEnd = addMonths(periodStart, step - 1);
+    return targetMonth >= periodStart && targetMonth <= periodEnd;
+}
+
+function getThemeMilestones(theme) {
+    if (Array.isArray(theme?.milestones) && theme.milestones.length > 0) return theme.milestones;
+    if (theme?.milestone_month) {
+        return [{ month: theme.milestone_month, label: theme.milestone_label || 'Milestone' }];
+    }
+    return [];
+}
+
+function milestoneBadges(theme, month) {
+    const matches = getThemeMilestones(theme)
+        .filter((item) => monthBucketIncludes(item.month, month, scale));
+    if (matches.length === 0) return '';
+
+    const chips = matches.map((item) => {
+        const label = escapeHtml(item.label || 'Milestone');
+        const completedClass = item.is_completed ? ' completed' : '';
+        return `<span class="member-theme-milestone${completedClass}" title="${label}">${label}</span>`;
+    }).join('');
+
+    return `<div class="member-theme-milestones">${chips}</div>`;
+}
+
+function devCompleteBadge(theme, month, rate) {
+    if (!theme?.dev_complete_month || !monthBucketIncludes(theme.dev_complete_month, month, scale)) return '';
+    const label = rate > 0 ? `★${rate}%` : '★';
+    return `<span class="member-theme-dev-complete" title="開発完了月">${label}</span>`;
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
 }
 
 async function exportCSV() {

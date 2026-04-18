@@ -187,10 +187,12 @@ function renderProjectRibbon(targetId, ribbonData) {
 }
 
 function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
-    const items = ribbonData.items || [];
-    const width = Math.max(fullscreen ? 1200 : 640, items.length * (fullscreen ? 180 : 140));
-    const height = fullscreen ? 560 : 340;
-    const padding = { top: 20, right: 24, bottom: 64, left: 24 };
+    const items = fullscreen ? trimRibbonItemsForFullscreen(ribbonData.items || []) : (ribbonData.items || []);
+    const width = Math.max(fullscreen ? 1120 : 640, items.length * (fullscreen ? 220 : 140));
+    const height = fullscreen ? 760 : 340;
+    const padding = fullscreen
+        ? { top: 28, right: 24, bottom: 72, left: 24 }
+        : { top: 20, right: 24, bottom: 64, left: 24 };
     const innerWidth = width - padding.left - padding.right;
     const innerHeight = height - padding.top - padding.bottom;
     const columnWidth = Math.min(fullscreen ? 80 : 68, Math.max(38, innerWidth / Math.max(items.length * 2.6, 1)));
@@ -298,10 +300,19 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         .map(([themeId]) => monthSegments.flatMap((item) => item.segments).find((segment) => segment.theme_id === themeId))
         .filter(Boolean);
 
+    const fullscreenControls = fullscreen ? `
+        <div class="project-ribbon__toolbar">
+            <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="prev">前の月</button>
+            <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="next">次の月</button>
+            <span class="project-ribbon__toolbar-hint">横スクロールでも移動できます</span>
+        </div>
+    ` : '';
+
     return `
-        <div class="project-ribbon ${fullscreen ? '' : 'project-ribbon--interactive'}" ${fullscreen ? '' : 'role="button" tabindex="0" aria-label="Open project load ribbon fullscreen"'}>
-            <div class="project-ribbon__scroll">
-                <svg viewBox="0 0 ${width} ${height}" class="project-ribbon__svg" role="img" aria-label="Project load ribbon chart">
+        <div class="project-ribbon ${fullscreen ? 'project-ribbon--fullscreen' : 'project-ribbon--interactive'}" ${fullscreen ? '' : 'role="button" tabindex="0" aria-label="Open project load ribbon fullscreen"'}>
+            ${fullscreenControls}
+            <div class="project-ribbon__scroll" ${fullscreen ? `data-ribbon-step="${step}" data-ribbon-width="${width}"` : ''}>
+                <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-label="Project load ribbon chart">
                     <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>
                     ${ribbons.join('')}
                     ${blocks.join('')}
@@ -318,6 +329,20 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             </div>
         </div>
     `;
+}
+
+function trimRibbonItemsForFullscreen(items) {
+    if (!items.length) return items;
+
+    const activeIndexes = items
+        .map((item, index) => (((item.projects || []).length > 0 || (item.total_load || 0) > 0) ? index : -1))
+        .filter((index) => index >= 0);
+
+    if (!activeIndexes.length) return items;
+
+    const firstIndex = Math.max(0, activeIndexes[0] - 1);
+    const lastIndex = Math.min(items.length - 1, activeIndexes[activeIndexes.length - 1] + 1);
+    return items.slice(firstIndex, lastIndex + 1);
 }
 
 function initRibbonFullscreen() {
@@ -349,6 +374,7 @@ function openRibbonFullscreen(ribbonData = activeRibbonData) {
 
     activeRibbonData = ribbonData;
     content.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: true });
+    bindRibbonFullscreenNavigation(content);
     overlay.hidden = false;
 }
 
@@ -373,6 +399,23 @@ function buildRibbonPath(source, target, columnWidth) {
         `C ${endX - controlOffset} ${target.y1}, ${startX + controlOffset} ${source.y1}, ${startX} ${source.y1}`,
         'Z',
     ].join(' ');
+}
+
+function bindRibbonFullscreenNavigation(container) {
+    const scrollEl = container.querySelector('.project-ribbon__scroll');
+    if (!scrollEl) return;
+
+    container.querySelectorAll('[data-ribbon-nav]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const direction = button.dataset.ribbonNav === 'prev' ? -1 : 1;
+            const svg = scrollEl.querySelector('.project-ribbon__svg');
+            const viewWidth = Number(scrollEl.dataset.ribbonWidth) || 1;
+            const viewStep = Number(scrollEl.dataset.ribbonStep) || 0;
+            const scale = svg ? svg.clientWidth / viewWidth : 1;
+            const amount = Math.max(viewStep * scale, scrollEl.clientWidth * 0.4, 160);
+            scrollEl.scrollBy({ left: direction * amount, behavior: 'smooth' });
+        });
+    });
 }
 
 function renderSimpleTable(targetId, headers, rows) {

@@ -1856,6 +1856,18 @@ td.out-period {
     margin-top: var(--space-3);
 }
 
+.project-ribbon--fullscreen {
+    min-height: 100%;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.project-ribbon--fullscreen .project-ribbon__scroll {
+    min-height: 0;
+    height: min(100%, calc(96vh - 220px));
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 .project-ribbon__scroll {
     overflow-x: auto;
     border: 1px solid var(--color-border);
@@ -1863,6 +1875,21 @@ td.out-period {
     background:
         linear-gradient(180deg, rgba(99, 102, 241, 0.08), transparent 48%),
         var(--color-bg);
+}
+
+.project-ribbon__toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    position: relative;
+    z-index: 1;
+    padding-inline: 2px;
+}
+
+.project-ribbon__toolbar-hint {
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
 }
 
 .project-ribbon__svg {
@@ -1937,7 +1964,7 @@ td.out-period {
 
 .ribbon-fullscreen-dialog {
     width: min(1440px, 100%);
-    height: min(92vh, 100%);
+    height: min(96vh, 100%);
     margin: 0 auto;
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-border);
@@ -1964,13 +1991,25 @@ td.out-period {
 
 .ribbon-fullscreen-content {
     flex: 1;
+    display: flex;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     padding: var(--space-5);
 }
 
+.ribbon-fullscreen-content .project-ribbon {
+    flex: 1;
+}
+
 .ribbon-fullscreen-content .project-ribbon__svg {
+    min-height: 0;
+}
+
+.ribbon-fullscreen-content .project-ribbon__svg--fullscreen {
+    width: auto;
+    height: 100%;
     min-width: 1100px;
+    max-width: none;
 }
 
 .shortcut-grid,

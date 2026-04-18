@@ -42,7 +42,7 @@ npm run lint
 npm run format:check
 ```
 
-Windows では [`tools/run_checks.ps1`](/C:/Users/galax/Desktop/Manage/tools/run_checks.ps1) でまとめて実行できます。
+Windows では [`tools/run_checks.ps1`](tools/run_checks.ps1) でまとめて実行できます。
 
 ## 主な改善
 
@@ -54,10 +54,10 @@ Windows では [`tools/run_checks.ps1`](/C:/Users/galax/Desktop/Manage/tools/run
 
 ## ドキュメント
 
-- [Requirement.md](/C:/Users/galax/Desktop/Manage/Requirement.md)
-- [SoftwareDesign.md](/C:/Users/galax/Desktop/Manage/SoftwareDesign.md)
-- [UserManual.md](/C:/Users/galax/Desktop/Manage/UserManual.md)
-- [UnitTestSpecification.md](/C:/Users/galax/Desktop/Manage/UnitTestSpecification.md)
+- [Requirement.md](Requirement.md)
+- [SoftwareDesign.md](SoftwareDesign.md)
+- [UserManual.md](UserManual.md)
+- [UnitTestSpecification.md](UnitTestSpecification.md)
 
 ## Recent additions
 

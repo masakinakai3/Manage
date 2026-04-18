@@ -235,6 +235,20 @@
     color: var(--color-text-secondary);
 }
 
+.member-theme-dev-complete {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(245, 158, 11, 0.14);
+    color: #b45309;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
 /* Hide by default */
 .theme-row.hidden {
     display: none;
@@ -328,10 +342,42 @@ td[data-member-cell]:hover .stacked-bar-segment {
     width: 100%;
 }
 
+.theme-row-load-empty {
+    display: none;
+}
+
 .theme-cell-bar {
     height: 4px;
     border-radius: 2px;
     max-width: 90%;
     min-width: 4px;
     transition: width var(--transition-fast);
+}
+
+.member-theme-milestones {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    max-width: 100%;
+}
+
+.member-theme-milestone {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-primary-hover);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.member-theme-milestone.completed {
+    background: rgba(148, 163, 184, 0.18);
+    color: var(--color-text-muted);
+    text-decoration: line-through;
 }
