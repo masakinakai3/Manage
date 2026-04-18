@@ -20,6 +20,7 @@ dist/
 dist_build/
 build/
 build_temp/
+.build_exe_state.json
 
 # IDE
 .vscode/
