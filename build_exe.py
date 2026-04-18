@@ -87,15 +87,15 @@ def remove_path(path):
         path.unlink()
 
 
-def get_preferred_python(root_dir):
+def get_preferred_python(root_dir, profile):
     venv_python = root_dir / ".venv" / "Scripts" / "python.exe"
-    if venv_python.exists():
+    if profile == "dev" and venv_python.exists():
         return venv_python
     return Path(sys.executable).resolve()
 
 
-def ensure_preferred_python(root_dir):
-    preferred_python = get_preferred_python(root_dir)
+def ensure_preferred_python(root_dir, profile):
+    preferred_python = get_preferred_python(root_dir, profile)
     current_python = Path(sys.executable).resolve()
 
     if (
@@ -116,6 +116,33 @@ def sync_directory(source_dir, target_dir):
     if target_dir.exists():
         shutil.rmtree(target_dir)
     shutil.copytree(source_dir, target_dir)
+
+
+def sync_release_bundle(dist_dir):
+    bundle_dir = dist_dir / "_release_bundle"
+    bundle_exe = bundle_dir / "manage_app.exe"
+    bundle_internal = bundle_dir / "_internal"
+
+    if not bundle_exe.exists() or not bundle_internal.exists():
+        print("Release packaging failed: expected onedir bundle contents were not created.")
+        sys.exit(1)
+
+    final_exe = dist_dir / "manage_app.exe"
+    final_internal = dist_dir / "_internal"
+    stale_runtime = dist_dir / "_runtime"
+
+    if final_exe.exists():
+        final_exe.unlink()
+    if final_internal.exists():
+        shutil.rmtree(final_internal)
+    if stale_runtime.exists():
+        try:
+            shutil.rmtree(stale_runtime)
+        except OSError:
+            print(f"Skipping cleanup of stale runtime cache: {stale_runtime}")
+
+    shutil.copy2(bundle_exe, final_exe)
+    shutil.copytree(bundle_internal, final_internal)
 
 
 def build_frontend(frontend_dir, state, force=False):
@@ -204,7 +231,11 @@ def build_backend(root_dir, backend_dir, frontend_dist, frontend_input_hash, sta
         for path in [root_dir / "build_exe.py", root_dir / "manage_app.spec"]
         if path.exists()
     ]
-    combined_backend_hash = fingerprint_paths(sorted(set(backend_files + extra_inputs)))
+    hook_files = []
+    hook_dir = root_dir / "pyinstaller_hooks"
+    if hook_dir.exists():
+        hook_files = list(iter_files(hook_dir))
+    combined_backend_hash = fingerprint_paths(sorted(set(backend_files + extra_inputs + hook_files)))
     pyinstaller_fingerprint = f"{profile}:{combined_backend_hash}"
     if profile == "release":
         pyinstaller_fingerprint = f"{pyinstaller_fingerprint}:{frontend_input_hash}"
@@ -257,6 +288,8 @@ def build_backend(root_dir, backend_dir, frontend_dist, frontend_input_hash, sta
         ]
         print(f"PyInstaller command: {' '.join(cmd)}")
         run_command(cmd, cwd=root_dir, env=build_env)
+        if profile == "release":
+            sync_release_bundle(dist_dir)
     else:
         print("Skipping backend build because inputs are unchanged and the existing EXE can be reused.")
 
@@ -311,8 +344,8 @@ def parse_args():
 def main():
     start_time = time.perf_counter()
     root_dir = Path(__file__).resolve().parent
-    preferred_python = ensure_preferred_python(root_dir)
     args = parse_args()
+    preferred_python = ensure_preferred_python(root_dir, args.profile)
 
     frontend_dir = root_dir / "frontend"
     backend_dir = root_dir / "backend"

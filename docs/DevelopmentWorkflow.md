@@ -39,7 +39,7 @@
 ## Build Profiles
 
 - Use `.\.venv\Scripts\python.exe build_exe.py --profile dev` during everyday development when you want the fastest packaged smoke check.
-- Prefer `.\.venv\Scripts\python.exe` over the Windows Store `python` launcher so PyInstaller runs against a stable environment.
+- Prefer `.\.venv\Scripts\python.exe` for `--profile dev`; keep using the release Python/toolchain that you trust for final onefile packaging.
 - In `dev`, frontend-only changes refresh `dist/manage_app/dist` without rerunning PyInstaller, so HTML/CSS/JS tweaks should rebuild much faster.
 - Use `.\.venv\Scripts\python.exe build_exe.py` for release verification and whenever you need the final single-file `dist/manage_app.exe`.
 - Use `--force` after build-script or packaging-definition changes when you want to bypass the incremental cache.

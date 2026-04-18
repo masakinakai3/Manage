@@ -134,7 +134,7 @@ Output:
 
 Notes:
 
-- The build script prefers `.\.venv\Scripts\python.exe` automatically when it exists so PyInstaller and dependency resolution stay stable.
+- `dev` prefers `.\.venv\Scripts\python.exe` automatically when it exists so iterative packaging runs against a stable environment.
 - `dev` is faster to rebuild because it skips the final single-file packaging step.
 - When only frontend files changed, `dev` now reuses the existing EXE and refreshes `dist/manage_app/dist` instead of rerunning PyInstaller.
 - `release` remains the default, so existing build commands continue to work unchanged.
