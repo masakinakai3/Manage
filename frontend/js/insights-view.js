@@ -343,6 +343,29 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
 
     const monthSegments = [];
     const totalsByTheme = new Map();
+    const themeMetaById = new Map();
+
+    items.forEach((item) => {
+        (item.projects || []).forEach((project) => {
+            totalsByTheme.set(project.theme_id, (totalsByTheme.get(project.theme_id) || 0) + project.load);
+            if (!themeMetaById.has(project.theme_id)) {
+                themeMetaById.set(project.theme_id, {
+                    name: project.name,
+                    color: project.color || '#6366f1',
+                });
+            }
+        });
+    });
+
+    const themeOrder = Array.from(themeMetaById.keys()).sort((left, right) => {
+        const totalDiff = (totalsByTheme.get(right) || 0) - (totalsByTheme.get(left) || 0);
+        if (totalDiff !== 0) return totalDiff;
+        const leftName = (themeMetaById.get(left)?.name || '').toLowerCase();
+        const rightName = (themeMetaById.get(right)?.name || '').toLowerCase();
+        if (leftName !== rightName) return leftName.localeCompare(rightName);
+        return left - right;
+    });
+    const themeRank = new Map(themeOrder.map((themeId, index) => [themeId, index]));
 
     items.forEach((item, index) => {
         const totalLoad = item.total_load || 0;
@@ -350,10 +373,12 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         const stackTop = padding.top + innerHeight - stackHeight;
         let cursorY = stackTop;
         const segments = [];
+        const projects = [...(item.projects || [])]
+            .sort((left, right) => (themeRank.get(left.theme_id) || 0) - (themeRank.get(right.theme_id) || 0));
+        const heights = normalizeRibbonHeights(projects, stackHeight);
 
-        (item.projects || []).forEach((project) => {
-            const rawHeight = totalLoad > 0 ? (stackHeight * project.load) / totalLoad : 0;
-            const segmentHeight = Math.max(rawHeight, 2);
+        projects.forEach((project, projectIndex) => {
+            const segmentHeight = heights[projectIndex] || 0;
             const segment = {
                 ...project,
                 month: item.month,
@@ -363,7 +388,6 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             };
             cursorY += segmentHeight;
             segments.push(segment);
-            totalsByTheme.set(project.theme_id, (totalsByTheme.get(project.theme_id) || 0) + project.load);
         });
 
         monthSegments.push({
@@ -401,7 +425,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
 
     const blocks = monthSegments.flatMap((item) => item.segments.map((segment) => {
         const color = segment.color || '#6366f1';
-        const heightValue = Math.max(segment.y1 - segment.y0, 2);
+        const heightValue = Math.max(segment.y1 - segment.y0, 0.5);
         const labelLimit = fullscreen ? 18 : (columnWidth > 52 ? 14 : 10);
         return `
             <g>
@@ -410,8 +434,8 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                     y="${segment.y0}"
                     width="${columnWidth}"
                     height="${heightValue}"
-                    rx="8"
-                    ry="8"
+                    rx="${Math.min(8, heightValue / 2)}"
+                    ry="${Math.min(8, heightValue / 2)}"
                     fill="${escapeHtml(color)}"
                     fill-opacity="0.85"
                 >
@@ -471,6 +495,29 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             </div>
         </div>
     `;
+}
+
+function normalizeRibbonHeights(projects, stackHeight) {
+    if (!projects.length || stackHeight <= 0) return [];
+
+    const totalLoad = projects.reduce((sum, project) => sum + project.load, 0);
+    const rawHeights = projects.map((project) => (stackHeight * project.load) / Math.max(totalLoad, 1));
+    const minHeight = stackHeight >= projects.length * 2 ? 2 : Math.max(stackHeight / projects.length, 0);
+    const seeded = rawHeights.map((height) => Math.max(height, minHeight));
+    const seededTotal = seeded.reduce((sum, height) => sum + height, 0);
+
+    if (seededTotal <= stackHeight || seededTotal === 0) {
+        return seeded;
+    }
+
+    const scale = stackHeight / seededTotal;
+    const scaled = seeded.map((height) => height * scale);
+    const scaledTotal = scaled.reduce((sum, height) => sum + height, 0);
+    const difference = stackHeight - scaledTotal;
+
+    if (!scaled.length) return scaled;
+    scaled[scaled.length - 1] += difference;
+    return scaled;
 }
 
 function trimRibbonItemsForFullscreen(items) {

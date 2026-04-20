@@ -466,7 +466,8 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         }
         for theme in themes
     }
-    ribbon_month_projects = defaultdict(list)
+    ribbon_month_projects = defaultdict(lambda: defaultdict(int))
+    ribbon_theme_totals = defaultdict(int)
 
     for theme in themes:
         category_counts[theme.category or "未分類"] += 1
@@ -477,10 +478,8 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         month_theme_counts[allocation.month].add(allocation.theme_id)
         theme_meta = theme_catalog.get(allocation.theme_id)
         if theme_meta and allocation.allocation_rate > 0:
-            ribbon_month_projects[allocation.month].append({
-                **theme_meta,
-                "load": allocation.allocation_rate,
-            })
+            ribbon_month_projects[allocation.month][allocation.theme_id] += allocation.allocation_rate
+            ribbon_theme_totals[allocation.theme_id] += allocation.allocation_rate
 
     dashboard_months = _month_range(from_month, to_month) if from_month and to_month else sorted(month_totals.keys(), key=_month_sort_key)
     forecast_context = _build_forecast(themes, members, allocations, dashboard_months)
@@ -501,8 +500,19 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
     project_ribbon = []
     for month in dashboard_months:
         projects = sorted(
-            ribbon_month_projects.get(month, []),
-            key=lambda item: (-item["load"], item["name"].lower(), item["theme_id"]),
+            [
+                {
+                    **theme_catalog[theme_id],
+                    "load": load,
+                }
+                for theme_id, load in ribbon_month_projects.get(month, {}).items()
+                if theme_id in theme_catalog and load > 0
+            ],
+            key=lambda item: (
+                -ribbon_theme_totals.get(item["theme_id"], 0),
+                item["name"].lower(),
+                item["theme_id"],
+            ),
         )
         project_ribbon.append({
             "month": month,

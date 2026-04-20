@@ -162,6 +162,34 @@ def test_insights_overview(auth_client, app):
     assert data['dashboard']['department_load'][0]['department'] == 'Platform'
 
 
+def test_project_ribbon_aggregates_theme_load_per_month(auth_client, app):
+    with app.app_context():
+        theme = Theme(
+            name='Ribbon Aggregate Theme',
+            category='Platform',
+            status='active',
+        )
+        member_a = Member(display_name='Ribbon Alice', department='Platform', capacity=100)
+        member_b = Member(display_name='Ribbon Bob', department='Platform', capacity=100)
+        db.session.add_all([theme, member_a, member_b])
+        db.session.commit()
+
+        db.session.add_all([
+            Allocation(theme_id=theme.theme_id, member_id=member_a.member_id, month='2024-03', allocation_rate=35),
+            Allocation(theme_id=theme.theme_id, member_id=member_b.member_id, month='2024-03', allocation_rate=45),
+        ])
+        db.session.commit()
+
+    response = auth_client.get('/api/insights/overview?from=2024-03&to=2024-03')
+    assert response.status_code == 200
+    data = response.json
+    ribbon_item = data['dashboard']['project_ribbon']['items'][0]
+    assert ribbon_item['total_load'] == 80
+    assert len(ribbon_item['projects']) == 1
+    assert ribbon_item['projects'][0]['name'] == 'Ribbon Aggregate Theme'
+    assert ribbon_item['projects'][0]['load'] == 80
+
+
 def test_saved_views_crud(auth_client, app):
     payload = {
         'id': 'view-1',
