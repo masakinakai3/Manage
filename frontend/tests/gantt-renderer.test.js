@@ -24,6 +24,7 @@ const themeList = vi.fn(async () => ([{
     theme_id: 1,
     name: 'Theme A',
     status: 'active',
+    dev_rank: 'S',
     color: '#00aaff',
     category: 'Delivery',
     milestones: [
@@ -112,7 +113,7 @@ function renderBaseDom() {
         <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-category-filter"><option value="">all categories</option></select>
         <select id="gantt-owner-filter"><option value="">all members</option></select>
-        <select id="gantt-status-filter"><option value="all">all statuses</option><option value="open">open</option><option value="completed">completed</option></select>
+        <select id="gantt-status-filter"><option value="all">all statuses</option><option value="open">open</option><option value="stop">stop</option><option value="completed">completed</option></select>
         <select id="gantt-priority-filter"><option value="all">all priorities</option><option value="1">p1</option></select>
         <select id="gantt-group-by"><option value="none" selected>none</option></select>
         <button id="gantt-filter-reset" type="button"></button>
@@ -280,7 +281,7 @@ describe('gantt-renderer regressions', () => {
         expect(dataset.rows).toEqual([
             {
                 type: 'summary',
-                label: 'Theme A / Active',
+                label: 'Theme A / Rank S / Active',
                 color: '#00aaff',
                 values: [{
                     text: '20%\nRelease\nReview',
@@ -348,6 +349,15 @@ describe('gantt-renderer regressions', () => {
 
         const badge = document.querySelector('.theme-priority-badge');
         expect(badge?.textContent).toBe('P0');
+    });
+
+    it('renders the development rank badge on the gantt summary row', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const badge = document.querySelector('.theme-dev-rank-badge');
+        expect(badge?.textContent).toBe('S');
     });
 
     it('opens and saves milestone edits from the gantt screen', async () => {

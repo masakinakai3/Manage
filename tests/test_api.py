@@ -43,6 +43,7 @@ def test_create_theme(auth_client):
         'name': 'New Theme',
         'category': 'Test',
         'status': 'planning',
+        'dev_rank': 'L',
         'milestones': [
             {'month': '2026-06', 'label': 'Release'},
             {'month': '2026-08', 'label': 'Audit'},
@@ -50,6 +51,7 @@ def test_create_theme(auth_client):
     })
     assert response.status_code == 201
     assert response.json['name'] == 'New Theme'
+    assert response.json['dev_rank'] == 'L'
     assert response.json['milestone_month'] == '2026-06'
     assert response.json['milestone_label'] == 'Release'
     assert [item['month'] for item in response.json['milestones']] == ['2026-06', '2026-08']
@@ -63,12 +65,16 @@ def test_update_theme_milestone(auth_client, app):
         theme_id = theme.theme_id
 
     response = auth_client.put(f'/api/themes/{theme_id}', json={
+        'status': 'stop',
+        'dev_rank': 'S',
         'milestones': [
             {'month': '2026-09', 'label': 'Go Live'},
             {'month': '2026-10', 'label': 'Hypercare'},
         ],
     })
     assert response.status_code == 200
+    assert response.json['status'] == 'stop'
+    assert response.json['dev_rank'] == 'S'
     assert response.json['milestone_month'] == '2026-09'
     assert response.json['milestone_label'] == 'Go Live'
     assert [item['label'] for item in response.json['milestones']] == ['Go Live', 'Hypercare']

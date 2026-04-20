@@ -800,6 +800,11 @@ body {
     color: var(--color-success);
 }
 
+.status-stop {
+    background: var(--color-warning-subtle);
+    color: var(--color-warning);
+}
+
 .status-done {
     background: var(--color-bg-hover);
     color: var(--color-text-muted);

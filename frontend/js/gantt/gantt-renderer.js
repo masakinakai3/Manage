@@ -5,7 +5,8 @@ import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptD
 import { isCellEditorOpen, openCellEditor } from './gantt-editor.js';
 import { initGanttDnD } from './gantt-dnd.js';
 
-const STATUS_LABELS = { planning: 'Planning', active: 'Active', completed: 'Completed', cancelled: 'Cancelled' };
+const STATUS_LABELS = { planning: 'Planning', active: 'Active', stop: 'STOP', completed: 'Completed', cancelled: 'Cancelled' };
+const DEV_RANK_LABELS = { S: 'S', M: 'M', L: 'L' };
 
 export const HistoryManager = {
     stack: [],
@@ -285,6 +286,43 @@ function renderSnapshotSummary(months) {
 }
 
 
+
+function decorateThemeSummaryRows() {
+    document.querySelectorAll('.gantt-row-summary').forEach((row) => {
+        const themeId = Number.parseInt(row.dataset.themeId || '', 10);
+        const theme = allThemes.find((item) => item.theme_id === themeId);
+        const labelCell = row.querySelector('.theme-label-cell');
+        if (!theme || !labelCell) return;
+
+        const devRank = DEV_RANK_LABELS[theme.dev_rank] || 'M';
+        const existingBadge = labelCell.querySelector('.theme-dev-rank-badge');
+        if (!existingBadge) {
+            const priorityBadge = labelCell.querySelector('.theme-priority-badge');
+            const markup = `<span class="theme-dev-rank-badge" title="開発ランク ${devRank}">${devRank}</span>`;
+            if (priorityBadge) {
+                priorityBadge.insertAdjacentHTML('beforebegin', markup);
+            } else {
+                labelCell.insertAdjacentHTML('beforeend', markup);
+            }
+        } else {
+            existingBadge.textContent = devRank;
+            existingBadge.setAttribute('title', `開発ランク ${devRank}`);
+        }
+
+        row.querySelectorAll('td:not(:first-child) .gantt-cell').forEach((cell) => {
+            const hasSummaryValue = cell.querySelector('.gantt-summary-value, .gantt-star-label');
+            if (hasSummaryValue) return;
+
+            const textNode = Array.from(cell.childNodes).find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+            if (!textNode) return;
+
+            const wrapper = document.createElement('span');
+            wrapper.className = 'gantt-summary-value';
+            wrapper.textContent = textNode.textContent.trim();
+            cell.replaceChild(wrapper, textNode);
+        });
+    });
+}
 
 function bindRows() {
     document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); refreshGantt(); }));
@@ -1428,6 +1466,7 @@ export function getGanttGridExportDataset() {
 
 function formatThemeExportLabel(theme) {
     const parts = [theme.name];
+    if (theme.dev_rank) parts.push(`Rank ${DEV_RANK_LABELS[theme.dev_rank] || theme.dev_rank}`);
     if (theme.priority != null) parts.push(`P${theme.priority}`);
     if (theme.status) parts.push(STATUS_LABELS[theme.status] || theme.status);
     return parts.join(' / ');
@@ -1465,6 +1504,14 @@ function buildSummaryExportCell(theme, month, members, current) {
         is_current: month === current,
         has_special_text: isDevComplete || milestones.length > 0,
     };
+}
+
+function formatSummaryCellContent(theme, totalRate, month, members) {
+    const isDevComplete = theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale);
+    const primaryLabel = isDevComplete
+        ? `<span class="gantt-star-label" title="開発完了月">★${formatRateValue(totalRate) || ''}</span>`
+        : `<span class="gantt-summary-value">${formatRateValue(totalRate)}</span>`;
+    return `${primaryLabel}${diffChip(totalRate, month, theme.theme_id, null, members)}`;
 }
 
 function buildMemberExportCell(theme, member, month, current) {
@@ -1583,6 +1630,7 @@ function renderTable(months) {
     });
 
     document.getElementById('gantt-tbody').innerHTML = rows.join('') || `<tr><td colspan="${months.length + 1}" class="summary-subtext">条件に一致するテーマがありません。</td></tr>`;
+    decorateThemeSummaryRows();
     bindRows();
     renderMobileThemeList(themes, months);
 }
@@ -1600,5 +1648,9 @@ function updateThemeSummaryCell(themeId, month) {
     const targetCell = summaryRow.children[monthIndex + 1];
     if (!targetCell) return;
 
-    targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${formatRateValue(totalRate)}${diffChip(totalRate, month, themeId, null, members)}</div>`;
+    const theme = allThemes.find((item) => item.theme_id === themeId);
+    const inner = theme
+        ? formatSummaryCellContent(theme, totalRate, month, members)
+        : `${formatRateValue(totalRate)}${diffChip(totalRate, month, themeId, null, members)}`;
+    targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${inner}</div>`;
 }

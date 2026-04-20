@@ -27,6 +27,14 @@ const STATUS_LABELS = {
     hold: '保留',
 };
 
+STATUS_LABELS.stop = 'STOP';
+
+const DEV_RANK_LABELS = {
+    S: 'S',
+    M: 'M',
+    L: 'L',
+};
+
 let currentUser = null;
 let currentView = 'gantt';
 let savedViewsCache = [];
@@ -423,8 +431,16 @@ async function openThemeModal(theme = null) {
         <div class="form-field">
             <label for="modal-theme-status">ステータス</label>
             <select id="modal-theme-status">
-                ${Object.entries(STATUS_LABELS).filter(([key]) => ['planning', 'active', 'completed', 'cancelled'].includes(key)).map(([key, label]) => `
+                ${Object.entries(STATUS_LABELS).filter(([key]) => ['planning', 'active', 'stop', 'completed', 'cancelled'].includes(key)).map(([key, label]) => `
                     <option value="${key}" ${key === (theme?.status || 'planning') ? 'selected' : ''}>${label}</option>
+                `).join('')}
+            </select>
+        </div>
+        <div class="form-field">
+            <label for="modal-theme-dev-rank">髢狗匱繝ｩ繝ｳ繧ｯ</label>
+            <select id="modal-theme-dev-rank">
+                ${Object.entries(DEV_RANK_LABELS).map(([key, label]) => `
+                    <option value="${key}" ${key === (theme?.dev_rank || 'M') ? 'selected' : ''}>${label}</option>
                 `).join('')}
             </select>
         </div>
@@ -495,6 +511,7 @@ async function openThemeModal(theme = null) {
             name: document.getElementById('modal-theme-name').value.trim(),
             category: document.getElementById('modal-theme-category').value.trim(),
             status: document.getElementById('modal-theme-status').value,
+            dev_rank: document.getElementById('modal-theme-dev-rank').value,
             color: document.getElementById('modal-theme-color').value,
             priority: Number.parseInt(document.getElementById('modal-theme-priority').value || '0', 10),
             dev_complete_month: document.getElementById('modal-theme-dev-complete')?.value || null,

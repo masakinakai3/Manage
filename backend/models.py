@@ -77,6 +77,7 @@ class Theme(db.Model):
     status = db.Column(db.String(20), nullable=False, default='planning')
     color = db.Column(db.String(7), default='#6366f1')
     priority = db.Column(db.Integer, nullable=False, default=0)
+    dev_rank = db.Column(db.String(1), nullable=False, default='M')
     start_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
     end_month = db.Column(db.String(7), nullable=True)    # 'YYYY-MM'
     milestone_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
@@ -103,6 +104,7 @@ class Theme(db.Model):
             'status': self.status,
             'color': self.color,
             'priority': self.priority,
+            'dev_rank': self.dev_rank,
             'start_month': self.start_month,
             'end_month': self.end_month,
             'dev_complete_month': self.dev_complete_month,

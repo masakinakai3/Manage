@@ -30,12 +30,13 @@ def test_theme_creation(app):
     """Test Theme creation."""
     with app.app_context():
         from models import db
-        t = Theme(name='Test Theme', status='active')
+        t = Theme(name='Test Theme', status='active', dev_rank='S')
         db.session.add(t)
         db.session.commit()
         
         assert t.name == 'Test Theme'
         assert t.status == 'active'
+        assert t.dev_rank == 'S'
         assert t.color == '#6366f1'  # Default value
 
 def test_allocation_unique_constraint(app):

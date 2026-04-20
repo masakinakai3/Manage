@@ -185,6 +185,8 @@ def _migrate_theme_milestones():
         statements.append("ALTER TABLE themes ADD COLUMN milestone_label VARCHAR(200)")
     if 'dev_complete_month' not in existing_columns:
         statements.append("ALTER TABLE themes ADD COLUMN dev_complete_month VARCHAR(7)")
+    if 'dev_rank' not in existing_columns:
+        statements.append("ALTER TABLE themes ADD COLUMN dev_rank VARCHAR(1) NOT NULL DEFAULT 'M'")
 
     for statement in statements:
         db.session.execute(text(statement))

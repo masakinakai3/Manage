@@ -89,7 +89,7 @@
     background: var(--color-bg-elevated) !important;
     font-weight: 600 !important;
     font-size: var(--text-sm) !important;
-    height: 40px !important;
+    height: 48px !important;
 }
 
 .gantt-row-summary td:first-child {
@@ -180,6 +180,11 @@
 .theme-status.status-active {
     background: rgba(34, 197, 94, 0.2);
     color: #86efac;
+}
+
+.theme-status.status-stop {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fcd34d;
 }
 
 .theme-status.status-completed {
@@ -283,9 +288,17 @@
 .gantt-row-summary .gantt-cell {
     align-items: flex-end;
     justify-content: center;
-    padding: 0 4px 3px;
+    padding: 0 4px 0;
     box-sizing: border-box;
     overflow: hidden;
+}
+
+.gantt-summary-value,
+.gantt-star-label {
+    display: inline-flex;
+    align-items: flex-end;
+    min-height: 1.3em;
+    transform: translateY(4px);
 }
 
 .gantt-milestones {
@@ -298,7 +311,7 @@
     align-items: flex-end;
     gap: 2px;
     max-width: calc(100% - 8px);
-    max-height: calc(100% - 16px);
+    max-height: calc(100% - 22px);
     overflow: hidden;
     pointer-events: none;
 }
@@ -483,6 +496,22 @@
 .theme-period.empty {
     color: var(--color-text-muted);
     font-style: italic;
+}
+
+.theme-dev-rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-warning) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 55%, transparent);
+    color: var(--color-warning);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    flex-shrink: 0;
 }
 
 /* Period Editor Popover */
