@@ -6,7 +6,7 @@ import { isCellEditorOpen, openCellEditor } from './gantt-editor.js';
 import { initGanttDnD } from './gantt-dnd.js';
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', stop: 'STOP', completed: 'Completed', cancelled: 'Cancelled' };
-const DEV_RANK_LABELS = { S: 'S', M: 'M', L: 'L' };
+const DEV_RANK_LABELS = { '': '-', S: 'S', M: 'M', L: 'L' };
 
 export const HistoryManager = {
     stack: [],
@@ -294,7 +294,7 @@ function decorateThemeSummaryRows() {
         const labelCell = row.querySelector('.theme-label-cell');
         if (!theme || !labelCell) return;
 
-        const devRank = DEV_RANK_LABELS[theme.dev_rank] || 'M';
+        const devRank = getDevRankLabel(theme.dev_rank);
         const existingBadge = labelCell.querySelector('.theme-dev-rank-badge');
         if (!existingBadge) {
             const priorityBadge = labelCell.querySelector('.theme-priority-badge');
@@ -327,6 +327,14 @@ function decorateThemeSummaryRows() {
 function bindRows() {
     document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); refreshGantt(); }));
     document.querySelectorAll('.theme-milestone-btn').forEach((button) => button.addEventListener('click', () => showMilestoneModal(Number.parseInt(button.dataset.themeId, 10))));
+    document.querySelectorAll('.gantt-summary-cell[data-theme-id]').forEach((cell) => cell.addEventListener('click', () => {
+        showMilestoneModal(Number.parseInt(cell.dataset.themeId, 10));
+    }));
+    document.querySelectorAll('.gantt-milestone-chip[data-theme-id]').forEach((chip) => chip.addEventListener('click', () => {
+        document.dispatchEvent(new CustomEvent('open-theme-edit', {
+            detail: { themeId: Number.parseInt(chip.dataset.themeId, 10) },
+        }));
+    }));
     document.querySelectorAll('.theme-assign-btn').forEach((button) => button.addEventListener('click', () => showAssignMemberModal(Number.parseInt(button.dataset.themeId, 10))));
     document.querySelectorAll('.theme-status-select').forEach((select) => select.addEventListener('change', async (event) => {
         const themeId = Number.parseInt(event.target.dataset.themeId, 10);
@@ -727,7 +735,13 @@ updateThemeSummaryCell = function(themeId, month) {
     const targetCell = summaryRow.children[monthIndex + 1];
     if (!targetCell) return;
 
-    targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${totalRate || ''}${diffChip(totalRate, month, themeId, null, members)}</div>`;
+    const theme = allThemes.find((item) => item.theme_id === themeId);
+    if (!theme) {
+        targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${formatRateValue(totalRate)}${diffChip(totalRate, month, themeId, null, members)}</div>`;
+        return;
+    }
+    targetCell.outerHTML = renderThemeSummaryCellMarkup(theme, month, currentMonth(), members);
+    bindRows();
 };
 
 function findAdjacentCell(button, direction) {
@@ -1260,14 +1274,48 @@ function memberMonthTotal(memberId, month) { return allAllocations.filter((item)
 function sumThemeRate(themeId, month, members) { return members.reduce((sum, member) => sum + lookupRate(allAllocations, themeId, member.member_id, month), 0); }
 function lookupRate(source, themeId, memberId, month) { return source.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month)?.allocation_rate || 0; }
 function countBy(items, selector) { const map = new Map(); items.forEach((item) => map.set(selector(item), (map.get(selector(item)) || 0) + 1)); return map; }
-function getGroupKey(theme) { return groupBy === 'status' ? STATUS_LABELS[theme.status] || theme.status : theme.category || 'Uncategorized'; }
+function getDevRankLabel(devRank) { return DEV_RANK_LABELS[devRank || ''] || devRank || '-'; }
+function getGroupKey(theme) {
+    if (groupBy === 'status') return STATUS_LABELS[theme.status] || theme.status;
+    if (groupBy === 'priority') return `P${Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0}`;
+    if (groupBy === 'dev-rank') return `Rank ${getDevRankLabel(theme.dev_rank)}`;
+    return theme.category || 'Uncategorized';
+}
 function rateClass(rate) { if (rate <= 0) return ''; if (rate <= 30) return 'rate-low'; if (rate <= 60) return 'rate-mid'; if (rate < 100) return 'rate-high'; if (rate === 100) return 'rate-full'; return 'rate-over'; }
 function csvEscape(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
+function escapeHtmlAttr(value) { return escapeHtml(value).replaceAll('`', '&#96;'); }
 function diffChip(rate, month, themeId, memberId, members = []) { if (snapshotAllocations.length === 0 || scale !== 1) return ''; const oldRate = memberId == null ? members.reduce((sum, member) => sum + lookupRate(snapshotAllocations, themeId, member.member_id, month), 0) : lookupRate(snapshotAllocations, themeId, memberId, month); if (oldRate === rate) return ''; const diff = rate - oldRate; return `<span class="diff-chip ${diff > 0 ? 'diff-plus' : 'diff-minus'}">${diff > 0 ? '+' : ''}${diff}</span>`; }
 function hydrateCollapsed() { try { collapsedThemes = new Set(JSON.parse(localStorage.getItem('gantt_collapsed') || '[]')); } catch { collapsedThemes = new Set(); } }
 function persistCollapsed() { localStorage.setItem('gantt_collapsed', JSON.stringify([...collapsedThemes])); }
 function syncScaleButtons() { document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.classList.toggle('active', Number.parseInt(button.dataset.scale, 10) === scale)); }
+
+function buildSummaryTooltip(theme, month, members, totalRate) {
+    const lines = [`${theme.name} | ${month} | 合計 ${totalRate}%`];
+    const milestones = getThemeMilestones(theme).filter((item) => monthBucketIncludes(item.month, month, scale));
+    if (milestones.length) {
+        lines.push(`マイルストーン: ${milestones.map((item) => item.label || 'Milestone').join(', ')}`);
+    }
+    const breakdown = members
+        .map((member) => ({
+            name: member.display_name,
+            rate: lookupRate(allAllocations, theme.theme_id, member.member_id, month),
+        }))
+        .filter((item) => item.rate > 0)
+        .sort((left, right) => right.rate - left.rate || left.name.localeCompare(right.name, 'ja'));
+    if (breakdown.length) {
+        lines.push(...breakdown.map((item) => `${item.name}: ${item.rate}%`));
+    } else {
+        lines.push('内訳なし');
+    }
+    return lines.join('\n');
+}
+
+function renderThemeSummaryCellMarkup(theme, month, current, members) {
+    const total = sumThemeRate(theme.theme_id, month, members);
+    const tooltip = escapeHtmlAttr(buildSummaryTooltip(theme, month, members, total));
+    return `<td class="${month === current ? 'month-current' : ''}"><button class="gantt-cell gantt-summary-cell ${rateClass(total)}" data-theme-id="${theme.theme_id}" data-month="${month}" title="${tooltip}" type="button">${formatSummaryCellContent(theme, total, month, members)}</button>${milestoneChips(theme, month)}</td>`;
+}
 
 function syncFilterInputs() {
     const search = document.getElementById('gantt-theme-filter');
@@ -1466,7 +1514,7 @@ export function getGanttGridExportDataset() {
 
 function formatThemeExportLabel(theme) {
     const parts = [theme.name];
-    if (theme.dev_rank) parts.push(`Rank ${DEV_RANK_LABELS[theme.dev_rank] || theme.dev_rank}`);
+    if (theme.dev_rank != null) parts.push(`Rank ${getDevRankLabel(theme.dev_rank)}`);
     if (theme.priority != null) parts.push(`P${theme.priority}`);
     if (theme.status) parts.push(STATUS_LABELS[theme.status] || theme.status);
     return parts.join(' / ');
@@ -1555,7 +1603,8 @@ function milestoneChips(theme, month) {
     const chips = matches.map((item) => {
         const label = escapeHtml(item.label || 'Milestone');
         const completedClass = item.is_completed ? 'completed' : '';
-        return `<div class="gantt-milestone-chip ${completedClass}" title="${label}">${label}</div>`;
+        const tooltip = escapeHtmlAttr(`${theme.name}\n${item.month}\n${item.label || 'Milestone'}`);
+        return `<button class="gantt-milestone-chip ${completedClass}" data-theme-id="${theme.theme_id}" type="button" title="${tooltip}">${label}</button>`;
     }).join('');
     return `<div class="gantt-milestones">${chips}</div>`;
 }
@@ -1624,7 +1673,7 @@ function renderTable(months) {
             const members = themeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
-            rows.push(`<tr class="gantt-row-summary" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${priorityBadge}${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => { const total = sumThemeRate(theme.theme_id, month, members); const isDevComplete = theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale); const starLabel = isDevComplete ? `<span class="gantt-star-label" title="開発完了月">★${total || ''}</span>` : ''; return `<td class="${month === current ? 'month-current' : ''}"><div class="gantt-cell ${rateClass(total)}">${isDevComplete ? starLabel : formatRateValue(total)}${diffChip(total, month, theme.theme_id, null, members)}</div>${milestoneChips(theme, month)}</td>`; }).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${priorityBadge}${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
@@ -1649,8 +1698,10 @@ function updateThemeSummaryCell(themeId, month) {
     if (!targetCell) return;
 
     const theme = allThemes.find((item) => item.theme_id === themeId);
-    const inner = theme
-        ? formatSummaryCellContent(theme, totalRate, month, members)
-        : `${formatRateValue(totalRate)}${diffChip(totalRate, month, themeId, null, members)}`;
-    targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${inner}</div>`;
+    if (!theme) {
+        targetCell.innerHTML = `<div class="gantt-cell ${rateClass(totalRate)}">${formatRateValue(totalRate)}${diffChip(totalRate, month, themeId, null, members)}</div>`;
+        return;
+    }
+    targetCell.outerHTML = renderThemeSummaryCellMarkup(theme, month, currentMonth(), members);
+    bindRows();
 }

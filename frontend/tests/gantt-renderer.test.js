@@ -45,6 +45,7 @@ const warnings = vi.fn(async () => ([]));
 const memberLoads = vi.fn(async () => ({ 10: { '2026-04': 20 } }));
 const snapshotList = vi.fn(async () => ([]));
 const themeUpdate = vi.fn(async () => ({}));
+const openThemeEditListener = vi.fn();
 
 vi.mock('../js/gantt/gantt-editor.js', () => ({
     openCellEditor,
@@ -160,6 +161,8 @@ function renderBaseDom() {
             <button id="cell-editor-clear" type="button">clear</button>
         </div>
     `;
+    document.removeEventListener('open-theme-edit', openThemeEditListener);
+    document.addEventListener('open-theme-edit', openThemeEditListener);
 }
 
 describe('gantt-renderer regressions', () => {
@@ -182,6 +185,7 @@ describe('gantt-renderer regressions', () => {
         memberLoads.mockClear();
         snapshotList.mockClear();
         themeUpdate.mockClear();
+        openThemeEditListener.mockClear();
         visibleMonths = ['2026-04'];
         allocationRows = [{
             theme_id: 1,
@@ -312,6 +316,28 @@ describe('gantt-renderer regressions', () => {
         const milestones = Array.from(document.querySelectorAll('.gantt-row-summary .gantt-milestone-chip'));
         expect(milestones).toHaveLength(2);
         expect(milestones.map((item) => item.textContent)).toEqual(['Release', 'Review']);
+        expect(milestones[0]?.getAttribute('title')).toContain('Theme A');
+    });
+
+    it('adds a summary tooltip with member breakdown', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const summaryCell = document.querySelector('.gantt-row-summary .gantt-cell');
+        expect(summaryCell?.getAttribute('title')).toContain('Alice: 20%');
+    });
+
+    it('opens the milestone editor when a summary cell is clicked', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const summaryCell = document.querySelector('.gantt-row-summary .gantt-summary-cell');
+        summaryCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.getElementById('modal-overlay')?.hidden).toBe(false);
+        expect(document.getElementById('modal-title')?.textContent).not.toBe('');
     });
 
     it('creates and syncs multi-filter controls for gantt search', async () => {
@@ -358,6 +384,25 @@ describe('gantt-renderer regressions', () => {
 
         const badge = document.querySelector('.theme-dev-rank-badge');
         expect(badge?.textContent).toBe('S');
+    });
+
+    it('supports grouping by development rank', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-04',
+            scale: 1,
+            ganttSearch: '',
+            ganttCategory: '',
+            ganttOwner: '',
+            ganttStatus: 'all',
+            ganttPriority: 'all',
+            groupBy: 'dev-rank',
+        });
+
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        expect(document.querySelector('.gantt-row-group')?.textContent).toContain('Rank S');
     });
 
     it('opens and saves milestone edits from the gantt screen', async () => {

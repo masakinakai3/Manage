@@ -14,6 +14,11 @@ from sqlalchemy import func
 themes_bp = Blueprint('themes', __name__)
 
 
+def _normalize_dev_rank(value):
+    normalized = (value or '').strip()
+    return normalized or ''
+
+
 def _normalize_milestones(data):
     raw_milestones = data.get('milestones')
     if raw_milestones is None:
@@ -92,7 +97,7 @@ def create_theme():
         status=data.get('status', 'planning'),
         color=data.get('color', '#6366f1'),
         priority=data.get('priority', 0),
-        dev_rank=(data.get('dev_rank') or 'M'),
+        dev_rank=_normalize_dev_rank(data.get('dev_rank')),
         start_month=data.get('start_month'),
         end_month=data.get('end_month'),
         dev_complete_month=data.get('dev_complete_month'),
@@ -112,7 +117,10 @@ def update_theme(theme_id):
     data = request.get_json()
     for field in ('name', 'category', 'status', 'color', 'priority', 'dev_rank', 'start_month', 'end_month', 'dev_complete_month'):
         if field in data:
-            setattr(theme, field, data[field])
+            if field == 'dev_rank':
+                setattr(theme, field, _normalize_dev_rank(data[field]))
+            else:
+                setattr(theme, field, data[field])
 
     if 'milestones' in data or 'milestone_month' in data or 'milestone_label' in data:
         _replace_theme_milestones(theme, _normalize_milestones(data))

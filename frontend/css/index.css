@@ -2133,6 +2133,23 @@ td.out-period {
     fill: transparent;
 }
 
+.project-ribbon__grid-line {
+    stroke: color-mix(in srgb, var(--color-border) 80%, transparent);
+    stroke-width: 1;
+    stroke-dasharray: 3 4;
+}
+
+.project-ribbon__axis-line {
+    stroke: color-mix(in srgb, var(--color-text-secondary) 70%, transparent);
+    stroke-width: 1.25;
+}
+
+.project-ribbon__axis-label {
+    fill: var(--color-text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+}
+
 .project-ribbon__block-label {
     fill: rgba(255, 255, 255, 0.92);
     font-size: 10px;

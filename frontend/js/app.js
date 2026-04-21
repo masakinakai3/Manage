@@ -30,6 +30,7 @@ const STATUS_LABELS = {
 STATUS_LABELS.stop = 'STOP';
 
 const DEV_RANK_LABELS = {
+    '': '-',
     S: 'S',
     M: 'M',
     L: 'L',
@@ -296,6 +297,13 @@ function initThemeManagement() {
     document.getElementById('add-theme-btn').addEventListener('click', () => openThemeModal());
     document.getElementById('theme-list-search').addEventListener('input', loadThemeList);
     document.getElementById('theme-list-sort').addEventListener('change', loadThemeList);
+    document.addEventListener('open-theme-edit', async (event) => {
+        const themeId = Number.parseInt(event.detail?.themeId, 10);
+        if (!themeId) return;
+        const themes = await themesApi.list().catch(() => []);
+        const theme = themes.find((item) => item.theme_id === themeId);
+        if (theme) openThemeModal(theme);
+    });
 }
 
 async function loadThemeList() {
@@ -437,10 +445,10 @@ async function openThemeModal(theme = null) {
             </select>
         </div>
         <div class="form-field">
-            <label for="modal-theme-dev-rank">髢狗匱繝ｩ繝ｳ繧ｯ</label>
+            <label for="modal-theme-dev-rank">開発ランク</label>
             <select id="modal-theme-dev-rank">
                 ${Object.entries(DEV_RANK_LABELS).map(([key, label]) => `
-                    <option value="${key}" ${key === (theme?.dev_rank || 'M') ? 'selected' : ''}>${label}</option>
+                    <option value="${key}" ${key === (theme?.dev_rank || '') ? 'selected' : ''}>${label}</option>
                 `).join('')}
             </select>
         </div>

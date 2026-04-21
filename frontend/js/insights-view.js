@@ -333,12 +333,13 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
     const width = Math.max(fullscreen ? 1120 : 640, items.length * (fullscreen ? 220 : 140));
     const height = fullscreen ? 760 : 340;
     const padding = fullscreen
-        ? { top: 28, right: 24, bottom: 72, left: 24 }
-        : { top: 20, right: 24, bottom: 64, left: 24 };
+        ? { top: 28, right: 24, bottom: 72, left: 56 }
+        : { top: 20, right: 24, bottom: 64, left: 48 };
     const innerWidth = width - padding.left - padding.right;
     const innerHeight = height - padding.top - padding.bottom;
     const columnWidth = Math.min(fullscreen ? 80 : 68, Math.max(38, innerWidth / Math.max(items.length * 2.6, 1)));
-    const step = items.length > 1 ? innerWidth / (items.length - 1) : 0;
+    const plotWidth = Math.max(innerWidth - columnWidth - 12, 0);
+    const step = items.length > 1 ? plotWidth / (items.length - 1) : 0;
     const maxTotalLoad = Math.max(ribbonData.max_total_load || 0, 1);
 
     const monthSegments = [];
@@ -376,13 +377,14 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         const projects = [...(item.projects || [])]
             .sort((left, right) => (themeRank.get(left.theme_id) || 0) - (themeRank.get(right.theme_id) || 0));
         const heights = normalizeRibbonHeights(projects, stackHeight);
+        const x = padding.left + (columnWidth / 2) + (step * index);
 
         projects.forEach((project, projectIndex) => {
             const segmentHeight = heights[projectIndex] || 0;
             const segment = {
                 ...project,
                 month: item.month,
-                x: padding.left + (step * index),
+                x,
                 y0: cursorY,
                 y1: cursorY + segmentHeight,
             };
@@ -393,7 +395,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         monthSegments.push({
             month: item.month,
             totalLoad,
-            x: padding.left + (step * index),
+            x,
             segments,
         });
     });
@@ -423,10 +425,44 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         });
     }
 
+    const axisValues = [0, 25, 50, 75, 100].filter((value) => value <= maxTotalLoad || value === 0);
+    if (!axisValues.includes(maxTotalLoad)) axisValues.push(maxTotalLoad);
+    const yAxis = axisValues
+        .sort((left, right) => left - right)
+        .map((value) => {
+            const y = padding.top + innerHeight - ((innerHeight * value) / maxTotalLoad);
+            return `
+                <g>
+                    <line x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}" class="project-ribbon__grid-line"></line>
+                    <text x="${padding.left - 8}" y="${y + 4}" text-anchor="end" class="project-ribbon__axis-label">${escapeHtml(String(value))}%</text>
+                </g>
+            `;
+        });
+
+    const monthHotspots = monthSegments.map((item) => {
+        const details = [...item.segments]
+            .sort((left, right) => right.load - left.load || left.name.localeCompare(right.name, 'ja'))
+            .map((segment) => `${segment.name}: ${segment.load}%`);
+        const tooltip = [`${item.month} 合計 ${item.totalLoad}%`, ...(details.length ? details : ['内訳なし'])].join('\n');
+        return `
+            <rect
+                x="${item.x - (columnWidth / 2)}"
+                y="${padding.top}"
+                width="${columnWidth}"
+                height="${innerHeight}"
+                fill="transparent"
+                pointer-events="all"
+            >
+                <title>${escapeHtml(tooltip)}</title>
+            </rect>
+        `;
+    });
+
     const blocks = monthSegments.flatMap((item) => item.segments.map((segment) => {
         const color = segment.color || '#6366f1';
         const heightValue = Math.max(segment.y1 - segment.y0, 0.5);
         const labelLimit = fullscreen ? 18 : (columnWidth > 52 ? 14 : 10);
+        const fontSize = heightValue < 18 ? 9 : (heightValue < 28 ? 10 : 11.5);
         return `
             <g>
                 <rect
@@ -447,6 +483,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                         y="${segment.y0 + (heightValue / 2) + 4}"
                         text-anchor="middle"
                         class="project-ribbon__block-label"
+                        style="font-size:${fontSize}px"
                     >${escapeHtml(truncateLabel(segment.name, labelLimit))}</text>
                 ` : ''}
             </g>
@@ -480,8 +517,11 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             <div class="project-ribbon__scroll" ${fullscreen ? `data-ribbon-step="${step}" data-ribbon-width="${width}"` : ''}>
                 <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-label="Project load ribbon chart">
                     <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>
+                    <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + innerHeight}" class="project-ribbon__axis-line"></line>
+                    ${yAxis.join('')}
                     ${ribbons.join('')}
                     ${blocks.join('')}
+                    ${monthHotspots.join('')}
                     ${monthLabels.join('')}
                 </svg>
             </div>

@@ -83,6 +83,19 @@ def test_update_theme_milestone(auth_client, app):
         saved = ThemeMilestone.query.filter_by(theme_id=theme_id).order_by(ThemeMilestone.position).all()
         assert [item.month for item in saved] == ['2026-09', '2026-10']
 
+def test_update_theme_allows_empty_dev_rank(auth_client, app):
+    with app.app_context():
+        theme = Theme(name='No Rank Theme', dev_rank='S')
+        db.session.add(theme)
+        db.session.commit()
+        theme_id = theme.theme_id
+
+    response = auth_client.put(f'/api/themes/{theme_id}', json={
+        'dev_rank': '',
+    })
+    assert response.status_code == 200
+    assert response.json['dev_rank'] == ''
+
 def test_bulk_allocations(auth_client, app):
     """Test bulk update of allocations."""
     # Setup: Create Theme and Member
