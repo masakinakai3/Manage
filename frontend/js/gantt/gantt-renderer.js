@@ -109,6 +109,13 @@ export async function refreshGantt() {
     }
 }
 
+function rerenderGanttView() {
+    const months = getVisibleMonths(startMonth, visibleCount, scale);
+    renderSnapshotSummaryCards(months);
+    renderTable(months);
+    renderDetailPanelV2();
+}
+
 function bindControls() {
     ensureGanttFilterControls();
     document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.addEventListener('click', () => updateViewState({ scale: Number.parseInt(button.dataset.scale, 10) })));
@@ -131,8 +138,8 @@ function bindControls() {
         const preset = document.getElementById('shared-period-preset').value || 'rolling-6';
         updateViewState({ preset, ...getPresetConfig(preset) });
     });
-    document.getElementById('gantt-expand-all')?.addEventListener('click', () => { collapsedThemes.clear(); persistCollapsed(); refreshGantt(); });
-    document.getElementById('gantt-collapse-all')?.addEventListener('click', () => { allThemes.forEach((theme) => collapsedThemes.add(theme.theme_id)); persistCollapsed(); refreshGantt(); });
+    document.getElementById('gantt-expand-all')?.addEventListener('click', () => { collapsedThemes.clear(); persistCollapsed(); rerenderGanttView(); });
+    document.getElementById('gantt-collapse-all')?.addEventListener('click', () => { allThemes.forEach((theme) => collapsedThemes.add(theme.theme_id)); persistCollapsed(); rerenderGanttView(); });
     document.getElementById('gantt-export-csv')?.addEventListener('click', exportCsv);
     document.getElementById('snapshot-save-btn')?.addEventListener('click', saveSnapshot);
     document.getElementById('snapshot-select')?.addEventListener('change', loadSelectedSnapshot);
@@ -325,7 +332,7 @@ function decorateThemeSummaryRows() {
 }
 
 function bindRows() {
-    document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); refreshGantt(); }));
+    document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); rerenderGanttView(); }));
     document.querySelectorAll('.theme-milestone-btn').forEach((button) => button.addEventListener('click', () => showMilestoneModal(Number.parseInt(button.dataset.themeId, 10))));
     document.querySelectorAll('.gantt-summary-cell[data-theme-id]').forEach((cell) => cell.addEventListener('click', () => {
         showMilestoneModal(Number.parseInt(cell.dataset.themeId, 10));
@@ -1646,7 +1653,7 @@ function renderMobileThemeList(themes, months) {
             });
             collapsedThemes.delete(themeId);
             persistCollapsed();
-            refreshGantt();
+            rerenderGanttView();
             const firstCell = document.querySelector(`.gantt-cell[data-theme="${themeId}"]`);
             if (firstCell) {
                 selectCellButton(firstCell);

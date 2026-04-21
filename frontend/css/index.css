@@ -540,6 +540,18 @@ body {
     gap: var(--space-3);
 }
 
+.gantt-header-status .header-busy {
+    order: 1;
+}
+
+.gantt-header-status .gantt-controls-toggle {
+    order: 2;
+}
+
+.gantt-header-status #shortcut-help-header-btn {
+    order: 3;
+}
+
 .header-status-stack {
     display: grid;
     justify-items: end;
@@ -1310,6 +1322,15 @@ body {
 
 .header-busy {
     justify-self: end;
+    width: 160px;
+    flex: 0 0 160px;
+    display: inline-block;
+    text-align: left;
+}
+
+.header-busy[hidden] {
+    display: inline-block !important;
+    visibility: hidden;
 }
 
 .sidebar-actions {
