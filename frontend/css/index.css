@@ -2178,6 +2178,11 @@ td.out-period {
     pointer-events: none;
 }
 
+.project-ribbon__block-label[data-small-load="true"] {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
 .project-ribbon__month-label {
     fill: var(--color-text);
     font-size: 12px;

@@ -6,6 +6,7 @@ import { formatError, setBusyState } from './ui.js';
 let currentState = loadViewState();
 let ribbonOverlayInitialized = false;
 let activeRibbonData = null;
+const SMALL_RIBBON_LOAD_THRESHOLD = 30;
 
 const HEALTH_CATEGORY_LABELS = {
     resource_operations: '配員運営',
@@ -31,11 +32,11 @@ export async function refreshInsightsView() {
     try {
         setBusyState(true, 'インサイトを読み込み中...');
         const overview = await insights.overview(from, toEnd);
+        simplifyInsightsLayout();
         renderSummary(overview.summary || {});
-        renderFocusPanels(overview.summary || {}, overview.dashboard || {}, overview.health_groups || []);
         renderHealthChecks(overview.health_checks || [], overview.health_groups || []);
         renderRecommendations(overview.recommendations || []);
-        renderDashboard(overview.dashboard || {}, overview.health_groups || []);
+        renderProjectRibbon('dashboard-project-ribbon', overview.dashboard?.project_ribbon || {});
     } catch (error) {
         renderError(formatError(error, 'インサイトの読み込みに失敗しました。'));
     } finally {
@@ -358,7 +359,8 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         });
     });
 
-    const themeOrder = Array.from(themeMetaById.keys()).sort((left, right) => {
+    const explicitThemeOrder = (ribbonData.theme_order || []).filter((themeId) => themeMetaById.has(themeId));
+    const fallbackThemeOrder = Array.from(themeMetaById.keys()).sort((left, right) => {
         const totalDiff = (totalsByTheme.get(right) || 0) - (totalsByTheme.get(left) || 0);
         if (totalDiff !== 0) return totalDiff;
         const leftName = (themeMetaById.get(left)?.name || '').toLowerCase();
@@ -366,7 +368,17 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         if (leftName !== rightName) return leftName.localeCompare(rightName);
         return left - right;
     });
+    const themeOrder = explicitThemeOrder.length
+        ? [...explicitThemeOrder, ...fallbackThemeOrder.filter((themeId) => !explicitThemeOrder.includes(themeId))]
+        : fallbackThemeOrder;
     const themeRank = new Map(themeOrder.map((themeId, index) => [themeId, index]));
+    const formatRibbonMemberBreakdown = (segment) => {
+        if (!segment) return ['担当内訳なし'];
+        if ((segment.member_breakdown || []).length) {
+            return segment.member_breakdown.map((member) => `${member.display_name}: ${member.load}%`);
+        }
+        return ['担当内訳なし'];
+    };
 
     items.forEach((item, index) => {
         const totalLoad = item.total_load || 0;
@@ -375,7 +387,11 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         let cursorY = stackTop;
         const segments = [];
         const projects = [...(item.projects || [])]
-            .sort((left, right) => (themeRank.get(left.theme_id) || 0) - (themeRank.get(right.theme_id) || 0));
+            .sort((left, right) => {
+                const loadDiff = (right.load || 0) - (left.load || 0);
+                if (loadDiff !== 0) return loadDiff;
+                return (themeRank.get(left.theme_id) || 0) - (themeRank.get(right.theme_id) || 0);
+            });
         const heights = normalizeRibbonHeights(projects, stackHeight);
         const x = padding.left + (columnWidth / 2) + (step * index);
 
@@ -410,6 +426,13 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             const nextSegment = nextMap.get(segment.theme_id);
             if (!nextSegment) return;
             const color = segment.color || '#6366f1';
+            const tooltipLines = [
+                `${segment.name}`,
+                `${segment.month}: ${segment.load}%`,
+                ...formatRibbonMemberBreakdown(segment),
+                `${nextSegment.month}: ${nextSegment.load}%`,
+                ...formatRibbonMemberBreakdown(nextSegment),
+            ];
             ribbons.push(`
                 <path
                     d="${buildRibbonPath(segment, nextSegment, columnWidth)}"
@@ -419,7 +442,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                     stroke-opacity="0.6"
                     stroke-width="1"
                 >
-                    <title>${escapeHtml(`${segment.name}: ${segment.month} ${segment.load}% -> ${nextSegment.month} ${nextSegment.load}%`)}</title>
+                    <title>${escapeHtml(tooltipLines.join('\n'))}</title>
                 </path>
             `);
         });
@@ -458,11 +481,40 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         `;
     });
 
+    const segmentHotspots = monthSegments.flatMap((item) => item.segments.map((segment) => {
+        const tooltipLines = [
+            `${segment.month} | ${segment.name} | ${segment.load}%`,
+            ...formatRibbonMemberBreakdown(segment),
+        ];
+        return `
+            <rect
+                x="${segment.x - (columnWidth / 2)}"
+                y="${segment.y0}"
+                width="${columnWidth}"
+                height="${Math.max(segment.y1 - segment.y0, 0.5)}"
+                fill="transparent"
+                pointer-events="all"
+            >
+                <title>${escapeHtml(tooltipLines.join('\n'))}</title>
+            </rect>
+        `;
+    }));
+
     const blocks = monthSegments.flatMap((item) => item.segments.map((segment) => {
         const color = segment.color || '#6366f1';
         const heightValue = Math.max(segment.y1 - segment.y0, 0.5);
-        const labelLimit = fullscreen ? 18 : (columnWidth > 52 ? 14 : 10);
-        const fontSize = heightValue < 18 ? 9 : (heightValue < 28 ? 10 : 11.5);
+        const isSmallLoad = (segment.load || 0) <= SMALL_RIBBON_LOAD_THRESHOLD;
+        const labelLimit = isSmallLoad
+            ? (fullscreen ? 12 : 8)
+            : (fullscreen ? 18 : (columnWidth > 52 ? 14 : 10));
+        const fontSize = isSmallLoad
+            ? (fullscreen ? 8.5 : 7.5)
+            : (heightValue < 18 ? 9 : (heightValue < 28 ? 10 : 11.5));
+        const shouldRenderLabel = heightValue >= (isSmallLoad ? 10 : 18);
+        const tooltipLines = [
+            `${segment.month} | ${segment.name} | ${segment.load}%`,
+            ...formatRibbonMemberBreakdown(segment),
+        ];
         return `
             <g>
                 <rect
@@ -475,14 +527,15 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                     fill="${escapeHtml(color)}"
                     fill-opacity="0.85"
                 >
-                    <title>${escapeHtml(`${segment.month} | ${segment.name} | ${segment.load}%`)}</title>
+                    <title>${escapeHtml(tooltipLines.join('\n'))}</title>
                 </rect>
-                ${heightValue >= 18 ? `
+                ${shouldRenderLabel ? `
                     <text
                         x="${segment.x}"
                         y="${segment.y0 + (heightValue / 2) + 4}"
                         text-anchor="middle"
                         class="project-ribbon__block-label"
+                        data-small-load="${isSmallLoad ? 'true' : 'false'}"
                         style="font-size:${fontSize}px"
                     >${escapeHtml(truncateLabel(segment.name, labelLimit))}</text>
                 ` : ''}
@@ -522,6 +575,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                     ${ribbons.join('')}
                     ${blocks.join('')}
                     ${monthHotspots.join('')}
+                    ${segmentHotspots.join('')}
                     ${monthLabels.join('')}
                 </svg>
             </div>
@@ -681,6 +735,134 @@ function renderPillList(targetId, items) {
         <span class="dashboard-pill">${escapeHtml(item.label)}: ${escapeHtml(item.value ?? item.count)}</span>
     `).join('');
 }
+
+function simplifyInsightsLayout() {
+    const aggregatePanel = document.querySelector('#view-insights .aggregate-panels');
+    if (aggregatePanel) {
+        aggregatePanel.hidden = true;
+        aggregatePanel.style.display = 'none';
+    }
+
+    [
+        'insights-gap-overview',
+        'insights-department-imbalance',
+        'insights-forecast-watch',
+        'dashboard-monthly-trend',
+        'dashboard-department-load',
+        'dashboard-impact-themes',
+        'dashboard-forecast-table',
+        'dashboard-health-groups',
+    ].forEach((id) => {
+        const target = document.getElementById(id);
+        const card = target?.closest('.summary-card');
+        if (card) {
+            card.hidden = true;
+            card.style.display = 'none';
+        }
+    });
+
+    const labels = document.querySelectorAll('#view-insights .insight-layout .summary-label');
+    if (labels[0]) labels[0].textContent = '優先アラート';
+    if (labels[1]) labels[1].textContent = '対応候補';
+
+    document.querySelectorAll('#view-insights .insight-layout--dashboard .summary-card').forEach((card) => {
+        card.hidden = !card.querySelector('#dashboard-project-ribbon');
+    });
+}
+
+function severityRank(severity) {
+    return { high: 3, medium: 2, low: 1 }[severity] || 0;
+}
+
+renderSummary = function(summary) {
+    const target = document.getElementById('insights-summary');
+    if (!target) return;
+
+    const urgentCount = Number(summary.overloaded_member_count || 0) + Number(summary.warning_cell_count || 0);
+    target.innerHTML = `
+        <article class="summary-card">
+            <div class="summary-label">優先対応件数</div>
+            <div class="summary-value">${urgentCount}</div>
+            <div class="summary-subtext">過負荷メンバー ${summary.overloaded_member_count || 0} 名 / 警告セル ${summary.warning_cell_count || 0} 件</div>
+        </article>
+        <article class="summary-card">
+            <div class="summary-label">不足見込み</div>
+            <div class="summary-value">${summary.total_shortage || 0}%</div>
+            <div class="summary-subtext">逼迫見込み月 ${summary.upcoming_shortage_months || 0} か月</div>
+        </article>
+        <article class="summary-card">
+            <div class="summary-label">稼働中テーマ</div>
+            <div class="summary-value">${summary.active_theme_count || 0}</div>
+            <div class="summary-subtext">提案候補 ${summary.recommendation_count || 0} 件</div>
+        </article>
+    `;
+};
+
+renderHealthChecks = function(items) {
+    const target = document.getElementById('health-check-list');
+    if (!target) return;
+
+    const prioritized = [...items]
+        .sort((left, right) => severityRank(right.severity) - severityRank(left.severity))
+        .slice(0, 5);
+
+    if (prioritized.length === 0) {
+        target.innerHTML = '<div class="empty-panel">現在、優先して確認すべきアラートはありません。</div>';
+        return;
+    }
+
+    target.innerHTML = prioritized.map((item) => `
+        <article class="insight-item insight-${item.severity}">
+            <div class="insight-header">
+                <strong>${labelSeverity(item.severity)}</strong>
+                <span>${escapeHtml(item.entity_name || item.code)}</span>
+            </div>
+            <div class="insight-meta-row">
+                <span class="dashboard-pill">${escapeHtml(HEALTH_CATEGORY_LABELS[item.category] || item.category || '未分類')}</span>
+                <span class="summary-subtext">${escapeHtml(item.code)}</span>
+            </div>
+            <p>${escapeHtml(item.message || '')}</p>
+            <div class="insight-actions">
+                ${buildHealthAction(item)}
+            </div>
+        </article>
+    `).join('');
+    bindActionButtons(target);
+};
+
+renderRecommendations = function(items) {
+    const target = document.getElementById('recommendation-list');
+    if (!target) return;
+
+    if (items.length === 0) {
+        target.innerHTML = '<div class="empty-panel">今すぐ確認が必要な対応候補はありません。</div>';
+        return;
+    }
+
+    target.innerHTML = items.slice(0, 3).map((item) => {
+        const best = item.best_option;
+        return `
+            <article class="insight-item">
+                <div class="insight-header">
+                    <strong>${escapeHtml(item.display_name)}</strong>
+                    <span>${escapeHtml(item.month)} / ${item.load}% / 容量 ${item.capacity}%</span>
+                </div>
+                <div class="insight-meta-row">
+                    <span class="dashboard-pill">超過 ${item.excess}%</span>
+                    ${best ? `<span class="dashboard-pill">最大解消 ${best.resolution_ratio}%</span>` : ''}
+                </div>
+                <p>${best
+                    ? `${escapeHtml(best.theme_name)} を ${escapeHtml(best.display_name)} に ${best.feasible_shift}% 移すと、負荷を ${best.source_load_after_shift}% まで下げられます。`
+                    : '有効な移管候補はまだ見つかっていません。'}</p>
+                <div class="insight-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load" data-member-search="${escapeHtmlAttr(item.display_name)}">負荷表で確認</button>
+                    ${best ? `<button class="btn btn-ghost btn-sm" type="button" data-open-view="gantt" data-theme-filter="${escapeHtmlAttr(best.theme_name)}">ガントで確認</button>` : ''}
+                </div>
+            </article>
+        `;
+    }).join('');
+    bindActionButtons(target);
+};
 
 function renderError(message) {
     [

@@ -28,8 +28,8 @@ const themeList = vi.fn(async () => ([{
     color: '#00aaff',
     category: 'Delivery',
     milestones: [
-        { id: 1, month: '2026-04', label: 'Release', position: 0 },
-        { id: 2, month: '2026-04', label: 'Review', position: 1 },
+        { id: 1, month: '2026-05', label: 'Release', position: 0, is_completed: false },
+        { id: 2, month: '2026-04', label: 'Review', position: 1, is_completed: true },
     ],
     member_ids: [10],
 }]));
@@ -288,7 +288,7 @@ describe('gantt-renderer regressions', () => {
                 label: 'Theme A / Rank S / Active',
                 color: '#00aaff',
                 values: [{
-                    text: '20%\nRelease\nReview',
+                    text: '20%\nReview',
                     rate: 20,
                     is_current: true,
                     has_special_text: true,
@@ -314,8 +314,8 @@ describe('gantt-renderer regressions', () => {
         await refreshGantt();
 
         const milestones = Array.from(document.querySelectorAll('.gantt-row-summary .gantt-milestone-chip'));
-        expect(milestones).toHaveLength(2);
-        expect(milestones.map((item) => item.textContent)).toEqual(['Release', 'Review']);
+        expect(milestones).toHaveLength(1);
+        expect(milestones.map((item) => item.textContent)).toEqual(['Review']);
         expect(milestones[0]?.getAttribute('title')).toContain('Theme A');
     });
 
@@ -418,6 +418,9 @@ describe('gantt-renderer regressions', () => {
         expect(document.getElementById('modal-overlay')?.hidden).toBe(false);
         const rows = document.querySelectorAll('.theme-milestone-row');
         expect(rows).toHaveLength(2);
+        expect(rows[0].querySelector('.theme-milestone-month')?.value).toBe('2026-04');
+        expect(rows[0].querySelector('.theme-milestone-completed')?.checked).toBe(true);
+        expect(rows[1].querySelector('.theme-milestone-month')?.value).toBe('2026-05');
 
         rows[0].querySelector('.theme-milestone-month').value = '2026-05';
         rows[0].querySelector('.theme-milestone-label').value = 'Launch';
@@ -428,8 +431,8 @@ describe('gantt-renderer regressions', () => {
         expect(themeUpdate).toHaveBeenCalledWith(1, {
             dev_complete_month: null,
             milestones: [
-                { month: '2026-05', label: 'Launch', is_completed: false },
-                { month: '2026-04', label: 'Review', is_completed: false },
+                { month: '2026-05', label: 'Launch', is_completed: true },
+                { month: '2026-05', label: 'Release', is_completed: false },
             ],
         });
     });

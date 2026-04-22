@@ -457,6 +457,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
     month_theme_counts = defaultdict(set)
     category_counts = defaultdict(int)
     status_counts = defaultdict(int)
+    member_by_id = {member.member_id: member for member in members}
     theme_catalog = {
         theme.theme_id: {
             "theme_id": theme.theme_id,
@@ -467,6 +468,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         for theme in themes
     }
     ribbon_month_projects = defaultdict(lambda: defaultdict(int))
+    ribbon_month_members = defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
     ribbon_theme_totals = defaultdict(int)
 
     for theme in themes:
@@ -479,6 +481,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         theme_meta = theme_catalog.get(allocation.theme_id)
         if theme_meta and allocation.allocation_rate > 0:
             ribbon_month_projects[allocation.month][allocation.theme_id] += allocation.allocation_rate
+            ribbon_month_members[allocation.month][allocation.theme_id][allocation.member_id] += allocation.allocation_rate
             ribbon_theme_totals[allocation.theme_id] += allocation.allocation_rate
 
     dashboard_months = _month_range(from_month, to_month) if from_month and to_month else sorted(month_totals.keys(), key=_month_sort_key)
@@ -498,12 +501,35 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
     ]
 
     project_ribbon = []
+    theme_order = [
+        theme_id
+        for theme_id, _total in sorted(
+            ribbon_theme_totals.items(),
+            key=lambda item: (
+                -item[1],
+                (theme_catalog.get(item[0], {}).get("name") or "").lower(),
+                item[0],
+            ),
+        )
+    ]
     for month in dashboard_months:
         projects = sorted(
             [
                 {
                     **theme_catalog[theme_id],
                     "load": load,
+                    "member_breakdown": sorted(
+                        [
+                            {
+                                "member_id": member_id,
+                                "display_name": member_by_id.get(member_id).display_name if member_by_id.get(member_id) else str(member_id),
+                                "load": member_load,
+                            }
+                            for member_id, member_load in ribbon_month_members.get(month, {}).get(theme_id, {}).items()
+                            if member_load > 0
+                        ],
+                        key=lambda item: (-item["load"], item["display_name"].lower(), item["member_id"]),
+                    ),
                 }
                 for theme_id, load in ribbon_month_projects.get(month, {}).items()
                 if theme_id in theme_catalog and load > 0
@@ -530,6 +556,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         "project_ribbon": {
             "months": dashboard_months,
             "max_total_load": max(month_totals.values(), default=0),
+            "theme_order": theme_order,
             "items": project_ribbon,
         },
         "department_monthly": forecast_context["department_monthly"],

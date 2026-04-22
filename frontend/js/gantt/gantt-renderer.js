@@ -1167,14 +1167,27 @@ function closeSharedModal() {
     if (modalOverlay) modalOverlay.hidden = true;
 }
 
+function compareMilestoneMonth(left, right) {
+    const leftMonth = left?.month || '9999-99';
+    const rightMonth = right?.month || '9999-99';
+    if (leftMonth !== rightMonth) return leftMonth.localeCompare(rightMonth);
+    return (left?.label || '').localeCompare(right?.label || '', 'ja');
+}
+
 function themeMilestonesForEdit(theme) {
     if (Array.isArray(theme?.milestones) && theme.milestones.length > 0) {
-        return theme.milestones.map((item) => ({ month: item.month || '', label: item.label || '' }));
+        return theme.milestones
+            .map((item) => ({
+                month: item.month || '',
+                label: item.label || '',
+                is_completed: Boolean(item.is_completed),
+            }))
+            .sort(compareMilestoneMonth);
     }
     if (theme?.milestone_month) {
-        return [{ month: theme.milestone_month, label: theme.milestone_label || '' }];
+        return [{ month: theme.milestone_month, label: theme.milestone_label || '', is_completed: false }];
     }
-    return [{ month: '', label: '' }];
+    return [{ month: '', label: '', is_completed: false }];
 }
 
 async function showMilestoneModal(themeId) {
@@ -1246,7 +1259,8 @@ async function showMilestoneModal(themeId) {
                 label: row.querySelector('.theme-milestone-label')?.value.trim() || '',
                 is_completed: row.querySelector('.theme-milestone-completed')?.checked || false,
             }))
-            .filter((item) => item.month);
+            .filter((item) => item.month)
+            .sort(compareMilestoneMonth);
         const devCompleteMonth = document.getElementById('theme-dev-complete-month')?.value || null;
 
         try {

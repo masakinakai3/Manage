@@ -414,9 +414,22 @@ async function openThemeModal(theme = null) {
         const border = color === selectedColor ? 'var(--color-text)' : 'transparent';
         return `<span class="card-color-dot ${usedBy.length ? 'is-used' : ''}" style="background:${color};width:24px;height:24px;cursor:pointer;border:2px solid ${border};margin:2px" data-color="${color}" title="${title}"></span>`;
     }).join('');
+    const compareMilestoneMonth = (left, right) => {
+        const leftMonth = left?.month || '9999-99';
+        const rightMonth = right?.month || '9999-99';
+        if (leftMonth !== rightMonth) return leftMonth.localeCompare(rightMonth);
+        return (left?.label || '').localeCompare(right?.label || '', 'ja');
+    };
+    const normalizeMilestoneForEdit = (item = {}) => ({
+        month: item.month || '',
+        label: item.label || '',
+        is_completed: Boolean(item.is_completed),
+    });
     const initialMilestones = Array.isArray(theme?.milestones) && theme.milestones.length > 0
-        ? theme.milestones.map((item) => ({ month: item.month || '', label: item.label || '' }))
-        : (theme?.milestone_month ? [{ month: theme.milestone_month, label: theme.milestone_label || '' }] : [{ month: '', label: '' }]);
+        ? theme.milestones.map(normalizeMilestoneForEdit).sort(compareMilestoneMonth)
+        : (theme?.milestone_month
+            ? [{ month: theme.milestone_month, label: theme.milestone_label || '', is_completed: false }]
+            : [{ month: '', label: '', is_completed: false }]);
 
     const renderMilestoneRow = (item = { month: '', label: '', is_completed: false }) => `
         <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px;">
@@ -529,7 +542,8 @@ async function openThemeModal(theme = null) {
                     label: row.querySelector('.theme-milestone-label')?.value.trim() || '',
                     is_completed: row.querySelector('.theme-milestone-completed')?.checked || false,
                 }))
-                .filter((item) => item.month),
+                .filter((item) => item.month)
+                .sort(compareMilestoneMonth),
         };
 
         if (!payload.name) {
