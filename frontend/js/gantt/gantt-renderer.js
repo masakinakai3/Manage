@@ -47,6 +47,7 @@ let ownerFilter = '';
 let statusFilter = 'all';
 let priorityFilter = 'all';
 let groupBy = 'none';
+let selectedMonth = null;
 let collapsedThemes = new Set();
 let selectedCell = null;
 let selectionAnchor = null;
@@ -332,6 +333,9 @@ function decorateThemeSummaryRows() {
 }
 
 function bindRows() {
+    document.querySelectorAll('[data-gantt-month]').forEach((element) => element.addEventListener('click', () => {
+        setSelectedMonth(element.dataset.ganttMonth || null);
+    }));
     document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); rerenderGanttView(); }));
     document.querySelectorAll('.theme-milestone-btn').forEach((button) => button.addEventListener('click', () => showMilestoneModal(Number.parseInt(button.dataset.themeId, 10))));
     document.querySelectorAll('.gantt-summary-cell[data-theme-id]').forEach((cell) => cell.addEventListener('click', () => {
@@ -370,6 +374,7 @@ function bindRows() {
         openEditorForButton(button);
     }));
     syncSelectionStyles();
+    syncSelectedMonthStyles();
 }
 
 function themeStatusSelect(theme) {
@@ -379,12 +384,37 @@ function themeStatusSelect(theme) {
     return `<select class="theme-status theme-status-select status-${theme.status}" data-theme-id="${theme.theme_id}" aria-label="${escapeHtml(theme.name)} のステータス">${options}</select>`;
 }
 
+function themeActionButton(theme, action) {
+    const buttons = {
+        milestone: {
+            className: 'theme-milestone-btn',
+            label: `${theme.name} のマイルストーンを編集`,
+            title: 'マイルストーン',
+            icon: `
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M8 1.5 9.7 4.9l3.8.5-2.8 2.6.7 3.7L8 9.9 4.6 11.7l.7-3.7L2.5 5.4l3.8-.5L8 1.5Z" fill="currentColor" />
+                </svg>`,
+        },
+        assign: {
+            className: 'theme-assign-btn',
+            label: `${theme.name} にメンバーを追加`,
+            title: 'メンバー追加',
+            icon: `
+                <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M8 8a2.75 2.75 0 1 0 0-5.5A2.75 2.75 0 0 0 8 8Zm0 1.5c-2.67 0-4.83 1.33-5.58 3.25-.13.33.13.69.49.69h10.18c.36 0 .62-.36.49-.69C12.83 10.83 10.67 9.5 8 9.5ZM13.25 2.75a.75.75 0 0 1 .75.75V5h1.5a.75.75 0 0 1 0 1.5H14v1.5a.75.75 0 0 1-1.5 0V6.5H11a.75.75 0 0 1 0-1.5h1.5V3.5a.75.75 0 0 1 .75-.75Z" fill="currentColor" />
+                </svg>`,
+        },
+    };
+    const config = buttons[action];
+    return `<button class="btn btn-ghost btn-sm theme-action-btn ${config.className}" data-theme-id="${theme.theme_id}" type="button" title="${config.title}" aria-label="${escapeHtmlAttr(config.label)}">${config.icon}</button>`;
+}
+
 function memberCell(theme, member, month, current) {
     const allocation = allAllocations.find((item) => item.theme_id === theme.theme_id && item.member_id === member.member_id && item.month === month);
     const rate = allocation?.allocation_rate || 0;
     const warning = warnings.find((item) => item.member_id === member.member_id && item.month === month);
     const memo = allocation?.memo || '';
-    return `<td class="${month === current ? 'month-current' : ''}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${rate}" data-memo="${escapeHtml(memo)}" title="${memo || 'No memo'}" type="button">${rate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${rate}" data-memo="${escapeHtml(memo)}" title="${memo || 'No memo'}" type="button">${rate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
 }
 
 function renderDetailPanel() {
@@ -916,6 +946,17 @@ function syncSelectionStyles() {
     });
 }
 
+function setSelectedMonth(month) {
+    selectedMonth = month || null;
+    syncSelectedMonthStyles();
+}
+
+function syncSelectedMonthStyles() {
+    document.querySelectorAll('[data-gantt-month]').forEach((element) => {
+        element.classList.toggle('month-selected', Boolean(selectedMonth) && element.dataset.ganttMonth === selectedMonth);
+    });
+}
+
 function moveGridSelection(direction, extendSelection = false) {
     const currentButton = getSelectedButton();
     const currentPosition = getCellPositionFromButton(currentButton);
@@ -1335,7 +1376,7 @@ function buildSummaryTooltip(theme, month, members, totalRate) {
 function renderThemeSummaryCellMarkup(theme, month, current, members) {
     const total = sumThemeRate(theme.theme_id, month, members);
     const tooltip = escapeHtmlAttr(buildSummaryTooltip(theme, month, members, total));
-    return `<td class="${month === current ? 'month-current' : ''}"><button class="gantt-cell gantt-summary-cell ${rateClass(total)}" data-theme-id="${theme.theme_id}" data-month="${month}" title="${tooltip}" type="button">${formatSummaryCellContent(theme, total, month, members)}</button>${milestoneChips(theme, month)}</td>`;
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell gantt-summary-cell ${rateClass(total)}" data-theme-id="${theme.theme_id}" data-month="${month}" title="${tooltip}" type="button">${formatSummaryCellContent(theme, total, month, members)}</button>${milestoneChips(theme, month)}</td>`;
 }
 
 function syncFilterInputs() {
@@ -1490,7 +1531,15 @@ export function getGanttExportDataset(selectedColumns = ['Theme', 'Member', 'Dep
 export function getGanttGridExportDataset() {
     const months = getVisibleMonths(startMonth, visibleCount, scale);
     const current = currentMonth();
+    document.querySelectorAll('#gantt-thead th').forEach((header, index) => {
+        if (index === 0) return;
+        header.dataset.ganttMonth = months[index - 1];
+    });
     const themes = filterThemes();
+    document.querySelectorAll('#gantt-thead th').forEach((header, index) => {
+        if (index === 0) return;
+        header.dataset.ganttMonth = months[index - 1];
+    });
     const rows = [];
     const groups = groupBy === 'none'
         ? [{ key: '', themes }]
@@ -1682,6 +1731,10 @@ function renderTable(months) {
     renderFilterControls();
     document.getElementById('gantt-thead').innerHTML = `<tr><th>テーマ / メンバー</th>${months.map((month) => `<th class="${month === current ? 'month-current' : ''}">${formatMonthHeader(month, scale).replace('\n', '<br>')}</th>`).join('')}</tr>`;
     const rows = [];
+    document.querySelectorAll('#gantt-thead th').forEach((header, index) => {
+        if (index === 0) return;
+        header.dataset.ganttMonth = months[index - 1];
+    });
     const themes = filterThemes();
     const groups = groupBy === 'none'
         ? [{ key: '', themes }]
@@ -1694,7 +1747,7 @@ function renderTable(months) {
             const members = themeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
-            rows.push(`<tr class="gantt-row-summary" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span>${theme.name}</span></button>${priorityBadge}${themeStatusSelect(theme)}<button class="btn btn-ghost btn-sm theme-milestone-btn" data-theme-id="${theme.theme_id}" type="button">マイルストーン</button><button class="btn btn-ghost btn-sm theme-assign-btn" data-theme-id="${theme.theme_id}" type="button">メンバー追加</button></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });

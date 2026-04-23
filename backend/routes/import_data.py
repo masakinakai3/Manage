@@ -10,6 +10,7 @@ import json
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
 from models import db, Theme, ThemeMilestone, Member, Allocation, theme_members as theme_members_table
+from routes.themes import _normalize_dev_rank
 
 import_data_bp = Blueprint('import_data', __name__)
 
@@ -77,6 +78,7 @@ def import_json():
                 status=t.get('status', 'planning'),
                 color=t.get('color', '#6366f1'),
                 priority=t.get('priority', 0),
+                dev_rank=_normalize_dev_rank(t.get('dev_rank')),
                 start_month=t.get('start_month'),
                 end_month=t.get('end_month'),
                 dev_complete_month=t.get('dev_complete_month'),

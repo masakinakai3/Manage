@@ -4,6 +4,7 @@
 # https://opensource.org/licenses/mit-license.php
 #
 
+import io
 import json
 from models import db, Theme, ThemeMilestone, Member, Allocation, SavedView
 
@@ -95,6 +96,64 @@ def test_update_theme_allows_empty_dev_rank(auth_client, app):
     })
     assert response.status_code == 200
     assert response.json['dev_rank'] == ''
+
+
+def test_import_json_preserves_dev_rank(auth_client, app):
+    with app.app_context():
+        existing_theme = Theme(name='Existing Theme', dev_rank='M')
+        existing_member = Member(display_name='Existing Member')
+        db.session.add_all([existing_theme, existing_member])
+        db.session.commit()
+
+    payload = {
+        'themes': [{
+            'theme_id': 10,
+            'name': 'Imported Theme',
+            'category': 'Platform',
+            'status': 'active',
+            'color': '#123456',
+            'priority': 2,
+            'dev_rank': 'S',
+            'start_month': '2026-04',
+            'end_month': '2026-06',
+            'dev_complete_month': '2026-06',
+            'milestones': [
+                {'month': '2026-05', 'label': 'Beta', 'is_completed': False},
+            ],
+        }],
+        'members': [{
+            'member_id': 20,
+            'display_name': 'Imported Member',
+            'department': 'Platform',
+            'capacity': 100,
+            'is_active': True,
+        }],
+        'theme_members': [{
+            'theme_id': 10,
+            'member_id': 20,
+        }],
+        'allocations': [{
+            'theme_id': 10,
+            'member_id': 20,
+            'month': '2026-05',
+            'allocation_rate': 60,
+            'memo': 'Imported allocation',
+        }],
+    }
+
+    response = auth_client.post(
+        '/api/import/json',
+        data={'file': (io.BytesIO(json.dumps(payload).encode('utf-8')), 'backup.json')},
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 200
+    assert response.json['themes'] == 1
+
+    response = auth_client.get('/api/themes')
+    assert response.status_code == 200
+    assert response.json[0]['name'] == 'Imported Theme'
+    assert response.json[0]['dev_rank'] == 'S'
 
 def test_bulk_allocations(auth_client, app):
     """Test bulk update of allocations."""

@@ -319,6 +319,33 @@ describe('gantt-renderer regressions', () => {
         expect(milestones[0]?.getAttribute('title')).toContain('Theme A');
     });
 
+    it('highlights only the clicked month column', async () => {
+        visibleMonths = ['2026-04', '2026-05'];
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 30, memo: '' },
+        ];
+
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const aprilCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-04"]');
+        const mayCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-05"]');
+
+        aprilCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.querySelector('th[data-gantt-month="2026-04"]')?.classList.contains('month-selected')).toBe(true);
+        expect(document.querySelector('td[data-gantt-month="2026-04"]')?.classList.contains('month-selected')).toBe(true);
+        expect(document.querySelector('th[data-gantt-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
+
+        mayCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.querySelector('th[data-gantt-month="2026-04"]')?.classList.contains('month-selected')).toBe(false);
+        expect(document.querySelector('th[data-gantt-month="2026-05"]')?.classList.contains('month-selected')).toBe(true);
+        expect(document.querySelector('td[data-gantt-month="2026-05"]')?.classList.contains('month-selected')).toBe(true);
+    });
+
     it('adds a summary tooltip with member breakdown', async () => {
         const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
 
@@ -412,6 +439,8 @@ describe('gantt-renderer regressions', () => {
 
         const button = document.querySelector('.theme-milestone-btn');
         expect(button).not.toBeNull();
+        expect(button?.getAttribute('title')).toBe('マイルストーン');
+        expect(button?.getAttribute('aria-label')).toContain('Theme A');
 
         button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 

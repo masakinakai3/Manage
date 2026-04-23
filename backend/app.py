@@ -7,6 +7,7 @@
 #
 
 import os
+import socket
 import sys
 import time
 from flask import Flask, send_from_directory
@@ -14,10 +15,35 @@ from flask_cors import CORS
 from flask_login import LoginManager
 from models import db, User, Theme, ThemeMilestone
 
-APP_HOST = "127.0.0.1"
+APP_HOST = os.environ.get('APP_HOST', '0.0.0.0')
 APP_PORT = 5001
-APP_URL = f"http://{APP_HOST}:{APP_PORT}/"
-LOOPBACK_ORIGINS = [APP_URL.rstrip("/"), f"http://localhost:{APP_PORT}"]
+
+
+def _detect_lan_ip():
+    """Best-effort LAN address for sharing the app on the local network."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.connect(('8.8.8.8', 80))
+        detected_ip = sock.getsockname()[0]
+        if detected_ip and not detected_ip.startswith('127.'):
+            return detected_ip
+    except OSError:
+        return 'localhost'
+    finally:
+        sock.close()
+    return 'localhost'
+
+
+PUBLIC_APP_HOST = os.environ.get('APP_PUBLIC_HOST')
+if not PUBLIC_APP_HOST:
+    PUBLIC_APP_HOST = 'localhost' if APP_HOST in ('127.0.0.1', 'localhost') else _detect_lan_ip()
+
+APP_URL = f"http://{PUBLIC_APP_HOST}:{APP_PORT}/"
+LOOPBACK_ORIGINS = [
+    APP_URL.rstrip("/"),
+    f"http://localhost:{APP_PORT}",
+    f"http://127.0.0.1:{APP_PORT}",
+]
 
 
 def _resolve_dist_folder():
@@ -232,13 +258,13 @@ def _seed_admin():
 
 def _open_browser_when_ready(url, timeout_seconds=20):
     """Wait for the local server, then open the default browser."""
-    import socket
     import webbrowser
 
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         try:
-            with socket.create_connection((APP_HOST, APP_PORT), timeout=1):
+            probe_host = '127.0.0.1' if APP_HOST == '0.0.0.0' else APP_HOST
+            with socket.create_connection((probe_host, APP_PORT), timeout=1):
                 break
         except OSError:
             time.sleep(0.25)
@@ -259,6 +285,9 @@ def _open_browser_when_ready(url, timeout_seconds=20):
 
 if __name__ == '__main__':
     app = create_app()
+    print(f"[Startup] Listening on http://127.0.0.1:{APP_PORT}/")
+    if PUBLIC_APP_HOST not in ('localhost', '127.0.0.1'):
+        print(f"[Startup] LAN access URL: {APP_URL}")
     
     # When running as an executable, open the browser automatically
     if getattr(sys, 'frozen', False):
@@ -267,7 +296,7 @@ if __name__ == '__main__':
         debug_mode = False
         threading.Thread(
             target=_open_browser_when_ready,
-            args=(APP_URL,),
+            args=(f"http://127.0.0.1:{APP_PORT}/",),
             daemon=True,
         ).start()
     else:
