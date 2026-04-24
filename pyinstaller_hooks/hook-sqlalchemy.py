@@ -1,9 +1,11 @@
 """Trim SQLAlchemy packaging to the SQLite runtime used by this app."""
 
-from PyInstaller.utils.hooks import collect_submodules
 
-
-hiddenimports = collect_submodules("sqlalchemy.dialects.sqlite")
+hiddenimports = [
+    "sqlalchemy.dialects.sqlite",
+    "sqlalchemy.dialects.sqlite.base",
+    "sqlalchemy.dialects.sqlite.pysqlite",
+]
 
 excludedimports = [
     "sqlalchemy.dialects.mssql",

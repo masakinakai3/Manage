@@ -89,7 +89,7 @@ def remove_path(path):
 
 def get_preferred_python(root_dir, profile):
     venv_python = root_dir / ".venv" / "Scripts" / "python.exe"
-    if profile == "dev" and venv_python.exists():
+    if venv_python.exists():
         return venv_python
     return Path(sys.executable).resolve()
 
@@ -203,7 +203,10 @@ def sync_dev_frontend(frontend_dist, exe_path, state, frontend_input_hash, force
 
 def build_backend(root_dir, backend_dir, frontend_dist, frontend_input_hash, state, profile, python_executable, force=False):
     dist_dir = root_dir / "dist"
-    build_work_dir = root_dir / "build"
+    # Keep PyInstaller caches isolated. Sharing one work directory between
+    # onedir(dev) and onefile(release) makes profile switches invalidate the
+    # expensive Analysis cache even when app inputs are unchanged.
+    build_work_dir = root_dir / "build" / profile
     exe_path = (
         dist_dir / "manage_app.exe"
         if profile == "release"
