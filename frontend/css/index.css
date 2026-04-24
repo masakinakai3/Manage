@@ -1112,6 +1112,25 @@ body {
     flex: 1;
 }
 
+.gantt-floating-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-3);
+}
+
+.gantt-inline-period-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.gantt-inline-period-controls #shared-period-preset {
+    min-width: 220px;
+}
+
 .detail-panel {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);

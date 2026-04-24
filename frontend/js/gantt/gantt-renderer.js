@@ -85,7 +85,26 @@ export async function initGantt() {
     await refreshGantt();
 }
 
+function ensureInlinePeriodControls() {
+    const toolbar = document.querySelector('.gantt-floating-actions');
+    const scaleSwitcher = document.getElementById('scale-switcher');
+    const presetSelect = document.getElementById('shared-period-preset');
+    const monthNav = document.querySelector('.gantt-control-row-primary .month-nav');
+    if (!toolbar || !scaleSwitcher || !presetSelect || !monthNav) return;
+
+    let inlineControls = document.getElementById('gantt-inline-period-controls');
+    if (!inlineControls) {
+        inlineControls = document.createElement('div');
+        inlineControls.id = 'gantt-inline-period-controls';
+        inlineControls.className = 'gantt-inline-period-controls';
+        toolbar.appendChild(inlineControls);
+    }
+
+    inlineControls.append(scaleSwitcher, presetSelect, monthNav);
+}
+
 export async function refreshGantt() {
+    ensureInlinePeriodControls();
     const months = getVisibleMonths(startMonth, visibleCount, scale);
     const from = months[0];
     const to = months[months.length - 1];
