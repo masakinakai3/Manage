@@ -36,44 +36,138 @@ const DEV_RANK_LABELS = {
     L: 'L',
 };
 
+const ROLE_LABELS = {
+    admin: '管理者',
+    user: '一般ユーザー',
+};
+
 let currentUser = null;
 let currentView = 'gantt';
 let savedViewsCache = [];
 let lastModalTrigger = null;
+let appInitialized = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
     initUi();
+    initAuth();
     setSaveState('idle', '起動中...');
 
     try {
         currentUser = await auth.me();
     } catch (error) {
-        console.warn('Auth bootstrap fallback', error);
-        currentUser = { username: 'admin', role: 'admin' };
+        console.warn('Auth bootstrap requires login', error);
     }
 
-    await showApp();
+    if (currentUser) {
+        await showApp();
+        return;
+    }
+    showLogin();
 });
 
 async function showApp() {
+    document.getElementById('login-screen').hidden = true;
     document.getElementById('app-screen').hidden = false;
+    updateCurrentUserUi();
+    applyRoleCapabilities();
 
-    initNavigation();
-    initBackup();
-    initUiConfig();
-    await initSavedViews();
-    initOnboarding();
-    initKeyboardShortcuts();
-    document.getElementById('shortcut-help-btn')?.addEventListener('click', showShortcutHelp);
-    document.getElementById('shortcut-help-header-btn')?.addEventListener('click', showShortcutHelp);
-    initThemeManagement();
-    initMemberManagement();
+    if (!appInitialized) {
+        initNavigation();
+        initBackup();
+        initUiConfig();
+        await initSavedViews();
+        initOnboarding();
+        initKeyboardShortcuts();
+        document.getElementById('shortcut-help-btn')?.addEventListener('click', showShortcutHelp);
+        document.getElementById('shortcut-help-header-btn')?.addEventListener('click', showShortcutHelp);
+        initThemeManagement();
+        initMemberManagement();
+        initUserManagement();
 
-    await initGantt();
-    await initMemberView();
-    await initInsightsView();
+        await initGantt();
+        await initMemberView();
+        await initInsightsView();
+        appInitialized = true;
+    } else {
+        await reloadSavedViews();
+        await Promise.all([refreshGantt(), refreshMemberView(), refreshInsightsView()]);
+        initOnboarding();
+    }
 
     setSaveState('saved', '表示内容は最新です');
+}
+
+function initAuth() {
+    document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
+    document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
+}
+
+function showLogin(message = '') {
+    document.getElementById('app-screen').hidden = true;
+    document.getElementById('login-screen').hidden = false;
+    const messageElement = document.getElementById('login-message');
+    messageElement.hidden = !message;
+    messageElement.textContent = message;
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-username')?.focus();
+}
+
+async function handleLoginSubmit(event) {
+    event.preventDefault();
+    const submitButton = document.getElementById('login-submit');
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) {
+        showLogin('ユーザー名とパスワードを入力してください。');
+        return;
+    }
+
+    submitButton.disabled = true;
+    try {
+        currentUser = await auth.login(username, password);
+        await showApp();
+    } catch (error) {
+        showLogin(formatError(error, 'ログインに失敗しました。'));
+    } finally {
+        submitButton.disabled = false;
+    }
+}
+
+async function handleLogout() {
+    try {
+        await auth.logout();
+    } catch (error) {
+        console.warn('Logout failed', error);
+    } finally {
+        currentUser = null;
+        showLogin('ログアウトしました。');
+    }
+}
+
+function updateCurrentUserUi() {
+    document.getElementById('current-user-name').textContent = currentUser?.username || '-';
+    document.getElementById('current-user-role').textContent = ROLE_LABELS[currentUser?.role] || currentUser?.role || '-';
+}
+
+function applyRoleCapabilities() {
+    const isAdmin = currentUser?.role === 'admin';
+    const adminOnlyElements = document.querySelectorAll('.admin-only');
+    const exportButton = document.getElementById('export-json-btn');
+    const importLabel = document.getElementById('import-json-label');
+    const importInput = document.getElementById('import-json-input');
+    const backupHint = document.getElementById('backup-hint');
+
+    adminOnlyElements.forEach((element) => {
+        element.hidden = !isAdmin;
+    });
+    if (exportButton) exportButton.hidden = !isAdmin;
+    if (importLabel) importLabel.hidden = !isAdmin;
+    if (importInput) importInput.disabled = !isAdmin;
+    if (backupHint) {
+        backupHint.textContent = isAdmin
+            ? 'インポート前に現在のデータをエクスポートしておくと安全です。'
+            : 'バックアップのインポートとエクスポートは管理者のみ利用できます。';
+    }
 }
 
 function initNavigation() {
@@ -258,6 +352,10 @@ function initUiConfig() {
 }
 
 function switchView(viewName) {
+    if (viewName === 'users' && currentUser?.role !== 'admin') {
+        showToast('ユーザ管理は管理者のみ利用できます。', 'warning');
+        return;
+    }
     currentView = viewName;
 
     document.querySelectorAll('.nav-item').forEach((item) => {
@@ -279,6 +377,7 @@ function switchView(viewName) {
     if (viewName === 'insights') refreshInsightsView();
     if (viewName === 'themes') loadThemeList();
     if (viewName === 'members') loadMemberList();
+    if (viewName === 'users') loadUserList();
 }
 
 function initThemeManagement() {
@@ -613,6 +712,200 @@ function initMemberManagement() {
     document.getElementById('add-member-btn').addEventListener('click', () => openMemberModal());
     document.getElementById('member-list-search').addEventListener('input', loadMemberList);
     document.getElementById('member-list-sort').addEventListener('change', loadMemberList);
+}
+
+function initUserManagement() {
+    document.getElementById('add-user-btn')?.addEventListener('click', () => openUserModal());
+    document.getElementById('user-list-search')?.addEventListener('input', loadUserList);
+    document.getElementById('user-list-sort')?.addEventListener('change', loadUserList);
+}
+
+async function loadUserList() {
+    const list = document.getElementById('user-list');
+    if (!list) return;
+    const search = document.getElementById('user-list-search')?.value.trim().toLowerCase() || '';
+    const sort = document.getElementById('user-list-sort')?.value || 'name-asc';
+
+    try {
+        let users = await auth.listUsers();
+        users = users.filter((user) => {
+            if (!search) return true;
+            return [user.username, user.role].some((value) => String(value || '').toLowerCase().includes(search));
+        });
+
+        users.sort((left, right) => {
+            if (sort === 'role-asc') {
+                return String(left.role || '').localeCompare(String(right.role || ''), 'ja')
+                    || left.username.localeCompare(right.username, 'ja');
+            }
+            return left.username.localeCompare(right.username, 'ja');
+        });
+
+        if (users.length === 0) {
+            list.innerHTML = '<p class="summary-subtext">表示できるユーザがありません。</p>';
+            return;
+        }
+
+        list.innerHTML = users.map((user) => `
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">${user.username}</div>
+                    <div class="card-actions">
+                        <button class="btn btn-ghost btn-sm" data-edit-user="${user.id}" type="button">編集</button>
+                        <button class="btn btn-ghost btn-sm" data-reset-user-password="${user.id}" type="button">PW再設定</button>
+                        ${user.id === currentUser?.id ? '' : `<button class="btn btn-danger btn-sm" data-delete-user="${user.id}" type="button">削除</button>`}
+                    </div>
+                </div>
+                <div class="card-meta">
+                    <span class="status-badge ${user.role === 'admin' ? 'status-active' : 'status-done'}">${ROLE_LABELS[user.role] || user.role}</span>
+                    <span>ID ${user.id}</span>
+                    ${user.id === currentUser?.id ? '<span>現在ログイン中</span>' : ''}
+                </div>
+            </div>
+        `).join('');
+
+        list.querySelectorAll('[data-edit-user]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const user = users.find((item) => item.id === Number.parseInt(button.dataset.editUser, 10));
+                if (user) openUserModal(user);
+            });
+        });
+
+        list.querySelectorAll('[data-reset-user-password]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const user = users.find((item) => item.id === Number.parseInt(button.dataset.resetUserPassword, 10));
+                if (user) openPasswordResetModal(user);
+            });
+        });
+
+        list.querySelectorAll('[data-delete-user]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const targetId = Number.parseInt(button.dataset.deleteUser, 10);
+                const targetUser = users.find((item) => item.id === targetId);
+                const shouldDelete = await showConfirmDialog({
+                    title: 'ユーザを削除しますか',
+                    message: `${targetUser?.username || '選択したユーザ'} を削除します。ログインできなくなります。`,
+                    confirmText: '削除する',
+                    cancelText: 'キャンセル',
+                    danger: true,
+                });
+                if (!shouldDelete) return;
+
+                try {
+                    await auth.deleteUser(targetId);
+                    showToast('ユーザを削除しました。', 'success');
+                    await loadUserList();
+                } catch (error) {
+                    showToast(`ユーザ削除に失敗しました: ${formatError(error)}`, 'error');
+                }
+            });
+        });
+    } catch (error) {
+        list.innerHTML = `<p class="summary-subtext">${formatError(error, 'ユーザ一覧の取得に失敗しました。')}</p>`;
+    }
+}
+
+function openUserModal(user = null) {
+    const isEdit = Boolean(user);
+    document.getElementById('modal-title').textContent = isEdit ? 'ユーザを編集' : 'ユーザを追加';
+    document.getElementById('modal-body').innerHTML = `
+        <div class="form-field">
+            <label for="modal-user-name">ユーザ名</label>
+            <input id="modal-user-name" type="text" value="${user?.username || ''}" required>
+        </div>
+        <div class="form-field">
+            <label for="modal-user-role">権限</label>
+            <select id="modal-user-role">
+                <option value="user" ${user?.role === 'user' || !user ? 'selected' : ''}>一般ユーザー</option>
+                <option value="admin" ${user?.role === 'admin' ? 'selected' : ''}>管理者</option>
+            </select>
+        </div>
+        <div class="form-field">
+            <label for="modal-user-password">${isEdit ? '新しいパスワード（変更時のみ）' : 'パスワード'}</label>
+            <input id="modal-user-password" type="password" value="" ${isEdit ? '' : 'required'}>
+        </div>
+    `;
+    document.getElementById('modal-footer').innerHTML = `
+        <button class="btn btn-ghost" id="modal-cancel-btn" type="button">キャンセル</button>
+        <button class="btn btn-primary" id="modal-save-btn" type="button">${isEdit ? '更新する' : '追加する'}</button>
+    `;
+
+    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.getElementById('modal-overlay').hidden = false;
+    document.getElementById('modal-close').onclick = closeModal;
+    document.getElementById('modal-cancel-btn').onclick = closeModal;
+    document.getElementById('modal-save-btn').onclick = async () => {
+        const payload = {
+            username: document.getElementById('modal-user-name').value.trim(),
+            role: document.getElementById('modal-user-role').value,
+            password: document.getElementById('modal-user-password').value,
+        };
+
+        if (!payload.username) {
+            showToast('ユーザ名を入力してください。', 'warning');
+            return;
+        }
+        if (!isEdit && !payload.password) {
+            showToast('パスワードを入力してください。', 'warning');
+            return;
+        }
+        if (isEdit && !payload.password) {
+            delete payload.password;
+        }
+
+        try {
+            if (isEdit) {
+                await auth.updateUser(user.id, payload);
+                showToast('ユーザを更新しました。', 'success');
+            } else {
+                await auth.createUser(payload);
+                showToast('ユーザを追加しました。', 'success');
+            }
+            closeModal();
+            await loadUserList();
+        } catch (error) {
+            showToast(`ユーザ保存に失敗しました: ${formatError(error)}`, 'error');
+        }
+    };
+}
+
+function openPasswordResetModal(user) {
+    document.getElementById('modal-title').textContent = 'パスワード再設定';
+    document.getElementById('modal-body').innerHTML = `
+        <div class="form-field">
+            <label>対象ユーザ</label>
+            <input type="text" value="${user.username}" disabled>
+        </div>
+        <div class="form-field">
+            <label for="modal-reset-password">新しいパスワード</label>
+            <input id="modal-reset-password" type="password" value="" required>
+        </div>
+        <p class="summary-subtext">入力したパスワードで次回ログインできます。</p>
+    `;
+    document.getElementById('modal-footer').innerHTML = `
+        <button class="btn btn-ghost" id="modal-cancel-btn" type="button">キャンセル</button>
+        <button class="btn btn-primary" id="modal-save-btn" type="button">再設定する</button>
+    `;
+
+    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.getElementById('modal-overlay').hidden = false;
+    document.getElementById('modal-close').onclick = closeModal;
+    document.getElementById('modal-cancel-btn').onclick = closeModal;
+    document.getElementById('modal-save-btn').onclick = async () => {
+        const password = document.getElementById('modal-reset-password').value;
+        if (!password) {
+            showToast('新しいパスワードを入力してください。', 'warning');
+            return;
+        }
+
+        try {
+            await auth.updateUser(user.id, { username: user.username, role: user.role, password });
+            closeModal();
+            showToast(`パスワードを再設定しました: ${user.username}`, 'success');
+        } catch (error) {
+            showToast(`パスワード再設定に失敗しました: ${formatError(error)}`, 'error');
+        }
+    };
 }
 
 async function loadMemberList() {

@@ -7,10 +7,10 @@
 #
 
 import os
-import ipaddress
 import socket
 import sys
 import time
+import secrets
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager
@@ -72,9 +72,16 @@ def create_app(test_config=None):
     else:
         db_path = os.path.join(base_dir, 'database.db')
     
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+    app.config['SECRET_KEY'] = _resolve_secret_key()
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['AUTO_LOGIN'] = os.environ.get('AUTO_LOGIN', '').strip().lower() in ('1', 'true', 'yes', 'on')
+    app.config['INITIAL_ADMIN_USERNAME'] = os.environ.get('INITIAL_ADMIN_USERNAME', 'admin').strip() or 'admin'
+    app.config['INITIAL_ADMIN_PASSWORD'] = os.environ.get('INITIAL_ADMIN_PASSWORD')
+    app.config['RESET_ADMIN_USERNAME'] = os.environ.get('RESET_ADMIN_USERNAME', '').strip()
+    app.config['RESET_ADMIN_PASSWORD'] = os.environ.get('RESET_ADMIN_PASSWORD')
+    app.config['SESSION_COOKIE_HTTPONLY'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
     if test_config:
         app.config.update(test_config)
@@ -137,22 +144,22 @@ def create_app(test_config=None):
         db.create_all()
         _migrate_allocations_unique_index()
         _migrate_theme_milestones()
-        _seed_admin()
+        _seed_admin(app)
+        _reset_admin_password_if_requested(app)
 
     @app.before_request
     def auto_login():
-        """Auto-login for local/private-network desktop usage."""
+        """Optional auto-login for trusted desktop usage."""
+        if not app.config.get('AUTO_LOGIN'):
+            return
         from flask import request as flask_request
         from flask_login import current_user, login_user
-        try:
-            remote_ip = ipaddress.ip_address(flask_request.remote_addr or '')
-            is_trusted_desktop_network = remote_ip.is_loopback or remote_ip.is_private or remote_ip.is_link_local
-        except ValueError:
-            is_trusted_desktop_network = False
+        remote_addr = flask_request.remote_addr or ''
+        is_trusted_desktop_network = remote_addr.startswith('127.') or remote_addr == '::1'
         if not is_trusted_desktop_network:
             return
         if not current_user.is_authenticated:
-            user = db.session.query(User).filter_by(username='admin').first()
+            user = db.session.query(User).filter_by(username=app.config['INITIAL_ADMIN_USERNAME']).first()
             if user:
                 login_user(user)
 
@@ -254,13 +261,98 @@ def _migrate_theme_milestones():
         print(f"[Migration] Backfilled {inserted} legacy theme milestones.")
 
 
-def _seed_admin():
+def _seed_admin(app):
     """Create default admin user if none exists."""
     if User.query.filter_by(role='admin').first() is None:
-        admin = User(username='admin', role='admin')
-        admin.set_password('admin')
+        username = app.config.get('INITIAL_ADMIN_USERNAME', 'admin')
+        password = app.config.get('INITIAL_ADMIN_PASSWORD')
+        generated_password = None
+        if not password:
+            if app.config.get('TESTING'):
+                password = 'admin'
+            else:
+                generated_password = secrets.token_urlsafe(12)
+                password = generated_password
+
+        admin = User(username=username, role='admin')
+        admin.set_password(password)
         db.session.add(admin)
         db.session.commit()
+        if generated_password:
+            _write_initial_admin_password_notice(username, generated_password)
+
+
+def _reset_admin_password_if_requested(app):
+    """Allow a local operator to reset an admin password via startup config."""
+    password = app.config.get('RESET_ADMIN_PASSWORD')
+    if not password:
+        return
+
+    username = app.config.get('RESET_ADMIN_USERNAME') or app.config.get('INITIAL_ADMIN_USERNAME', 'admin')
+    user = User.query.filter_by(username=username).first()
+    if user is None:
+        print(f"[Security] Admin password reset skipped: user '{username}' was not found.")
+        return
+    if user.role != 'admin':
+        print(f"[Security] Admin password reset skipped: user '{username}' is not an admin.")
+        return
+
+    user.set_password(password)
+    db.session.commit()
+    print(f"[Security] Admin password was reset for '{username}'. Remove RESET_ADMIN_PASSWORD after use.")
+
+
+def _app_runtime_dir():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.abspath(os.path.dirname(__file__))
+
+
+def _resolve_secret_key():
+    configured = os.environ.get('SECRET_KEY')
+    if configured:
+        return configured
+
+    if 'PYTEST_CURRENT_TEST' in os.environ:
+        return 'test-secret-key'
+
+    secret_path = os.path.join(_app_runtime_dir(), 'secret_key.txt')
+    if os.path.exists(secret_path):
+        try:
+            with open(secret_path, 'r', encoding='utf-8') as handle:
+                saved = handle.read().strip()
+            if saved:
+                return saved
+        except OSError as exc:
+            print(f"[Security] Failed to read secret key file: {exc}")
+
+    generated = secrets.token_urlsafe(32)
+    try:
+        with open(secret_path, 'w', encoding='utf-8') as handle:
+            handle.write(generated)
+        print(f"[Security] Generated persistent secret key at {secret_path}")
+    except OSError as exc:
+        print(f"[Security] Failed to persist secret key: {exc}")
+        print("[Security] Falling back to an in-memory secret key for this run.")
+    return generated
+
+
+def _write_initial_admin_password_notice(username, password):
+    """Persist the generated initial admin password next to the app database."""
+    credentials_path = os.path.join(_app_runtime_dir(), 'initial_admin_password.txt')
+    message = (
+        "Initial admin account created.\n"
+        f"Username: {username}\n"
+        f"Password: {password}\n"
+        "Change this password immediately after the first login.\n"
+    )
+    try:
+        with open(credentials_path, 'w', encoding='utf-8') as handle:
+            handle.write(message)
+        print(f"[Security] Wrote generated admin password to {credentials_path}")
+    except OSError as exc:
+        print(f"[Security] Failed to write generated admin password file: {exc}")
+        print(f"[Security] Temporary admin password: {password}")
 
 
 def _open_browser_when_ready(url, timeout_seconds=20):

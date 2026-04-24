@@ -21,6 +21,8 @@ def app():
         "TESTING": True,
         "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
         "WTF_CSRF_ENABLED": False,  # Disable CSRF for testing
+        "INITIAL_ADMIN_PASSWORD": "admin",
+        "AUTO_LOGIN": False,
     })
 
     with app.app_context():
@@ -47,5 +49,21 @@ def auth_client(client):
     client.post('/api/auth/login', json={
         'username': 'admin',
         'password': 'admin'
+    })
+    return client
+
+
+@pytest.fixture
+def user_client(client, app):
+    """A helper to log in a non-admin user."""
+    with app.app_context():
+        user = User(username='user1', role='user')
+        user.set_password('userpass')
+        db.session.add(user)
+        db.session.commit()
+
+    client.post('/api/auth/login', json={
+        'username': 'user1',
+        'password': 'userpass'
     })
     return client

@@ -6,7 +6,8 @@
 
 import io
 import json
-from models import db, Theme, ThemeMilestone, Member, Allocation, SavedView
+from app import create_app
+from models import db, Theme, ThemeMilestone, Member, Allocation, SavedView, User
 
 def test_login(client):
     """Test login functionality."""
@@ -24,6 +25,92 @@ def test_login(client):
         'password': 'wrongpassword'
     })
     assert response.status_code == 401
+
+
+def test_requires_login_for_protected_api(client):
+    response = client.get('/api/themes')
+    assert response.status_code == 401
+
+
+def test_non_admin_cannot_access_admin_user_management(user_client):
+    response = user_client.get('/api/auth/users')
+    assert response.status_code == 403
+
+
+def test_non_admin_cannot_export_or_import_data(user_client):
+    export_response = user_client.get('/api/export/json')
+    assert export_response.status_code == 403
+
+    payload = {
+        'themes': [],
+        'members': [],
+        'theme_members': [],
+        'allocations': [],
+    }
+    import_response = user_client.post(
+        '/api/import/json',
+        data={'file': (io.BytesIO(json.dumps(payload).encode('utf-8')), 'backup.json')},
+        content_type='multipart/form-data',
+    )
+    assert import_response.status_code == 403
+
+
+def test_admin_can_manage_users(auth_client, app):
+    create_response = auth_client.post('/api/auth/users', json={
+        'username': 'planner',
+        'password': 'initial-pass',
+        'role': 'user',
+    })
+    assert create_response.status_code == 201
+    user_id = create_response.json['id']
+
+    list_response = auth_client.get('/api/auth/users')
+    assert list_response.status_code == 200
+    assert any(item['username'] == 'planner' for item in list_response.json)
+
+    update_response = auth_client.put(f'/api/auth/users/{user_id}', json={
+        'username': 'planner-admin',
+        'role': 'admin',
+        'password': 'next-pass',
+    })
+    assert update_response.status_code == 200
+    assert update_response.json['username'] == 'planner-admin'
+    assert update_response.json['role'] == 'admin'
+
+    with app.app_context():
+        user = db.session.get(User, user_id)
+        assert user is not None
+        assert user.check_password('next-pass')
+
+    delete_response = auth_client.delete(f'/api/auth/users/{user_id}')
+    assert delete_response.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(User, user_id) is None
+
+
+def test_admin_cannot_delete_self(auth_client, app):
+    with app.app_context():
+        admin = User.query.filter_by(username='admin').first()
+        admin_id = admin.id
+
+    response = auth_client.delete(f'/api/auth/users/{admin_id}')
+    assert response.status_code == 400
+
+
+def test_startup_can_reset_admin_password():
+    reset_app = create_app({
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+        "INITIAL_ADMIN_PASSWORD": "admin",
+        "RESET_ADMIN_PASSWORD": "rescue-pass",
+        "AUTO_LOGIN": False,
+    })
+
+    with reset_app.app_context():
+        admin = User.query.filter_by(username='admin').first()
+        assert admin is not None
+        assert admin.check_password('rescue-pass')
 
 def test_get_themes(auth_client, app):
     """Test fetching themes."""

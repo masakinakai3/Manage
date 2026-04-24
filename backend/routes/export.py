@@ -12,12 +12,12 @@ import re
 from datetime import date
 
 from flask import Blueprint, Response, request
-from flask_login import login_required
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
 from models import Allocation, Member, Theme, db
+from authz import admin_required
 
 export_bp = Blueprint('export', __name__)
 
@@ -181,7 +181,7 @@ def _export_gantt_layout(workbook, headers, rows, header_labels=None):
 
 
 @export_bp.route('/csv', methods=['POST'])
-@login_required
+@admin_required
 def export_csv():
     """Return client-generated CSV as a downloadable file."""
     if request.is_json:
@@ -208,7 +208,7 @@ def export_csv():
 
 
 @export_bp.route('/xlsx', methods=['POST'])
-@login_required
+@admin_required
 def export_xlsx():
     """Export gantt rows as an XLSX file."""
     data = request.get_json()
@@ -238,7 +238,7 @@ def export_xlsx():
 
 
 @export_bp.route('/json', methods=['GET'])
-@login_required
+@admin_required
 def export_json():
     """Export all application data as JSON.
 

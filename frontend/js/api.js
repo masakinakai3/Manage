@@ -34,6 +34,16 @@ export const auth = {
     }),
     logout: () => request('/auth/logout', { method: 'POST' }),
     me: () => request('/auth/me'),
+    listUsers: () => request('/auth/users'),
+    createUser: (data) => request('/auth/users', {
+        method: 'POST', body: JSON.stringify(data),
+    }),
+    updateUser: (id, data) => request(`/auth/users/${id}`, {
+        method: 'PUT', body: JSON.stringify(data),
+    }),
+    deleteUser: (id) => request(`/auth/users/${id}`, {
+        method: 'DELETE',
+    }),
 };
 
 // Themes

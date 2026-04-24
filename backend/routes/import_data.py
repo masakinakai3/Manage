@@ -8,15 +8,15 @@
 
 import json
 from flask import Blueprint, request, jsonify
-from flask_login import login_required
 from models import db, Theme, ThemeMilestone, Member, Allocation, theme_members as theme_members_table
+from authz import admin_required
 from routes.themes import _normalize_dev_rank
 
 import_data_bp = Blueprint('import_data', __name__)
 
 
 @import_data_bp.route('/json', methods=['POST'])
-@login_required
+@admin_required
 def import_json():
     """Replace all application data with the contents of an uploaded JSON backup.
 

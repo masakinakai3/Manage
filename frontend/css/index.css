@@ -197,6 +197,11 @@ body {
     font-size: var(--text-sm);
 }
 
+.login-form {
+    display: grid;
+    gap: var(--space-4);
+}
+
 /* ==========================================
    Forms
    ========================================== */
@@ -1358,6 +1363,25 @@ body {
     display: grid;
     gap: var(--space-2);
     margin-bottom: var(--space-4);
+}
+
+.sidebar-user-meta {
+    display: grid;
+    gap: 2px;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    text-align: left;
+}
+
+.sidebar-user-meta strong {
+    font-size: var(--text-sm);
+}
+
+.sidebar-user-meta span {
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
 }
 
 .save-state-pill {
