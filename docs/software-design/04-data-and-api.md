@@ -6,7 +6,7 @@
 
 | モデル | 主キー | 主な属性 |
 |---|---|---|
-| `Theme` | `theme_id` | `name`, `category`, `status`, `priority`, `start_month`, `end_month` |
+| `Theme` | `theme_id` | `name`, `category`, `status`, `priority`, `dev_rank`, `start_month`, `end_month`, `dev_complete_month`, `dev_complete_months` |
 | `Member` | `member_id` | `display_name`, `department`, `capacity`, `is_active` |
 | `Allocation` | `id` | `theme_id`, `member_id`, `month`, `allocation_rate`, `memo` |
 
@@ -14,8 +14,8 @@
 
 | モデル | 用途 |
 |---|---|
-| `ThemeMilestone` | テーマ内の節目管理 |
-| `SavedView` | 表示状態の保存 |
+| `ThemeMilestone` | テーマ内の節目管理。`is_completed` で完了状態を保持 |
+| `SavedView` | 表示状態の保存。`view` で対象画面を識別、`updated_at` で更新日時を追跡 |
 | `Snapshot` | 比較用状態保存 |
 | `User` | ログインユーザー |
 

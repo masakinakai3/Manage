@@ -74,7 +74,7 @@ flowchart TD
 
 | ファイル | 役割 | 備考 |
 |---|---|---|
-| `themes.py` | テーマ CRUD、担当割当、マイルストーン更新 | 旧 `milestone_month` と新 `milestones[]` を橋渡し |
+| `themes.py` | テーマ CRUD、担当割当（一括含む）、マイルストーン更新、dev_rank 管理 | 旧 `milestone_month` と新 `milestones[]` を橋渡し。`dev_complete_months` は JSON 形式で管理 |
 | `members.py` | メンバー CRUD | `active=true/false` フィルタあり |
 
 ### 4.3 配員
@@ -152,7 +152,7 @@ flowchart TD
 
 1. 既存の関連データ削除  
 2. `Member` 復元  
-3. `Theme` 復元  
-4. `ThemeMilestone` 復元  
+3. `Theme` 復元（`dev_rank`, `dev_complete_months` を含む）  
+4. `ThemeMilestone` 復元（`is_completed` を含む）  
 5. テーマ-メンバー紐付け復元  
 6. `Allocation` 復元  

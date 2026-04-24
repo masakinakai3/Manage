@@ -26,7 +26,7 @@
 
 | 機能カテゴリ | できること |
 |---|---|
-| テーマ管理 | テーマ作成、状態管理、優先度、期間、マイルストーン設定、担当メンバー紐付け |
+| テーマ管理 | テーマ作成、状態管理、優先度、開発ランク、期間、マイルストーン設定、複数開発完了月、担当メンバー紐付け（一括割当含む） |
 | メンバー管理 | メンバー作成、部署、稼働率、アクティブ/非アクティブ管理 |
 | 配員編集 | Gantt セル編集、ドラッグ&ドロップ、複数セル貼り付け、メモ保存 |
 | 負荷確認 | メンバー別負荷一覧、過負荷警告、余力確認 |
@@ -211,9 +211,11 @@ erDiagram
         string status
         string color
         int priority
+        string dev_rank
         string start_month
         string end_month
         string dev_complete_month
+        text dev_complete_months
     }
 
     theme_milestones {
@@ -248,10 +250,10 @@ erDiagram
 
 | テーブル | ポイント |
 |---|---|
-| `themes` | 旧互換の `milestone_month` / `milestone_label` を保持しつつ、実体は `theme_milestones` に寄せている |
+| `themes` | 旧互換の `milestone_month` / `milestone_label` を保持しつつ、実体は `theme_milestones` に寄せている。`dev_complete_months` は JSON 配列で複数の完了月とその完了状態を保持する |
 | `members` | `is_active` により論理的な運用停止を表現する |
 | `allocations` | `theme_id + member_id + month` に UNIQUE 制約がある |
-| `saved_views` | 画面状態を JSON 文字列として保持する |
+| `saved_views` | 画面状態を JSON 文字列として保持する。`view` でどの画面用かを識別する |
 | `snapshots` | Gantt 状態の比較用スナップショットを保持する |
 
 ## 8. API 全体像

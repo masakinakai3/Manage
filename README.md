@@ -180,6 +180,7 @@ powershell -ExecutionPolicy Bypass -File tools\run_checks.ps1
 
 - `/api/auth/*`
 - `/api/themes`
+- `/api/themes/{id}/members`, `/api/themes/{id}/members/bulk`
 - `/api/members`
 - `/api/allocations`
 - `/api/insights/overview`

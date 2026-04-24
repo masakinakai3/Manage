@@ -180,6 +180,31 @@ powershell -ExecutionPolicy Bypass -File tools\run_checks.ps1
   - DB に JSON 状態が保存される
   - 削除後に DB から消える
 
+#### A-08 開発ランク空更新
+
+- 対象: `PUT /api/themes/{id}`
+- 目的: `dev_rank` を空文字列に更新できることを確認する
+- 期待結果:
+  - `200`
+  - レスポンスの `dev_rank` が `""` になる
+
+#### A-09 JSON インポートでの dev_rank・dev_complete_months 保持
+
+- 対象: `POST /api/import/json`
+- 目的: JSON バックアップ復元時に `dev_rank` と `dev_complete_months` が保持されることを確認する
+- 期待結果:
+  - `200`
+  - 復元後のテーマに `dev_rank` が保存される
+  - 復元後のテーマに `dev_complete_months`（完了状態付き）が保存される
+
+#### A-10 Project Ribbon テーマ負荷集計
+
+- 対象: `GET /api/insights/overview`
+- 目的: Project Load Ribbon が同一テーマの複数メンバー配賦を正しく集計することを確認する
+- 期待結果:
+  - Ribbon の `total_load` が全メンバー合算値になる
+  - `projects` 配列内のテーマ `load` も合算値になる
+
 ## 6. フロントエンドテスト仕様
 
 ### 6.1 `frontend/tests/date-utils.test.js`
