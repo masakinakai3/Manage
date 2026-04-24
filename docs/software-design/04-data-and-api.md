@@ -15,7 +15,7 @@
 | モデル | 用途 |
 |---|---|
 | `ThemeMilestone` | テーマ内の節目管理。`is_completed` で完了状態を保持 |
-| `SavedView` | 表示状態の保存。`view` で対象画面を識別、`updated_at` で更新日時を追跡 |
+| `SavedView` | 表示状態の保存。`view` で対象画面を識別、`created_at` および `updated_at` で日時を追跡 |
 | `Snapshot` | 比較用状態保存 |
 | `User` | ログインユーザー |
 
@@ -89,7 +89,7 @@
 |---|---|
 | `version` | バックアップバージョン |
 | `exported_at` | エクスポート日時 |
-| `themes` | テーマ一覧 |
+| `themes` | テーマ一覧（`milestones` 配列と `dev_complete_months` を含む） |
 | `members` | メンバー一覧 |
 | `allocations` | 配員一覧 |
 | `theme_members` | テーマ-メンバー紐付け |

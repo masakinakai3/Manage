@@ -157,7 +157,7 @@ powershell -ExecutionPolicy Bypass -File tools\run_checks.ps1
 - 対象: `PUT /api/allocations/bulk`
 - 目的: 新規登録と 0 指定削除を確認する
 - 期待結果:
-  - 追加時に `updated: 1`
+  - 追加時に `updated: 1`（削除操作は件数に含まれない）
   - DB にレコードが作成される
   - `allocation_rate: 0` 更新でレコードが削除される
 
@@ -319,7 +319,7 @@ GitHub Actions の `windows-latest` 上で次を実行します。
 
 - EXE ビルド結果そのものの自動検証
 - 実ブラウザでの E2E シナリオ
-- JSON インポート / エクスポート API の詳細検証
+- JSON インポート / エクスポート API の詳細検証（A-09 で部分カバー済み）
 - スナップショット API の詳細検証
 - 権限制御の網羅的ケース
 
