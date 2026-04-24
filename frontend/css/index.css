@@ -566,9 +566,9 @@ body {
 
 .gantt-view-controls {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(360px, 0.95fr) minmax(520px, 1.25fr);
     align-items: start;
-    gap: var(--space-3);
+    gap: var(--space-2);
     flex: 1;
 }
 
@@ -584,12 +584,20 @@ body {
 .gantt-control-section {
     display: grid;
     gap: var(--space-2);
-    padding: var(--space-4);
+    padding: var(--space-3);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
-    background:
-        linear-gradient(180deg, rgba(99, 102, 241, 0.06), transparent 52%),
-        var(--color-bg);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+}
+
+.gantt-control-section:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.gantt-control-section:nth-child(3),
+#snapshot-diff-summary {
+    display: none;
 }
 
 .gantt-section-heading {
@@ -609,8 +617,7 @@ body {
 }
 
 .gantt-section-note {
-    font-size: var(--text-xs);
-    color: var(--color-text-secondary);
+    display: none;
 }
 
 .gantt-control-row {
@@ -620,27 +627,26 @@ body {
 }
 
 .gantt-control-row-primary {
-    grid-template-columns: minmax(180px, 220px) minmax(220px, 280px) auto minmax(180px, 220px);
+    grid-template-columns: minmax(160px, 220px) minmax(190px, 1fr) auto;
     align-items: center;
 }
 
 .gantt-filter-bar {
     display: grid;
-    grid-template-columns:
-        minmax(240px, 1.45fr)
-        minmax(170px, 0.95fr)
-        minmax(200px, 1.15fr)
-        minmax(170px, 0.95fr)
-        minmax(170px, 0.95fr)
-        auto;
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
     align-items: center;
     gap: var(--space-2);
 }
 
+.gantt-filter-bar #gantt-filter-reset {
+    grid-column: 1 / -1;
+}
+
 .gantt-grouping-controls {
     display: flex;
-    justify-content: flex-end;
+    justify-content: stretch;
     min-width: 0;
+    grid-column: 1 / -1;
 }
 
 .gantt-grouping-controls .view-select {
@@ -684,11 +690,7 @@ body {
 }
 
 .gantt-control-row-actions {
-    grid-template-columns:
-        minmax(300px, 1.4fr)
-        minmax(160px, 0.75fr)
-        minmax(300px, 1.25fr)
-        minmax(220px, 1fr);
+    grid-template-columns: minmax(240px, 1fr) minmax(170px, 0.7fr);
     align-items: stretch;
 }
 
@@ -1930,14 +1932,15 @@ td.out-period {
     align-self: stretch;
 }
 
-.saved-view-controls,
-.snapshot-controls {
+.saved-view-controls {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(96px, auto));
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(84px, auto));
 }
 
 .snapshot-controls {
-    grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(140px, auto);
+    grid-column: 1 / -1;
 }
 
 .toggle-nav,
@@ -1951,7 +1954,7 @@ td.out-period {
 }
 
 .toggle-nav {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
 }
 
 .toggle-nav .btn,
@@ -1971,6 +1974,14 @@ td.out-period {
 
 .insight-layout--dashboard {
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.insight-layout--ribbon-only {
+    display: none;
+}
+
+.insight-layout--dashboard .summary-card:not(.insight-card-wide) {
+    display: none;
 }
 
 .insight-card-wide {
@@ -2138,6 +2149,22 @@ td.out-period {
     padding-inline: 2px;
 }
 
+.project-ribbon__toolbar--scale {
+    justify-content: flex-end;
+}
+
+.project-ribbon__scale-control {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+}
+
+.project-ribbon__scale-control input {
+    width: 140px;
+}
+
 .project-ribbon__toolbar-hint {
     color: var(--color-text-secondary);
     font-size: var(--text-xs);
@@ -2145,9 +2172,9 @@ td.out-period {
 
 .project-ribbon__svg {
     display: block;
-    width: 100%;
+    width: auto;
     min-width: 640px;
-    height: auto;
+    height: 340px;
 }
 
 .project-ribbon__bg {
@@ -2408,6 +2435,11 @@ kbd {
         grid-template-columns: 1fr;
     }
 
+    .gantt-control-section:nth-child(2) {
+        grid-column: auto;
+        grid-row: auto;
+    }
+
     .detail-summary-grid {
         grid-template-columns: 1fr;
     }
@@ -2454,6 +2486,15 @@ kbd {
 }
 
 @media (min-width: 721px) and (max-width: 1280px) {
+    .gantt-view-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .gantt-control-section:nth-child(2) {
+        grid-column: auto;
+        grid-row: auto;
+    }
+
     .gantt-control-row-primary {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }

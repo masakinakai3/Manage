@@ -81,10 +81,28 @@ def import_json():
                 dev_rank=_normalize_dev_rank(t.get('dev_rank')),
                 start_month=t.get('start_month'),
                 end_month=t.get('end_month'),
-                dev_complete_month=t.get('dev_complete_month'),
                 milestone_month=t.get('milestone_month'),
                 milestone_label=t.get('milestone_label'),
             )
+            dev_complete_months = t.get('dev_complete_months')
+            if dev_complete_months is None:
+                dev_complete_months = [t.get('dev_complete_month')] if t.get('dev_complete_month') else []
+            elif isinstance(dev_complete_months, str):
+                dev_complete_months = [dev_complete_months]
+            normalized_dev_complete_months = []
+            seen_dev_complete_months = set()
+            for raw_month in dev_complete_months or []:
+                if isinstance(raw_month, dict):
+                    month = str(raw_month.get('month') or '').strip()
+                    is_completed = bool(raw_month.get('is_completed', False))
+                else:
+                    month = str(raw_month or '').strip()
+                    is_completed = False
+                if month and month not in seen_dev_complete_months:
+                    normalized_dev_complete_months.append({'month': month, 'is_completed': is_completed})
+                    seen_dev_complete_months.add(month)
+            new_theme.dev_complete_month = normalized_dev_complete_months[0]['month'] if normalized_dev_complete_months else None
+            new_theme.dev_complete_months = json.dumps(normalized_dev_complete_months, ensure_ascii=False) if normalized_dev_complete_months else None
             db.session.add(new_theme)
             db.session.flush()
             theme_map[t['theme_id']] = new_theme

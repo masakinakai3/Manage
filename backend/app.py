@@ -7,6 +7,7 @@
 #
 
 import os
+import ipaddress
 import socket
 import sys
 import time
@@ -140,11 +141,15 @@ def create_app(test_config=None):
 
     @app.before_request
     def auto_login():
-        """Auto-login is restricted to localhost only to avoid unintended access."""
+        """Auto-login for local/private-network desktop usage."""
         from flask import request as flask_request
         from flask_login import current_user, login_user
-        # Only auto-login from loopback addresses
-        if flask_request.remote_addr not in ('127.0.0.1', '::1'):
+        try:
+            remote_ip = ipaddress.ip_address(flask_request.remote_addr or '')
+            is_trusted_desktop_network = remote_ip.is_loopback or remote_ip.is_private or remote_ip.is_link_local
+        except ValueError:
+            is_trusted_desktop_network = False
+        if not is_trusted_desktop_network:
             return
         if not current_user.is_authenticated:
             user = db.session.query(User).filter_by(username='admin').first()
@@ -211,6 +216,8 @@ def _migrate_theme_milestones():
         statements.append("ALTER TABLE themes ADD COLUMN milestone_label VARCHAR(200)")
     if 'dev_complete_month' not in existing_columns:
         statements.append("ALTER TABLE themes ADD COLUMN dev_complete_month VARCHAR(7)")
+    if 'dev_complete_months' not in existing_columns:
+        statements.append("ALTER TABLE themes ADD COLUMN dev_complete_months TEXT")
     if 'dev_rank' not in existing_columns:
         statements.append("ALTER TABLE themes ADD COLUMN dev_rank VARCHAR(1) NOT NULL DEFAULT 'M'")
 

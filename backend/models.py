@@ -1,6 +1,7 @@
 """SQLAlchemy models for the Resource Management Tool."""
 
 from datetime import datetime, timezone
+import json
 #
 # Copyright (c) 2026 Masaki Nakai (https://github.com/masakinakai3)
 # Released under the MIT license
@@ -83,6 +84,7 @@ class Theme(db.Model):
     milestone_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
     milestone_label = db.Column(db.String(200), nullable=True)
     dev_complete_month = db.Column(db.String(7), nullable=True)  # 'YYYY-MM'
+    dev_complete_months = db.Column(db.Text, nullable=True)  # JSON array of 'YYYY-MM'
 
     allocations = db.relationship('Allocation', backref='theme', lazy='dynamic',
                                   cascade='all, delete-orphan')
@@ -97,6 +99,30 @@ class Theme(db.Model):
 
     def to_dict(self):
         milestones = [milestone.to_dict() for milestone in self.milestones]
+        dev_complete_months = []
+        if self.dev_complete_months:
+            try:
+                parsed = json.loads(self.dev_complete_months)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        if isinstance(item, dict):
+                            month = str(item.get('month') or '').strip()
+                            if month:
+                                dev_complete_months.append({
+                                    'month': month,
+                                    'is_completed': bool(item.get('is_completed', False)),
+                                })
+                        else:
+                            month = str(item or '').strip()
+                            if month:
+                                dev_complete_months.append({
+                                    'month': month,
+                                    'is_completed': False,
+                                })
+            except (TypeError, ValueError):
+                dev_complete_months = []
+        if self.dev_complete_month and not any(item['month'] == self.dev_complete_month for item in dev_complete_months):
+            dev_complete_months.insert(0, {'month': self.dev_complete_month, 'is_completed': False})
         return {
             'theme_id': self.theme_id,
             'name': self.name,
@@ -108,6 +134,7 @@ class Theme(db.Model):
             'start_month': self.start_month,
             'end_month': self.end_month,
             'dev_complete_month': self.dev_complete_month,
+            'dev_complete_months': dev_complete_months,
             'milestones': milestones,
             'milestone_month': self.milestone_month,
             'milestone_label': self.milestone_label,

@@ -6,6 +6,7 @@ import { formatError, setBusyState } from './ui.js';
 let currentState = loadViewState();
 let ribbonOverlayInitialized = false;
 let activeRibbonData = null;
+let ribbonXAxisScale = Number.parseFloat(localStorage.getItem('project_ribbon_x_scale') || '1');
 const SMALL_RIBBON_LOAD_THRESHOLD = 30;
 
 const HEALTH_CATEGORY_LABELS = {
@@ -32,10 +33,6 @@ export async function refreshInsightsView() {
     try {
         setBusyState(true, 'インサイトを読み込み中...');
         const overview = await insights.overview(from, toEnd);
-        simplifyInsightsLayout();
-        renderSummary(overview.summary || {});
-        renderHealthChecks(overview.health_checks || [], overview.health_groups || []);
-        renderRecommendations(overview.recommendations || []);
         renderProjectRibbon('dashboard-project-ribbon', overview.dashboard?.project_ribbon || {});
     } catch (error) {
         renderError(formatError(error, 'インサイトの読み込みに失敗しました。'));
@@ -318,9 +315,13 @@ function renderProjectRibbon(targetId, ribbonData) {
 
     activeRibbonData = ribbonData;
     target.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: false });
+    bindRibbonScaleControls(target);
 
     const interactiveRibbon = target.querySelector('.project-ribbon--interactive');
-    interactiveRibbon?.addEventListener('click', () => openRibbonFullscreen(ribbonData));
+    interactiveRibbon?.addEventListener('click', (event) => {
+        if (event.target?.closest?.('.project-ribbon__toolbar')) return;
+        openRibbonFullscreen(ribbonData);
+    });
     interactiveRibbon?.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
@@ -331,7 +332,8 @@ function renderProjectRibbon(targetId, ribbonData) {
 
 function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
     const items = fullscreen ? trimRibbonItemsForFullscreen(ribbonData.items || []) : (ribbonData.items || []);
-    const width = Math.max(fullscreen ? 1120 : 640, items.length * (fullscreen ? 220 : 140));
+    const xScale = Math.min(1.4, Math.max(0.45, ribbonXAxisScale || 1));
+    const width = Math.max(fullscreen ? 1120 : 640, items.length * (fullscreen ? 220 : 140) * xScale);
     const height = fullscreen ? 760 : 340;
     const padding = fullscreen
         ? { top: 28, right: 24, bottom: 72, left: 56 }
@@ -556,6 +558,13 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         .map(([themeId]) => monthSegments.flatMap((item) => item.segments).find((segment) => segment.theme_id === themeId))
         .filter(Boolean);
 
+    const scaleControl = `
+        <label class="project-ribbon__scale-control">
+            <span>時間軸</span>
+            <input type="range" min="45" max="140" step="5" value="${Math.round(xScale * 100)}" data-ribbon-x-scale>
+            <span>${Math.round(xScale * 100)}%</span>
+        </label>
+    `;
     const fullscreenControls = fullscreen ? `
         <div class="project-ribbon__toolbar">
             <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="prev">前へ</button>
@@ -567,6 +576,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
     return `
         <div class="project-ribbon ${fullscreen ? 'project-ribbon--fullscreen' : 'project-ribbon--interactive'}" ${fullscreen ? '' : 'role="button" tabindex="0" aria-label="Open project load ribbon fullscreen"'}>
             ${fullscreenControls}
+            <div class="project-ribbon__toolbar project-ribbon__toolbar--scale">${scaleControl}</div>
             <div class="project-ribbon__scroll" ${fullscreen ? `data-ribbon-step="${step}" data-ribbon-width="${width}"` : ''}>
                 <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-label="Project load ribbon chart">
                     <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>
@@ -657,6 +667,7 @@ function openRibbonFullscreen(ribbonData = activeRibbonData) {
 
     activeRibbonData = ribbonData;
     content.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: true });
+    bindRibbonScaleControls(content);
     bindRibbonFullscreenNavigation(content);
     overlay.hidden = false;
 }
@@ -697,6 +708,27 @@ function bindRibbonFullscreenNavigation(container) {
             const scale = svg ? svg.clientWidth / viewWidth : 1;
             const amount = Math.max(viewStep * scale, scrollEl.clientWidth * 0.4, 160);
             scrollEl.scrollBy({ left: direction * amount, behavior: 'smooth' });
+        });
+    });
+}
+
+function bindRibbonScaleControls(container) {
+    container.querySelectorAll('[data-ribbon-x-scale]').forEach((input) => {
+        input.addEventListener('click', (event) => event.stopPropagation());
+        input.addEventListener('input', () => {
+            ribbonXAxisScale = Math.min(1.4, Math.max(0.45, Number(input.value) / 100));
+            localStorage.setItem('project_ribbon_x_scale', String(ribbonXAxisScale));
+            if (!activeRibbonData) return;
+
+            renderProjectRibbon('dashboard-project-ribbon', activeRibbonData);
+
+            const overlay = document.getElementById('ribbon-fullscreen-overlay');
+            const content = document.getElementById('ribbon-fullscreen-content');
+            if (overlay && content && !overlay.hidden) {
+                content.innerHTML = buildProjectRibbonMarkup(activeRibbonData, { fullscreen: true });
+                bindRibbonScaleControls(content);
+                bindRibbonFullscreenNavigation(content);
+            }
         });
     });
 }
@@ -865,25 +897,10 @@ renderRecommendations = function(items) {
 };
 
 function renderError(message) {
-    [
-        'insights-summary',
-        'insights-gap-overview',
-        'insights-department-imbalance',
-        'insights-forecast-watch',
-        'health-check-list',
-        'recommendation-list',
-        'dashboard-monthly-trend',
-        'dashboard-project-ribbon',
-        'dashboard-department-load',
-        'dashboard-impact-themes',
-        'dashboard-forecast-table',
-        'dashboard-health-groups',
-    ].forEach((targetId) => {
-        const target = document.getElementById(targetId);
-        if (target) {
-            target.innerHTML = `<div class="empty-panel">${escapeHtml(message)}</div>`;
-        }
-    });
+    const target = document.getElementById('dashboard-project-ribbon');
+    if (target) {
+        target.innerHTML = `<div class="empty-panel">${escapeHtml(message)}</div>`;
+    }
 
     closeRibbonFullscreen();
 }

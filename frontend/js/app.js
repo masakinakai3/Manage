@@ -57,8 +57,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function showApp() {
     document.getElementById('app-screen').hidden = false;
-    document.getElementById('user-name').textContent = currentUser.username;
-    document.getElementById('user-avatar').textContent = currentUser.username[0].toUpperCase();
 
     initNavigation();
     initBackup();
@@ -84,16 +82,6 @@ function initNavigation() {
             event.preventDefault();
             switchView(item.dataset.view);
         });
-    });
-
-    document.getElementById('logout-btn').addEventListener('click', async () => {
-        try {
-            setBusyState(true, 'ログアウトしています...');
-            await auth.logout();
-        } finally {
-            setBusyState(false);
-            location.reload();
-        }
     });
 
     document.addEventListener('keydown', (event) => {
@@ -430,6 +418,22 @@ async function openThemeModal(theme = null) {
         : (theme?.milestone_month
             ? [{ month: theme.milestone_month, label: theme.milestone_label || '', is_completed: false }]
             : [{ month: '', label: '', is_completed: false }]);
+    const compareMonthValues = (left, right) => (left || '9999-99').localeCompare(right || '9999-99');
+    const initialDevCompleteItems = (Array.isArray(theme?.dev_complete_months)
+        ? theme.dev_complete_months
+        : (theme?.dev_complete_month ? [theme.dev_complete_month] : []))
+        .map((item) => {
+            if (item && typeof item === 'object') {
+                return {
+                    month: String(item.month || '').trim(),
+                    is_completed: Boolean(item.is_completed),
+                };
+            }
+            return { month: String(item || '').trim(), is_completed: false };
+        })
+        .filter((item) => item.month)
+        .filter((item, index, list) => list.findIndex((candidate) => candidate.month === item.month) === index)
+        .sort((left, right) => compareMonthValues(left.month, right.month));
 
     const renderMilestoneRow = (item = { month: '', label: '', is_completed: false }) => `
         <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px;">
@@ -437,6 +441,13 @@ async function openThemeModal(theme = null) {
             <input class="theme-milestone-label" type="text" value="${item.label || ''}" placeholder="例: リリース">
             <label style="display:flex;align-items:center;gap:4px;font-size:var(--text-sm);margin:0;"><input class="theme-milestone-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
             <button class="btn btn-ghost btn-sm theme-milestone-remove" type="button">削除</button>
+        </div>
+    `;
+    const renderDevCompleteRow = (item = { month: '', is_completed: false }) => `
+        <div class="theme-dev-complete-row" style="display:grid;grid-template-columns:140px auto auto;gap:8px;align-items:center;margin-bottom:8px;">
+            <input class="theme-dev-complete-month" type="month" value="${item.month || ''}">
+            <label style="display:flex;align-items:center;gap:4px;font-size:var(--text-sm);margin:0;"><input class="theme-dev-complete-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
+            <button class="btn btn-ghost btn-sm theme-dev-complete-remove" type="button">削除</button>
         </div>
     `;
 
@@ -472,7 +483,8 @@ async function openThemeModal(theme = null) {
         <div class="form-field">
             <label>開発完了月</label>
             <div style="display:flex;align-items:center;gap:8px;">
-                <input id="modal-theme-dev-complete" class="milestone-month-input" type="month" value="${theme?.dev_complete_month || ''}" style="flex:1;">
+                <div id="theme-dev-complete-editor" style="flex:1;">${(initialDevCompleteItems.length ? initialDevCompleteItems : [{ month: '', is_completed: false }]).map((item) => renderDevCompleteRow(item)).join('')}</div>
+                <button class="btn btn-ghost btn-sm" id="theme-dev-complete-add" type="button">追加</button>
                 <span class="summary-subtext" style="white-space:nowrap;">★ 総計欄に表示されます</span>
             </div>
         </div>
@@ -497,6 +509,25 @@ async function openThemeModal(theme = null) {
             document.getElementById('modal-theme-color').value = dot.dataset.color;
         });
     });
+
+    const devCompleteEditor = document.getElementById('theme-dev-complete-editor');
+    const bindDevCompleteRows = () => {
+        devCompleteEditor.querySelectorAll('.theme-dev-complete-remove').forEach((button) => {
+            button.onclick = () => {
+                const rows = devCompleteEditor.querySelectorAll('.theme-dev-complete-row');
+                if (rows.length === 1) {
+                    rows[0].querySelector('.theme-dev-complete-month').value = '';
+                    return;
+                }
+                button.closest('.theme-dev-complete-row')?.remove();
+            };
+        });
+    };
+    document.getElementById('theme-dev-complete-add').onclick = () => {
+        devCompleteEditor.insertAdjacentHTML('beforeend', renderDevCompleteRow());
+        bindDevCompleteRows();
+    };
+    bindDevCompleteRows();
 
     const milestoneEditor = document.getElementById('theme-milestones-editor');
     const bindMilestoneRows = () => {
@@ -535,7 +566,14 @@ async function openThemeModal(theme = null) {
             dev_rank: document.getElementById('modal-theme-dev-rank').value,
             color: document.getElementById('modal-theme-color').value,
             priority: Number.parseInt(document.getElementById('modal-theme-priority').value || '0', 10),
-            dev_complete_month: document.getElementById('modal-theme-dev-complete')?.value || null,
+            dev_complete_months: Array.from(devCompleteEditor.querySelectorAll('.theme-dev-complete-row'))
+                .map((row) => ({
+                    month: row.querySelector('.theme-dev-complete-month')?.value || '',
+                    is_completed: row.querySelector('.theme-dev-complete-completed')?.checked || false,
+                }))
+                .filter((item) => item.month)
+                .filter((item, index, list) => list.findIndex((candidate) => candidate.month === item.month) === index)
+                .sort((left, right) => compareMonthValues(left.month, right.month)),
             milestones: Array.from(document.querySelectorAll('#theme-milestones-editor .theme-milestone-row'))
                 .map((row) => ({
                     month: row.querySelector('.theme-milestone-month')?.value || '',

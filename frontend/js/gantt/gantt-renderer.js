@@ -334,7 +334,8 @@ function decorateThemeSummaryRows() {
 
 function bindRows() {
     document.querySelectorAll('[data-gantt-month]').forEach((element) => element.addEventListener('click', () => {
-        setSelectedMonth(element.dataset.ganttMonth || null);
+        const month = element.dataset.ganttMonth || null;
+        setSelectedMonth(selectedMonth === month ? null : month);
     }));
     document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); rerenderGanttView(); }));
     document.querySelectorAll('.theme-milestone-btn').forEach((button) => button.addEventListener('click', () => showMilestoneModal(Number.parseInt(button.dataset.themeId, 10))));
@@ -1231,6 +1232,29 @@ function themeMilestonesForEdit(theme) {
     return [{ month: '', label: '', is_completed: false }];
 }
 
+function compareMonthValues(left, right) {
+    return (left || '9999-99').localeCompare(right || '9999-99');
+}
+
+function getThemeDevCompleteItems(theme) {
+    const source = Array.isArray(theme?.dev_complete_months)
+        ? theme.dev_complete_months
+        : (theme?.dev_complete_month ? [theme.dev_complete_month] : []);
+    return source
+        .map((item) => {
+            if (item && typeof item === 'object') {
+                return {
+                    month: String(item.month || '').trim(),
+                    is_completed: Boolean(item.is_completed),
+                };
+            }
+            return { month: String(item || '').trim(), is_completed: false };
+        })
+        .filter((item) => item.month)
+        .filter((item, index, list) => list.findIndex((candidate) => candidate.month === item.month) === index)
+        .sort((left, right) => compareMonthValues(left.month, right.month));
+}
+
 async function showMilestoneModal(themeId) {
     const theme = allThemes.find((item) => item.theme_id === themeId);
     if (!theme) return;
@@ -1239,6 +1263,14 @@ async function showMilestoneModal(themeId) {
     const modalBody = document.getElementById('modal-body');
     const modalFooter = document.getElementById('modal-footer');
     const modalOverlay = document.getElementById('modal-overlay');
+    const renderDevCompleteRow = (item = { month: '', is_completed: false }) => `
+        <div class="theme-dev-complete-row" style="display:grid;grid-template-columns:140px auto auto;gap:8px;align-items:center;margin-bottom:8px;">
+            <input class="theme-dev-complete-month" type="month" value="${escapeHtml(item.month || '')}">
+            <label style="display:flex;align-items:center;gap:4px;font-size:var(--text-sm);margin:0;"><input class="theme-dev-complete-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
+            <button class="btn btn-ghost btn-sm theme-dev-complete-remove" type="button">削除</button>
+        </div>
+    `;
+    const initialDevCompleteItems = getThemeDevCompleteItems(theme);
 
     const renderRow = (item = { month: '', label: '', is_completed: false }) => `
         <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px;">
@@ -1254,7 +1286,8 @@ async function showMilestoneModal(themeId) {
         <div class="form-field">
             <label>開発完了月</label>
             <div style="display:flex;align-items:center;gap:8px;">
-                <input id="theme-dev-complete-month" class="milestone-month-input" type="month" value="${escapeHtml(theme.dev_complete_month || '')}" style="flex:1;">
+                <div id="theme-dev-complete-editor" style="flex:1;">${(initialDevCompleteItems.length ? initialDevCompleteItems : [{ month: '', is_completed: false }]).map((item) => renderDevCompleteRow(item)).join('')}</div>
+                <button class="btn btn-ghost btn-sm" id="theme-dev-complete-add" type="button">追加</button>
                 <span class="summary-subtext" style="white-space:nowrap;">★ 総計欄に表示されます</span>
             </div>
         </div>
@@ -1269,6 +1302,25 @@ async function showMilestoneModal(themeId) {
         <button class="btn btn-primary" id="modal-save-btn" type="button">保存する</button>
     `;
     modalOverlay.hidden = false;
+
+    const devCompleteEditor = document.getElementById('theme-dev-complete-editor');
+    const bindDevCompleteRows = () => {
+        devCompleteEditor.querySelectorAll('.theme-dev-complete-remove').forEach((button) => {
+            button.onclick = () => {
+                const rows = devCompleteEditor.querySelectorAll('.theme-dev-complete-row');
+                if (rows.length === 1) {
+                    rows[0].querySelector('.theme-dev-complete-month').value = '';
+                    return;
+                }
+                button.closest('.theme-dev-complete-row')?.remove();
+            };
+        });
+    };
+    document.getElementById('theme-dev-complete-add').onclick = () => {
+        devCompleteEditor.insertAdjacentHTML('beforeend', renderDevCompleteRow());
+        bindDevCompleteRows();
+    };
+    bindDevCompleteRows();
 
     const editor = document.getElementById('theme-milestones-editor');
     const bindMilestoneRows = () => {
@@ -1302,11 +1354,18 @@ async function showMilestoneModal(themeId) {
             }))
             .filter((item) => item.month)
             .sort(compareMilestoneMonth);
-        const devCompleteMonth = document.getElementById('theme-dev-complete-month')?.value || null;
+        const devCompleteMonths = Array.from(devCompleteEditor.querySelectorAll('.theme-dev-complete-row'))
+            .map((row) => ({
+                month: row.querySelector('.theme-dev-complete-month')?.value || '',
+                is_completed: row.querySelector('.theme-dev-complete-completed')?.checked || false,
+            }))
+            .filter((item) => item.month)
+            .filter((item, index, list) => list.findIndex((candidate) => candidate.month === item.month) === index)
+            .sort((left, right) => compareMonthValues(left.month, right.month));
 
         try {
             setSaveState('saving', 'マイルストーンを保存しています...');
-            await themesApi.update(themeId, { milestones, dev_complete_month: devCompleteMonth || null });
+            await themesApi.update(themeId, { milestones, dev_complete_months: devCompleteMonths });
             closeSharedModal();
             setSaveState('saved', 'マイルストーンを保存しました');
             showToast('マイルストーンを保存しました。', 'success');
@@ -1599,7 +1658,7 @@ function formatMemberExportLabel(member) {
 
 function buildSummaryExportCell(theme, month, members, current) {
     const rate = sumThemeRate(theme.theme_id, month, members);
-    const isDevComplete = Boolean(theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale));
+    const isDevComplete = getThemeDevCompleteItems(theme).some((item) => monthBucketIncludes(item.month, month, scale));
     const milestones = getThemeMilestones(theme)
         .filter((item) => monthBucketIncludes(item.month, month, scale))
         .map((item) => item.label || 'Milestone');
@@ -1625,9 +1684,10 @@ function buildSummaryExportCell(theme, month, members, current) {
 }
 
 function formatSummaryCellContent(theme, totalRate, month, members) {
-    const isDevComplete = theme.dev_complete_month && monthBucketIncludes(theme.dev_complete_month, month, scale);
+    const devCompleteItem = getThemeDevCompleteItems(theme).find((item) => monthBucketIncludes(item.month, month, scale));
+    const isDevComplete = Boolean(devCompleteItem);
     const primaryLabel = isDevComplete
-        ? `<span class="gantt-star-label" title="開発完了月">★${formatRateValue(totalRate) || ''}</span>`
+        ? `<span class="gantt-star-label ${devCompleteItem.is_completed ? 'completed' : ''}" title="開発完了月">★${formatRateValue(totalRate) || ''}</span>`
         : `<span class="gantt-summary-value">${formatRateValue(totalRate)}</span>`;
     return `${primaryLabel}${diffChip(totalRate, month, theme.theme_id, null, members)}`;
 }
@@ -1746,9 +1806,10 @@ function renderTable(months) {
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
+            const completedRowClass = theme.status === 'completed' ? ' theme-row-completed' : '';
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
-            rows.push(`<tr class="gantt-row-summary" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+            rows.push(`<tr class="gantt-row-summary${completedRowClass}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
+            members.forEach((member) => rows.push(`<tr class="gantt-row-member${completedRowClass} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
 

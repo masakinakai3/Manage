@@ -6,6 +6,8 @@
 
 """Theme CRUD routes."""
 
+import json
+
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
 from models import db, Theme, ThemeMilestone, Allocation, Member
@@ -41,6 +43,33 @@ def _normalize_milestones(data):
             'is_completed': item.get('is_completed', False),
         })
     return milestones
+
+
+def _normalize_dev_complete_months(data):
+    raw_months = data.get('dev_complete_months')
+    if raw_months is None:
+        raw_months = [data.get('dev_complete_month')] if data.get('dev_complete_month') else []
+    elif isinstance(raw_months, str):
+        raw_months = [raw_months]
+
+    items = []
+    seen_months = set()
+    for raw_month in raw_months or []:
+        if isinstance(raw_month, dict):
+            month = str(raw_month.get('month') or '').strip()
+            is_completed = bool(raw_month.get('is_completed', False))
+        else:
+            month = str(raw_month or '').strip()
+            is_completed = False
+        if month and month not in seen_months:
+            items.append({'month': month, 'is_completed': is_completed})
+            seen_months.add(month)
+    return items
+
+
+def _set_dev_complete_months(theme, items):
+    theme.dev_complete_month = items[0]['month'] if items else None
+    theme.dev_complete_months = json.dumps(items, ensure_ascii=False) if items else None
 
 
 def _replace_theme_milestones(theme, items):
@@ -100,8 +129,8 @@ def create_theme():
         dev_rank=_normalize_dev_rank(data.get('dev_rank')),
         start_month=data.get('start_month'),
         end_month=data.get('end_month'),
-        dev_complete_month=data.get('dev_complete_month'),
     )
+    _set_dev_complete_months(theme, _normalize_dev_complete_months(data))
     _replace_theme_milestones(theme, _normalize_milestones(data))
     db.session.add(theme)
     db.session.commit()
@@ -115,12 +144,15 @@ def update_theme(theme_id):
     if not theme:
         return jsonify({'error': 'Not found'}), 404
     data = request.get_json()
-    for field in ('name', 'category', 'status', 'color', 'priority', 'dev_rank', 'start_month', 'end_month', 'dev_complete_month'):
+    for field in ('name', 'category', 'status', 'color', 'priority', 'dev_rank', 'start_month', 'end_month'):
         if field in data:
             if field == 'dev_rank':
                 setattr(theme, field, _normalize_dev_rank(data[field]))
             else:
                 setattr(theme, field, data[field])
+
+    if 'dev_complete_months' in data or 'dev_complete_month' in data:
+        _set_dev_complete_months(theme, _normalize_dev_complete_months(data))
 
     if 'milestones' in data or 'milestone_month' in data or 'milestone_label' in data:
         _replace_theme_milestones(theme, _normalize_milestones(data))

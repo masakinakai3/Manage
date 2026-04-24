@@ -17,6 +17,7 @@ let startMonth = addMonths(currentMonth(), -1);
 let visibleCount = 14;
 let scale = 1;
 let memberSearchQuery = '';
+let selectedMonth = null;
 
 export async function initMemberView() {
     const state = loadViewState();
@@ -227,7 +228,7 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
             const { barHtml, details } = buildStackedBar(month, memberThemes, member.capacity);
             const detailsJson = details.length > 0 ? encodeURIComponent(JSON.stringify(details)) : '';
 
-            html += `<td class="${month === current ? 'month-current' : ''}" data-member-cell="${member.member_id}-${month}" data-member-id="${member.member_id}" data-month="${month}" data-details="${detailsJson}">`;
+            html += `<td class="${month === current ? 'month-current' : ''}" data-member-month="${month}" data-member-cell="${member.member_id}-${month}" data-member-id="${member.member_id}" data-month="${month}" data-details="${detailsJson}">`;
             if (load > 0) {
                 html += `<div class="member-cell-inner"><span class="load-cell ${className}">${load}%</span>${barHtml}</div>`;
             }
@@ -247,7 +248,7 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
 
             months.forEach((month) => {
                 const rate = aggregateRate(themeLoads, month, scale);
-                html += `<td class="member-theme-cell ${month === current ? 'month-current' : ''}" data-member="${member.member_id}" data-theme="${themeId}" data-month="${month}" data-rate="${rate}">`;
+                html += `<td class="member-theme-cell ${month === current ? 'month-current' : ''}" data-member-month="${month}" data-member="${member.member_id}" data-theme="${themeId}" data-month="${month}" data-rate="${rate}">`;
                 html += renderMemberThemeCellContent(theme, member, month, rate);
                 html += `</td>`;
             });
@@ -259,6 +260,7 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
     tbody.innerHTML = html || `<tr><td colspan="${months.length + 1}" class="summary-subtext">条件に一致するメンバーがありません。</td></tr>`;
 
     bindTableInteractions(tbody);
+    syncSelectedMonthStyles();
 }
 
 function renderHeader(months) {
@@ -267,7 +269,7 @@ function renderHeader(months) {
     let html = '<tr><th>メンバー</th>';
     months.forEach((month) => {
         const label = formatMonthHeader(month, scale);
-        html += `<th class="${month === current ? 'month-current' : ''}">${label.replace('\n', '<br>')}</th>`;
+        html += `<th class="${month === current ? 'month-current' : ''}" data-member-month="${month}">${label.replace('\n', '<br>')}</th>`;
     });
     html += '</tr>';
     thead.innerHTML = html;
@@ -328,6 +330,13 @@ function buildStackedBar(month, memberThemes, capacity) {
 }
 
 function bindTableInteractions(tbody) {
+    document.querySelectorAll('[data-member-month]').forEach((element) => {
+        element.addEventListener('click', () => {
+            const month = element.dataset.memberMonth || null;
+            setSelectedMonth(selectedMonth === month ? null : month);
+        });
+    });
+
     tbody.querySelectorAll('.toggle-btn').forEach((button) => {
         button.addEventListener('click', (event) => {
             event.stopPropagation();
@@ -379,6 +388,17 @@ function bindTableInteractions(tbody) {
                 moveEditorFocus(cell, direction);
             });
         });
+    });
+}
+
+function setSelectedMonth(month) {
+    selectedMonth = month || null;
+    syncSelectedMonthStyles();
+}
+
+function syncSelectedMonthStyles() {
+    document.querySelectorAll('[data-member-month]').forEach((element) => {
+        element.classList.toggle('month-selected', Boolean(selectedMonth) && element.dataset.memberMonth === selectedMonth);
     });
 }
 
@@ -490,6 +510,24 @@ function getThemeMilestones(theme) {
     return [];
 }
 
+function getThemeDevCompleteItems(theme) {
+    const source = Array.isArray(theme?.dev_complete_months)
+        ? theme.dev_complete_months
+        : (theme?.dev_complete_month ? [theme.dev_complete_month] : []);
+    return source
+        .map((item) => {
+            if (item && typeof item === 'object') {
+                return {
+                    month: String(item.month || '').trim(),
+                    is_completed: Boolean(item.is_completed),
+                };
+            }
+            return { month: String(item || '').trim(), is_completed: false };
+        })
+        .filter((item) => item.month)
+        .filter((item, index, list) => list.findIndex((candidate) => candidate.month === item.month) === index);
+}
+
 function milestoneBadges(theme, month) {
     const matches = getThemeMilestones(theme)
         .filter((item) => monthBucketIncludes(item.month, month, scale));
@@ -505,9 +543,10 @@ function milestoneBadges(theme, month) {
 }
 
 function devCompleteBadge(theme, month, rate) {
-    if (!theme?.dev_complete_month || !monthBucketIncludes(theme.dev_complete_month, month, scale)) return '';
+    const item = getThemeDevCompleteItems(theme).find((candidate) => monthBucketIncludes(candidate.month, month, scale));
+    if (!item) return '';
     const label = rate > 0 ? `★${rate}%` : '★';
-    return `<span class="member-theme-dev-complete" title="開発完了月">${label}</span>`;
+    return `<span class="member-theme-dev-complete${item.is_completed ? ' completed' : ''}" title="開発完了月">${label}</span>`;
 }
 
 function escapeHtml(value) {

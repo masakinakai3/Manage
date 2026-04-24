@@ -49,6 +49,10 @@ def test_create_theme(auth_client):
             {'month': '2026-06', 'label': 'Release'},
             {'month': '2026-08', 'label': 'Audit'},
         ],
+        'dev_complete_months': [
+            {'month': '2026-07', 'is_completed': True},
+            {'month': '2026-09', 'is_completed': False},
+        ],
     })
     assert response.status_code == 201
     assert response.json['name'] == 'New Theme'
@@ -57,6 +61,11 @@ def test_create_theme(auth_client):
     assert response.json['milestone_label'] == 'Release'
     assert [item['month'] for item in response.json['milestones']] == ['2026-06', '2026-08']
     assert [item['label'] for item in response.json['milestones']] == ['Release', 'Audit']
+    assert response.json['dev_complete_month'] == '2026-07'
+    assert response.json['dev_complete_months'] == [
+        {'month': '2026-07', 'is_completed': True},
+        {'month': '2026-09', 'is_completed': False},
+    ]
 
 def test_update_theme_milestone(auth_client, app):
     with app.app_context():
@@ -116,7 +125,10 @@ def test_import_json_preserves_dev_rank(auth_client, app):
             'dev_rank': 'S',
             'start_month': '2026-04',
             'end_month': '2026-06',
-            'dev_complete_month': '2026-06',
+            'dev_complete_months': [
+                {'month': '2026-06', 'is_completed': False},
+                {'month': '2026-08', 'is_completed': True},
+            ],
             'milestones': [
                 {'month': '2026-05', 'label': 'Beta', 'is_completed': False},
             ],
@@ -154,6 +166,11 @@ def test_import_json_preserves_dev_rank(auth_client, app):
     assert response.status_code == 200
     assert response.json[0]['name'] == 'Imported Theme'
     assert response.json[0]['dev_rank'] == 'S'
+    assert response.json[0]['dev_complete_month'] == '2026-06'
+    assert response.json[0]['dev_complete_months'] == [
+        {'month': '2026-06', 'is_completed': False},
+        {'month': '2026-08', 'is_completed': True},
+    ]
 
 def test_bulk_allocations(auth_client, app):
     """Test bulk update of allocations."""

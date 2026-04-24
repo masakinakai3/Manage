@@ -30,6 +30,7 @@ const themesList = vi.fn(async () => ([{
     category: 'Delivery',
     status: 'active',
     dev_complete_month: '2026-04',
+    dev_complete_months: [{ month: '2026-04', is_completed: true }],
     milestones: [
         { month: '2026-04', label: 'Release', is_completed: false },
         { month: '2026-05', label: 'Review', is_completed: true },
@@ -168,6 +169,7 @@ describe('member-view milestones', () => {
         const marker = document.querySelector('.member-theme-cell .member-theme-dev-complete');
         expect(marker).not.toBeNull();
         expect(marker?.textContent).toBe('★20%');
+        expect(marker?.classList.contains('completed')).toBe(true);
     });
 
     it('renders milestone badges for aggregated periods in the matching bucket', async () => {
@@ -198,5 +200,37 @@ describe('member-view milestones', () => {
         expect(cell?.textContent).toContain('Review');
         expect(cell?.querySelector('.member-theme-milestone.completed')).not.toBeNull();
         expect(cell?.querySelector('.member-theme-dev-complete')).not.toBeNull();
+    });
+
+    it('highlights only the clicked member-load month column and toggles off on repeat click', async () => {
+        visibleMonths = ['2026-04', '2026-05'];
+        allocationsList = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 30, memo: '' },
+        ];
+
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+
+        await refreshMemberView();
+
+        const aprilCell = document.querySelector('td[data-member-cell="10-2026-04"]');
+        const mayCell = document.querySelector('td[data-member-cell="10-2026-05"]');
+
+        aprilCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.querySelector('th[data-member-month="2026-04"]')?.classList.contains('month-selected')).toBe(true);
+        expect(document.querySelector('td[data-member-cell="10-2026-04"]')?.classList.contains('month-selected')).toBe(true);
+        expect(document.querySelector('th[data-member-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
+
+        mayCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.querySelector('th[data-member-month="2026-04"]')?.classList.contains('month-selected')).toBe(false);
+        expect(document.querySelector('th[data-member-month="2026-05"]')?.classList.contains('month-selected')).toBe(true);
+        expect(document.querySelector('td[data-member-cell="10-2026-05"]')?.classList.contains('month-selected')).toBe(true);
+
+        mayCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.querySelector('th[data-member-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
+        expect(document.querySelector('td[data-member-cell="10-2026-05"]')?.classList.contains('month-selected')).toBe(false);
     });
 });

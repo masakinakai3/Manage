@@ -49,6 +49,11 @@
     border-bottom-color: var(--color-primary);
 }
 
+.member-load-table [data-member-month].month-selected {
+    background: color-mix(in srgb, var(--color-primary-subtle) 88%, white 12%);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
 .member-load-table tbody td {
     border-bottom: 1px solid var(--color-border);
     padding: var(--space-2) var(--space-1);
@@ -77,6 +82,10 @@
 
 .member-load-table tbody td.month-current {
     box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+.member-load-table tbody td[data-member-month].month-selected {
+    background: color-mix(in srgb, var(--color-primary-subtle) 88%, white 12%);
 }
 
 /* Load levels */
@@ -247,6 +256,13 @@
     font-weight: 700;
     line-height: 1.4;
     white-space: nowrap;
+}
+
+.member-theme-dev-complete.completed {
+    opacity: 0.45;
+    color: var(--color-text-secondary);
+    background: var(--color-bg-elevated);
+    text-decoration: line-through;
 }
 
 /* Hide by default */

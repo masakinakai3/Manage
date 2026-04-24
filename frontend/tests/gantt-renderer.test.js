@@ -344,6 +344,11 @@ describe('gantt-renderer regressions', () => {
         expect(document.querySelector('th[data-gantt-month="2026-04"]')?.classList.contains('month-selected')).toBe(false);
         expect(document.querySelector('th[data-gantt-month="2026-05"]')?.classList.contains('month-selected')).toBe(true);
         expect(document.querySelector('td[data-gantt-month="2026-05"]')?.classList.contains('month-selected')).toBe(true);
+
+        mayCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.querySelector('th[data-gantt-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
+        expect(document.querySelector('td[data-gantt-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
     });
 
     it('adds a summary tooltip with member breakdown', async () => {
@@ -413,6 +418,26 @@ describe('gantt-renderer regressions', () => {
         expect(badge?.textContent).toBe('S');
     });
 
+    it('greys out completed theme rows', async () => {
+        themeList.mockResolvedValueOnce([{
+            theme_id: 1,
+            name: 'Theme A',
+            status: 'completed',
+            dev_rank: 'S',
+            color: '#00aaff',
+            category: 'Delivery',
+            milestones: [],
+            member_ids: [10],
+        }]);
+
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        expect(document.querySelector('.gantt-row-summary')?.classList.contains('theme-row-completed')).toBe(true);
+        expect(document.querySelector('.gantt-row-member')?.classList.contains('theme-row-completed')).toBe(true);
+    });
+
     it('supports grouping by development rank', async () => {
         const sharedState = await import('../js/shared-state.js');
         sharedState.loadViewState.mockReturnValue({
@@ -458,11 +483,68 @@ describe('gantt-renderer regressions', () => {
         await Promise.resolve();
 
         expect(themeUpdate).toHaveBeenCalledWith(1, {
-            dev_complete_month: null,
+            dev_complete_months: [],
             milestones: [
                 { month: '2026-05', label: 'Launch', is_completed: true },
                 { month: '2026-05', label: 'Release', is_completed: false },
             ],
         });
+    });
+
+    it('saves multiple development-complete months from the gantt editor', async () => {
+        themeList.mockResolvedValueOnce([{
+            theme_id: 1,
+            name: 'Theme A',
+            status: 'active',
+            dev_rank: 'S',
+            color: '#00aaff',
+            category: 'Delivery',
+            dev_complete_months: [
+                { month: '2026-04', is_completed: false },
+                { month: '2026-06', is_completed: true },
+            ],
+            milestones: [],
+            member_ids: [10],
+        }]);
+
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+        await refreshGantt();
+
+        document.querySelector('.theme-milestone-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        const rows = document.querySelectorAll('.theme-dev-complete-row');
+        expect(rows).toHaveLength(2);
+        rows[1].querySelector('.theme-dev-complete-month').value = '2026-05';
+        rows[1].querySelector('.theme-dev-complete-completed').checked = true;
+
+        document.getElementById('modal-save-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+
+        expect(themeUpdate).toHaveBeenCalledWith(1, expect.objectContaining({
+            dev_complete_months: [
+                { month: '2026-04', is_completed: false },
+                { month: '2026-05', is_completed: true },
+            ],
+        }));
+    });
+
+    it('greys out completed development-complete markers', async () => {
+        themeList.mockResolvedValueOnce([{
+            theme_id: 1,
+            name: 'Theme A',
+            status: 'active',
+            dev_rank: 'S',
+            color: '#00aaff',
+            category: 'Delivery',
+            dev_complete_months: [{ month: '2026-04', is_completed: true }],
+            milestones: [],
+            member_ids: [10],
+        }]);
+
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+        await refreshGantt();
+
+        const marker = document.querySelector('.gantt-star-label');
+        expect(marker?.classList.contains('completed')).toBe(true);
     });
 });
