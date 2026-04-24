@@ -174,6 +174,12 @@
     user-select: none;
 }
 
+.scenario-preview-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
 .theme-toggle-icon {
     display: inline-block;
     width: 14px;
@@ -834,6 +840,57 @@
 .diff-minus {
     background: rgba(37, 99, 235, 0.15);
     color: #60a5fa;
+}
+
+.scenario-preview-card {
+    background:
+        linear-gradient(180deg, rgba(14, 165, 233, 0.08), transparent 42%),
+        var(--color-bg);
+}
+
+.gantt-row-scenario td,
+.gantt-row-scenario td:first-child {
+    background: color-mix(in srgb, var(--color-primary-subtle) 60%, var(--color-bg-elevated)) !important;
+}
+
+.scenario-preview-bar {
+    background: linear-gradient(180deg, #38bdf8, #2563eb);
+}
+
+.scenario-preview-cell {
+    background: color-mix(in srgb, rgba(56, 189, 248, 0.28) 80%, transparent);
+    color: #bfdbfe;
+}
+
+.scenario-preview-tag,
+.scenario-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 700;
+}
+
+.scenario-preview-tag {
+    background: rgba(56, 189, 248, 0.18);
+    color: #bae6fd;
+}
+
+.scenario-cell-highlight {
+    box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.35);
+}
+
+.scenario-chip-shift-out {
+    background: rgba(239, 68, 68, 0.18);
+    color: #fca5a5;
+}
+
+.scenario-chip-shift-in {
+    background: rgba(34, 197, 94, 0.16);
+    color: #86efac;
 }
 
 /* ==========================================

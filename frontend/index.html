@@ -333,6 +333,49 @@
                         <p class="summary-subtext">過負荷チェック、提案候補、月次レビュー向けの要約を確認できます。</p>
                     </div>
                 </div>
+                <section class="insight-layout">
+                    <article class="summary-card insight-card-wide">
+                        <div class="summary-label">案件追加シミュレーション</div>
+                        <form id="insight-scenario-form" class="insight-scenario-form">
+                            <label class="form-field">
+                                <span>提案モード</span>
+                                <select id="insight-scenario-mode" class="view-select">
+                                    <option value="start_fixed">開始月を固定して入れる</option>
+                                    <option value="keep_schedule">既存スケジュールを変えずに開始可能月を見る</option>
+                                </select>
+                            </label>
+                            <label class="form-field">
+                                <span>対象プロジェクト</span>
+                                <select id="insight-scenario-theme" class="view-select">
+                                    <option value="">新規プロジェクトとして検討</option>
+                                </select>
+                            </label>
+                            <label class="form-field">
+                                <span>開始月</span>
+                                <input id="insight-scenario-start-month" class="view-input" type="month" required>
+                            </label>
+                            <label class="form-field">
+                                <span>期間(月)</span>
+                                <input id="insight-scenario-duration" class="view-input" type="number" min="1" max="24" step="1" value="3" required>
+                            </label>
+                            <label class="form-field">
+                                <span>必要工数(人月)</span>
+                                <input id="insight-scenario-effort" class="view-input" type="number" min="0.1" max="120" step="0.1" value="3.0" required>
+                            </label>
+                            <label class="form-field">
+                                <span>希望部門</span>
+                                <select id="insight-scenario-department" class="view-select">
+                                    <option value="">こだわらない</option>
+                                </select>
+                            </label>
+                            <div class="insight-scenario-actions">
+                                <button id="insight-scenario-submit" class="btn btn-primary" type="submit">候補を提案</button>
+                                <p id="insight-scenario-hint" class="summary-subtext">工数と期間から、割当候補・後ろ倒し候補・開始可能月候補を提案します。</p>
+                            </div>
+                        </form>
+                        <div id="insight-scenario-results" class="insight-scenario-results"></div>
+                    </article>
+                </section>
                 <section class="insight-layout insight-layout--ribbon-only">
                     <article class="summary-card">
                         <div class="summary-label">カテゴリ分布</div>

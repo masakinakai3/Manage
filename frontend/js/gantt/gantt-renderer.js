@@ -54,6 +54,19 @@ let selectionAnchor = null;
 let selectedRange = null;
 let copiedRange = null;
 let ganttKeyboardBound = false;
+let scenarioPreview = null;
+let scenarioPreviewContext = null;
+
+export function showScenarioPreview(preview) {
+    scenarioPreview = preview || null;
+    rerenderGanttView();
+}
+
+export function clearScenarioPreview() {
+    if (!scenarioPreview) return;
+    scenarioPreview = null;
+    rerenderGanttView();
+}
 
 export async function initGantt() {
     const state = loadViewState();
@@ -134,6 +147,124 @@ function rerenderGanttView() {
     renderSnapshotSummaryCards(months);
     renderTable(months);
     renderDetailPanelV2();
+}
+
+function buildScenarioPreviewContext() {
+    if (!scenarioPreview) return null;
+
+    const assignmentByKey = new Map();
+    const assignmentTotalsByMonth = new Map();
+    const membersById = new Map();
+    const shiftOutByKey = new Map();
+    const shiftInByKey = new Map();
+    const shiftOutByThemeMonth = new Map();
+    const shiftInByThemeMonth = new Map();
+
+    (scenarioPreview.assignments || []).forEach((assignment) => {
+        const memberKey = `${assignment.memberId}|${assignment.month}`;
+        assignmentByKey.set(memberKey, (assignmentByKey.get(memberKey) || 0) + assignment.rate);
+        assignmentTotalsByMonth.set(assignment.month, (assignmentTotalsByMonth.get(assignment.month) || 0) + assignment.rate);
+        if (!membersById.has(assignment.memberId)) {
+            membersById.set(assignment.memberId, {
+                memberId: assignment.memberId,
+                displayName: assignment.displayName,
+                department: assignment.department || '',
+            });
+        }
+    });
+
+    (scenarioPreview.shiftSuggestions || []).forEach((item) => {
+        const outKey = `${item.themeId}|${item.memberId}|${item.fromMonth}`;
+        const inKey = `${item.themeId}|${item.memberId}|${item.toMonth}`;
+        const outThemeKey = `${item.themeId}|${item.fromMonth}`;
+        const inThemeKey = `${item.themeId}|${item.toMonth}`;
+        shiftOutByKey.set(outKey, (shiftOutByKey.get(outKey) || 0) + item.rate);
+        shiftInByKey.set(inKey, (shiftInByKey.get(inKey) || 0) + item.rate);
+        shiftOutByThemeMonth.set(outThemeKey, (shiftOutByThemeMonth.get(outThemeKey) || 0) + item.rate);
+        shiftInByThemeMonth.set(inThemeKey, (shiftInByThemeMonth.get(inThemeKey) || 0) + item.rate);
+    });
+
+    return {
+        title: scenarioPreview.title || '提案プレビュー',
+        startMonth: scenarioPreview.startMonth || '',
+        previewThemeName: scenarioPreview.previewThemeName || '提案案件',
+        assignmentByKey,
+        assignmentTotalsByMonth,
+        previewMembers: [...membersById.values()].sort((left, right) => left.displayName.localeCompare(right.displayName, 'ja')),
+        shiftOutByKey,
+        shiftInByKey,
+        shiftOutByThemeMonth,
+        shiftInByThemeMonth,
+        assignmentCount: (scenarioPreview.assignments || []).length,
+        shiftCount: (scenarioPreview.shiftSuggestions || []).length,
+    };
+}
+
+function renderScenarioPreviewSummaryCell(month, current) {
+    const total = scenarioPreviewContext?.assignmentTotalsByMonth.get(month) || 0;
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><div class="gantt-cell gantt-summary-cell scenario-preview-cell ${rateClass(total)}">${formatRateValue(total)}${total ? '<span class="scenario-preview-tag">提案</span>' : ''}</div></td>`;
+}
+
+function renderScenarioPreviewMemberCell(member, month, current) {
+    const rate = scenarioPreviewContext?.assignmentByKey.get(`${member.memberId}|${month}`) || 0;
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><div class="gantt-cell scenario-preview-cell ${rateClass(rate)}">${formatRateValue(rate)}${rate ? '<span class="scenario-preview-tag">追加</span>' : ''}</div></td>`;
+}
+
+function renderScenarioPreviewRows(months, current) {
+    if (!scenarioPreviewContext) return [];
+    const rows = [];
+    rows.push(`
+        <tr class="gantt-row-summary gantt-row-scenario">
+            <td>
+                <div class="theme-label-cell">
+                    <div class="scenario-preview-label">
+                        <span class="theme-color-bar scenario-preview-bar"></span>
+                        <span class="theme-name-text">${escapeHtml(scenarioPreviewContext.previewThemeName)}</span>
+                    </div>
+                    <div class="theme-label-actions">
+                        <span class="theme-priority-badge">提案</span>
+                    </div>
+                </div>
+            </td>
+            ${months.map((month) => renderScenarioPreviewSummaryCell(month, current)).join('')}
+        </tr>
+    `);
+
+    scenarioPreviewContext.previewMembers.forEach((member) => {
+        rows.push(`
+            <tr class="gantt-row-member gantt-row-scenario">
+                <td><div class="member-label-cell"><span>${escapeHtml(member.displayName)}</span><span class="member-capacity">${escapeHtml(member.department || '未設定')} / 提案割当</span></div></td>
+                ${months.map((month) => renderScenarioPreviewMemberCell(member, month, current)).join('')}
+            </tr>
+        `);
+    });
+    return rows;
+}
+
+function scenarioMemberPreviewChip(themeId, memberId, month) {
+    if (!scenarioPreviewContext) return '';
+    const shiftOut = scenarioPreviewContext.shiftOutByKey.get(`${themeId}|${memberId}|${month}`) || 0;
+    const shiftIn = scenarioPreviewContext.shiftInByKey.get(`${themeId}|${memberId}|${month}`) || 0;
+    const chips = [];
+    if (shiftOut > 0) chips.push(`<span class="scenario-chip scenario-chip-shift-out">-${shiftOut}</span>`);
+    if (shiftIn > 0) chips.push(`<span class="scenario-chip scenario-chip-shift-in">+${shiftIn}</span>`);
+    return chips.join('');
+}
+
+function scenarioThemePreviewChip(themeId, month) {
+    if (!scenarioPreviewContext) return '';
+    const shiftOut = scenarioPreviewContext.shiftOutByThemeMonth.get(`${themeId}|${month}`) || 0;
+    const shiftIn = scenarioPreviewContext.shiftInByThemeMonth.get(`${themeId}|${month}`) || 0;
+    const chips = [];
+    if (shiftOut > 0) chips.push(`<span class="scenario-chip scenario-chip-shift-out">-${shiftOut}</span>`);
+    if (shiftIn > 0) chips.push(`<span class="scenario-chip scenario-chip-shift-in">+${shiftIn}</span>`);
+    return chips.join('');
+}
+
+function focusScenarioPreview() {
+    const previewRow = document.querySelector('.gantt-row-scenario');
+    if (!previewRow) return;
+    previewRow.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
 }
 
 function bindControls() {
@@ -434,7 +565,9 @@ function memberCell(theme, member, month, current) {
     const rate = allocation?.allocation_rate || 0;
     const warning = warnings.find((item) => item.member_id === member.member_id && item.month === month);
     const memo = allocation?.memo || '';
-    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${rate}" data-memo="${escapeHtml(memo)}" title="${memo || 'No memo'}" type="button">${rate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
+    const previewMarkup = scenarioMemberPreviewChip(theme.theme_id, member.member_id, month);
+    const previewCellClass = previewMarkup ? ' scenario-cell-highlight' : '';
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}${previewCellClass}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${rate}" data-memo="${escapeHtml(memo)}" title="${memo || 'No memo'}" type="button">${rate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${previewMarkup}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
 }
 
 function renderDetailPanel() {
@@ -536,8 +669,25 @@ function collectSnapshotDiffs(months) {
 function renderSnapshotSummaryCards(months) {
     const target = document.getElementById('snapshot-diff-summary');
     if (!target) return;
+    const previewContext = buildScenarioPreviewContext();
     if (snapshotAllocations.length === 0) {
-        target.innerHTML = '';
+        if (!previewContext) {
+            target.innerHTML = '';
+            return;
+        }
+        target.innerHTML = `
+            <article class="summary-card scenario-preview-card">
+                <div class="summary-label">提案プレビュー</div>
+                <div class="summary-value">${escapeHtml(previewContext.title)}</div>
+                <div class="summary-subtext">追加 ${previewContext.assignmentCount} 件 / 後ろ倒し ${previewContext.shiftCount} 件 / 開始 ${escapeHtml(previewContext.startMonth)}</div>
+                <div class="snapshot-diff-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" data-scenario-focus="true">ガント内で見る</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-scenario-clear="true">解除</button>
+                </div>
+            </article>
+        `;
+        target.querySelector('[data-scenario-clear="true"]')?.addEventListener('click', () => clearScenarioPreview());
+        target.querySelector('[data-scenario-focus="true"]')?.addEventListener('click', () => focusScenarioPreview());
         return;
     }
 
@@ -578,12 +728,28 @@ function renderSnapshotSummaryCards(months) {
         </article>
     `;
 
+    if (previewContext) {
+        target.insertAdjacentHTML('afterbegin', `
+            <article class="summary-card scenario-preview-card">
+                <div class="summary-label">提案プレビュー</div>
+                <div class="summary-value">${escapeHtml(previewContext.title)}</div>
+                <div class="summary-subtext">追加 ${previewContext.assignmentCount} 件 / 後ろ倒し ${previewContext.shiftCount} 件 / 開始 ${escapeHtml(previewContext.startMonth)}</div>
+                <div class="snapshot-diff-actions">
+                    <button class="btn btn-ghost btn-sm" type="button" data-scenario-focus="true">ガント内で見る</button>
+                    <button class="btn btn-ghost btn-sm" type="button" data-scenario-clear="true">解除</button>
+                </div>
+            </article>
+        `);
+    }
+
     target.querySelectorAll('[data-diff-index]').forEach((button) => {
         button.addEventListener('click', () => {
             const diff = topDiffs[Number.parseInt(button.dataset.diffIndex, 10)];
             if (diff) jumpToCell(diff.theme_id, diff.member_id, diff.month);
         });
     });
+    target.querySelector('[data-scenario-clear="true"]')?.addEventListener('click', () => clearScenarioPreview());
+    target.querySelector('[data-scenario-focus="true"]')?.addEventListener('click', () => focusScenarioPreview());
 }
 
 function jumpToCell(themeId, memberId, month) {
@@ -1454,7 +1620,9 @@ function buildSummaryTooltip(theme, month, members, totalRate) {
 function renderThemeSummaryCellMarkup(theme, month, current, members) {
     const total = sumThemeRate(theme.theme_id, month, members);
     const tooltip = escapeHtmlAttr(buildSummaryTooltip(theme, month, members, total));
-    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell gantt-summary-cell ${rateClass(total)}" data-theme-id="${theme.theme_id}" data-month="${month}" title="${tooltip}" type="button">${formatSummaryCellContent(theme, total, month, members)}</button>${milestoneChips(theme, month)}</td>`;
+    const previewChip = scenarioThemePreviewChip(theme.theme_id, month);
+    const previewCellClass = previewChip ? ' scenario-cell-highlight' : '';
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell gantt-summary-cell ${rateClass(total)}${previewCellClass}" data-theme-id="${theme.theme_id}" data-month="${month}" title="${tooltip}" type="button">${formatSummaryCellContent(theme, total, month, members)}${previewChip}</button>${milestoneChips(theme, month)}</td>`;
 }
 
 function syncFilterInputs() {
@@ -1807,6 +1975,7 @@ function renderMobileThemeList(themes, months) {
 
 function renderTable(months) {
     const current = currentMonth();
+    scenarioPreviewContext = buildScenarioPreviewContext();
     renderFilterControls();
     document.getElementById('gantt-thead').innerHTML = `<tr><th>テーマ / メンバー</th>${months.map((month) => `<th class="${month === current ? 'month-current' : ''}">${formatMonthHeader(month, scale).replace('\n', '<br>')}</th>`).join('')}</tr>`;
     const rows = [];
@@ -1822,13 +1991,16 @@ function renderTable(months) {
 
     groups.forEach((group) => {
         if (group.key) rows.push(`<tr class="gantt-row-group"><td colspan="${months.length + 1}">${group.key}</td></tr>`);
+        if (!group.key && scenarioPreviewContext) {
+            rows.push(...renderScenarioPreviewRows(months, current));
+        }
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
             const completedRowClass = theme.status === 'completed' ? ' theme-row-completed' : '';
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
             rows.push(`<tr class="gantt-row-summary${completedRowClass}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member${completedRowClass} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+            members.forEach((member) => rows.push(`<tr class="gantt-row-member${completedRowClass} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
 

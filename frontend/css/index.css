@@ -2090,6 +2090,84 @@ td.out-period {
         var(--color-bg);
 }
 
+.insight-scenario-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+}
+
+.insight-scenario-actions {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--space-2);
+}
+
+.insight-scenario-results {
+    display: grid;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+}
+
+.insight-scenario-card {
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    background:
+        linear-gradient(180deg, rgba(59, 130, 246, 0.06), transparent 42%),
+        var(--color-bg);
+}
+
+.insight-scenario-card.is-recommended {
+    border-color: rgba(37, 99, 235, 0.35);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.08);
+}
+
+.insight-scenario-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.insight-scenario-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+}
+
+.insight-scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+
+.insight-scenario-stat {
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-card);
+}
+
+.insight-scenario-stat strong {
+    display: block;
+    font-size: var(--text-lg);
+}
+
+.insight-scenario-months {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+
+.insight-scenario-month {
+    padding: var(--space-2);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-card);
+}
+
 .candidate-list {
     display: grid;
     gap: var(--space-2);

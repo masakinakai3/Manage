@@ -1,4 +1,5 @@
 import { insights } from './api.js';
+import { showScenarioPreview } from './gantt/gantt-renderer.js';
 import { loadViewState, subscribeViewState, updateViewState } from './shared-state.js';
 import { addMonths, getVisibleMonths } from './utils/date-utils.js';
 import { formatError, setBusyState } from './ui.js';
@@ -7,6 +8,8 @@ let currentState = loadViewState();
 let ribbonOverlayInitialized = false;
 let activeRibbonData = null;
 let ribbonXAxisScale = Number.parseFloat(localStorage.getItem('project_ribbon_x_scale') || '1');
+let currentOverview = null;
+let currentScenarioResult = null;
 const SMALL_RIBBON_LOAD_THRESHOLD = 30;
 
 const HEALTH_CATEGORY_LABELS = {
@@ -17,6 +20,7 @@ const HEALTH_CATEGORY_LABELS = {
 
 export async function initInsightsView() {
     initRibbonFullscreen();
+    initScenarioPlanner();
     subscribeViewState((nextState) => {
         currentState = nextState;
         refreshInsightsView();
@@ -33,6 +37,15 @@ export async function refreshInsightsView() {
     try {
         setBusyState(true, 'インサイトを読み込み中...');
         const overview = await insights.overview(from, toEnd);
+        currentOverview = overview;
+        renderFocusPanels(overview.summary || {}, overview.dashboard || {}, overview.health_groups || []);
+        renderHealthChecks(overview.health_checks || [], overview.health_groups || []);
+        renderRecommendations(overview.recommendations || []);
+        renderDashboard(overview.dashboard || {}, overview.health_groups || []);
+        renderScenarioPlanner(overview);
+        if (currentScenarioResult) {
+            renderScenarioResults(currentScenarioResult);
+        }
         renderProjectRibbon('dashboard-project-ribbon', overview.dashboard?.project_ribbon || {});
     } catch (error) {
         renderError(formatError(error, 'インサイトの読み込みに失敗しました。'));
@@ -766,6 +779,236 @@ function renderPillList(targetId, items) {
     target.innerHTML = items.map((item) => `
         <span class="dashboard-pill">${escapeHtml(item.label)}: ${escapeHtml(item.value ?? item.count)}</span>
     `).join('');
+}
+
+function initScenarioPlanner() {
+    const form = document.getElementById('insight-scenario-form');
+    const modeSelect = document.getElementById('insight-scenario-mode');
+    if (!form) return;
+
+    if (!form.dataset.bound) {
+        form.dataset.bound = 'true';
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            await submitScenarioPlanner();
+        });
+    }
+
+    if (modeSelect && !modeSelect.dataset.bound) {
+        modeSelect.dataset.bound = 'true';
+        modeSelect.addEventListener('change', updateScenarioHint);
+    }
+}
+
+function renderScenarioPlanner(overview) {
+    const dashboard = overview?.dashboard || {};
+    const themeSelect = document.getElementById('insight-scenario-theme');
+    const departmentSelect = document.getElementById('insight-scenario-department');
+    const startMonthInput = document.getElementById('insight-scenario-start-month');
+
+    if (themeSelect) {
+        const currentValue = themeSelect.value;
+        const options = [{ theme_id: '', name: '新規プロジェクトとして検討' }, ...(dashboard.theme_options || [])];
+        themeSelect.innerHTML = options.map((item) => `
+            <option value="${escapeHtmlAttr(item.theme_id ?? '')}">${escapeHtml(item.name)}</option>
+        `).join('');
+        if ([...themeSelect.options].some((option) => option.value === currentValue)) {
+            themeSelect.value = currentValue;
+        }
+    }
+
+    if (departmentSelect) {
+        const currentValue = departmentSelect.value;
+        const options = [''].concat(dashboard.department_options || []);
+        departmentSelect.innerHTML = options.map((item) => `
+            <option value="${escapeHtmlAttr(item)}">${item ? escapeHtml(item) : 'こだわらない'}</option>
+        `).join('');
+        if ([...departmentSelect.options].some((option) => option.value === currentValue)) {
+            departmentSelect.value = currentValue;
+        }
+    }
+
+    if (startMonthInput && !startMonthInput.value) {
+        startMonthInput.value = currentState.startMonth || '';
+    }
+
+    updateScenarioHint();
+}
+
+function updateScenarioHint() {
+    const mode = document.getElementById('insight-scenario-mode')?.value || 'start_fixed';
+    const hint = document.getElementById('insight-scenario-hint');
+    if (!hint) return;
+    hint.textContent = mode === 'keep_schedule'
+        ? '既存スケジュールを動かさず、最短で入れられる開始月と担当候補を返します。'
+        : '開始月を固定して、割当候補と必要なら後ろ倒し候補を返します。';
+}
+
+async function submitScenarioPlanner() {
+    const submitButton = document.getElementById('insight-scenario-submit');
+    const payload = {
+        mode: document.getElementById('insight-scenario-mode')?.value || 'start_fixed',
+        target_theme_id: document.getElementById('insight-scenario-theme')?.value || '',
+        start_month: normalizeMonthInput(document.getElementById('insight-scenario-start-month')?.value),
+        duration_months: Number.parseInt(document.getElementById('insight-scenario-duration')?.value || '0', 10),
+        effort_person_months: Number.parseFloat(document.getElementById('insight-scenario-effort')?.value || '0'),
+        preferred_department: document.getElementById('insight-scenario-department')?.value || '',
+    };
+
+    if (!payload.start_month || !payload.duration_months || !payload.effort_person_months) {
+        renderScenarioMessage('開始月・期間・必要工数を入力してください。');
+        return;
+    }
+
+    try {
+        if (submitButton) submitButton.disabled = true;
+        renderScenarioMessage('候補を計算しています...');
+        currentScenarioResult = await insights.scenarioSuggestions(payload);
+        renderScenarioResults(currentScenarioResult);
+    } catch (error) {
+        renderScenarioMessage(formatError(error, '候補の計算に失敗しました。'));
+    } finally {
+        if (submitButton) submitButton.disabled = false;
+    }
+}
+
+function renderScenarioMessage(message) {
+    const target = document.getElementById('insight-scenario-results');
+    if (!target) return;
+    target.innerHTML = `<div class="empty-panel">${escapeHtml(message)}</div>`;
+}
+
+function renderScenarioResults(result) {
+    const target = document.getElementById('insight-scenario-results');
+    if (!target) return;
+
+    const candidates = result?.candidates || [];
+    if (!candidates.length) {
+        target.innerHTML = '<div class="empty-panel">候補は見つかりませんでした。</div>';
+        return;
+    }
+
+    target.innerHTML = candidates.map((candidate, index) => `
+        <article class="insight-scenario-card${candidate.recommended ? ' is-recommended' : ''}">
+            <div class="insight-scenario-header">
+                <div>
+                    <strong>${escapeHtml(candidate.title || `候補 ${index + 1}`)}</strong>
+                    <p class="summary-subtext">${escapeHtml(candidate.summary || '')}</p>
+                </div>
+                <div class="insight-scenario-meta">
+                    ${candidate.recommended ? '<span class="dashboard-pill">おすすめ</span>' : ''}
+                    <span class="dashboard-pill">開始 ${escapeHtml(candidate.start_month || '-')}</span>
+                    <span class="dashboard-pill">充足率 ${escapeHtml(String(candidate.coverage_ratio || 0))}%</span>
+                </div>
+            </div>
+            <div class="insight-scenario-grid">
+                <div class="insight-scenario-stat">
+                    <span class="summary-subtext">不足工数</span>
+                    <strong>${escapeHtml(formatPersonMonths(candidate.uncovered_person_months))} 人月</strong>
+                </div>
+                <div class="insight-scenario-stat">
+                    <span class="summary-subtext">関与人数</span>
+                    <strong>${escapeHtml(String(candidate.affected_member_count || 0))} 人</strong>
+                </div>
+                <div class="insight-scenario-stat">
+                    <span class="summary-subtext">同部門比率</span>
+                    <strong>${escapeHtml(String(candidate.same_department_ratio || 0))}%</strong>
+                </div>
+                <div class="insight-scenario-stat">
+                    <span class="summary-subtext">影響テーマ数</span>
+                    <strong>${escapeHtml(String(candidate.impacted_theme_count || 0))}</strong>
+                </div>
+            </div>
+            <div class="insight-scenario-months">
+                ${(candidate.monthly_plan || []).map((monthPlan) => `
+                    <div class="insight-scenario-month">
+                        <strong>${escapeHtml(monthPlan.month)}</strong>
+                        <div class="candidate-body">
+                            <span class="candidate-chip">必要 ${escapeHtml(formatPersonMonths(monthPlan.required_person_months))} 人月</span>
+                            <span class="candidate-chip">割当 ${escapeHtml(formatPersonMonths(monthPlan.assigned_person_months))} 人月</span>
+                            ${typeof monthPlan.shift_supported_person_months === 'number'
+                                ? `<span class="candidate-chip">後ろ倒しで補完 ${escapeHtml(formatPersonMonths(monthPlan.shift_supported_person_months))} 人月</span>`
+                                : ''}
+                            <span class="candidate-chip">不足 ${escapeHtml(formatPersonMonths(monthPlan.remaining_uncovered_person_months ?? monthPlan.uncovered_person_months))} 人月</span>
+                        </div>
+                        <div class="candidate-body">
+                            ${(monthPlan.assignments || []).map((assignment) => `
+                                <span class="candidate-chip">${escapeHtml(assignment.display_name)} ${escapeHtml(formatPersonMonths(assignment.assigned_person_months))} 人月</span>
+                            `).join('') || '<span class="summary-subtext">割当候補なし</span>'}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            ${(candidate.shift_suggestions || []).length ? `
+                <div class="candidate-list">
+                    ${(candidate.shift_suggestions || []).map((suggestion) => `
+                        <div class="candidate-card">
+                            <div class="candidate-title">${escapeHtml(suggestion.theme_name)} を ${escapeHtml(suggestion.from_month)} から ${escapeHtml(suggestion.to_month)} へ</div>
+                            <div class="candidate-body">
+                                <span class="candidate-chip">${escapeHtml(suggestion.display_name)}</span>
+                                <span class="candidate-chip">解放 ${escapeHtml(formatPersonMonths(suggestion.released_person_months))} 人月</span>
+                                <span class="candidate-chip">部門 ${escapeHtml(suggestion.department || '未設定')}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+            <div class="insight-actions">
+                <button class="btn btn-ghost btn-sm" type="button" data-scenario-preview-index="${index}">ガントで見る</button>
+            </div>
+        </article>
+    `).join('');
+
+    target.querySelectorAll('[data-scenario-preview-index]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const candidate = candidates[Number.parseInt(button.dataset.scenarioPreviewIndex || '-1', 10)];
+            if (!candidate) return;
+            openCandidateInGantt(candidate);
+        });
+    });
+}
+
+function normalizeMonthInput(value) {
+    return String(value || '').trim().slice(0, 7);
+}
+
+function formatPersonMonths(value) {
+    const number = Number.parseFloat(value || 0);
+    if (!Number.isFinite(number)) return '0';
+    return Number.isInteger(number) ? String(number) : number.toFixed(1);
+}
+
+function openCandidateInGantt(candidate) {
+    const scenarioInput = currentScenarioResult?.input || {};
+    const themeOptions = currentOverview?.dashboard?.theme_options || [];
+    const targetThemeId = Number.parseInt(String(scenarioInput.target_theme_id || ''), 10);
+    const targetTheme = themeOptions.find((item) => item.theme_id === targetThemeId);
+    const preview = {
+        title: candidate.title || '提案プレビュー',
+        startMonth: candidate.start_month || scenarioInput.start_month || '',
+        previewThemeName: targetTheme?.name ? `提案追加: ${targetTheme.name}` : '提案案件',
+        assignments: (candidate.monthly_plan || []).flatMap((monthPlan) => (monthPlan.assignments || []).map((assignment) => ({
+            month: monthPlan.month,
+            memberId: assignment.member_id,
+            displayName: assignment.display_name,
+            department: assignment.department || '',
+            rate: Number.parseInt(String(assignment.assigned_points ?? Math.round((assignment.assigned_person_months || 0) * 100)), 10) || 0,
+        }))),
+        shiftSuggestions: (candidate.shift_suggestions || []).map((suggestion) => ({
+            themeId: suggestion.theme_id,
+            memberId: suggestion.member_id,
+            fromMonth: suggestion.from_month,
+            toMonth: suggestion.to_month,
+            rate: Number.parseInt(String(suggestion.released_points ?? Math.round((suggestion.released_person_months || 0) * 100)), 10) || 0,
+        })),
+    };
+
+    showScenarioPreview(preview);
+    updateViewState({
+        startMonth: candidate.start_month || currentState.startMonth,
+        scale: 1,
+    });
+    document.querySelector('.nav-item[data-view="gantt"]')?.click();
 }
 
 function simplifyInsightsLayout() {

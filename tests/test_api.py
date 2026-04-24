@@ -372,6 +372,84 @@ def test_project_ribbon_aggregates_theme_load_per_month(auth_client, app):
     assert ribbon_item['projects'][0]['load'] == 80
 
 
+def test_insights_scenario_suggestions_start_fixed(auth_client, app):
+    with app.app_context():
+        target_theme = Theme(
+            name='Scenario Existing Theme',
+            category='Platform',
+            status='active',
+            priority=1,
+        )
+        shift_theme = Theme(
+            name='Scenario Shift Theme',
+            category='Support',
+            status='planning',
+            priority=3,
+        )
+        member_a = Member(display_name='Scenario Alice', department='Platform', capacity=100)
+        member_b = Member(display_name='Scenario Bob', department='Platform', capacity=100)
+        member_c = Member(display_name='Scenario Carol', department='Platform', capacity=100)
+        db.session.add_all([target_theme, shift_theme, member_a, member_b, member_c])
+        db.session.commit()
+
+        target_theme.members.append(member_a)
+        target_theme.members.append(member_b)
+        db.session.add_all([
+            Allocation(theme_id=target_theme.theme_id, member_id=member_a.member_id, month='2024-05', allocation_rate=60),
+            Allocation(theme_id=target_theme.theme_id, member_id=member_b.member_id, month='2024-05', allocation_rate=40),
+            Allocation(theme_id=shift_theme.theme_id, member_id=member_c.member_id, month='2024-05', allocation_rate=70),
+        ])
+        db.session.commit()
+        target_theme_id = target_theme.theme_id
+
+    response = auth_client.post('/api/insights/scenario-suggestions', json={
+        'mode': 'start_fixed',
+        'start_month': '2024-05',
+        'duration_months': 1,
+        'effort_person_months': 1.2,
+        'target_theme_id': target_theme_id,
+        'preferred_department': 'Platform',
+    })
+    assert response.status_code == 200
+    data = response.json
+    assert data['mode'] == 'start_fixed'
+    assert len(data['candidates']) == 3
+    assert any(candidate['type'] == 'shift_with_assignments' for candidate in data['candidates'])
+    assert any(candidate['monthly_plan'][0]['assignments'] for candidate in data['candidates'])
+
+
+def test_insights_scenario_suggestions_keep_schedule(auth_client, app):
+    with app.app_context():
+        theme = Theme(
+            name='Busy Theme',
+            category='Platform',
+            status='active',
+            priority=1,
+        )
+        member = Member(display_name='Start Finder', department='Platform', capacity=100)
+        db.session.add_all([theme, member])
+        db.session.commit()
+
+        db.session.add_all([
+            Allocation(theme_id=theme.theme_id, member_id=member.member_id, month='2024-05', allocation_rate=100),
+            Allocation(theme_id=theme.theme_id, member_id=member.member_id, month='2024-06', allocation_rate=100),
+        ])
+        db.session.commit()
+
+    response = auth_client.post('/api/insights/scenario-suggestions', json={
+        'mode': 'keep_schedule',
+        'start_month': '2024-05',
+        'duration_months': 1,
+        'effort_person_months': 1.0,
+        'preferred_department': 'Platform',
+    })
+    assert response.status_code == 200
+    data = response.json
+    assert data['mode'] == 'keep_schedule'
+    assert data['candidates'][0]['start_month'] == '2024-07'
+    assert data['candidates'][0]['uncovered_points'] == 0
+
+
 def test_saved_views_crud(auth_client, app):
     payload = {
         'id': 'view-1',

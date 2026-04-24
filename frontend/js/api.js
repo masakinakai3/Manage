@@ -172,4 +172,8 @@ export const insights = {
         const qs = new URLSearchParams({ from, to }).toString();
         return request(`/insights/overview?${qs}`);
     },
+    scenarioSuggestions: (data) => request('/insights/scenario-suggestions', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
 };
