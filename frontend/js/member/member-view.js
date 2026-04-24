@@ -18,6 +18,7 @@ let visibleCount = 14;
 let scale = 1;
 let memberSearchQuery = '';
 let selectedMonth = null;
+const MEMBER_MONTH_COLUMN_WIDTH = 88;
 
 export async function initMemberView() {
     const state = loadViewState();
@@ -269,7 +270,7 @@ function renderHeader(months) {
     let html = '<tr><th>メンバー</th>';
     months.forEach((month) => {
         const label = formatMonthHeader(month, scale);
-        html += `<th class="${month === current ? 'month-current' : ''}" data-member-month="${month}">${label.replace('\n', '<br>')}</th>`;
+        html += `<th class="${month === current ? 'month-current' : ''}" data-member-month="${month}" style="width:${MEMBER_MONTH_COLUMN_WIDTH}px;min-width:${MEMBER_MONTH_COLUMN_WIDTH}px;max-width:${MEMBER_MONTH_COLUMN_WIDTH}px;">${label.replace('\n', '<br>')}</th>`;
     });
     html += '</tr>';
     thead.innerHTML = html;
@@ -533,13 +534,17 @@ function milestoneBadges(theme, month) {
         .filter((item) => monthBucketIncludes(item.month, month, scale));
     if (matches.length === 0) return '';
 
-    const chips = matches.map((item) => {
-        const label = escapeHtml(item.label || 'Milestone');
-        const completedClass = item.is_completed ? ' completed' : '';
-        return `<span class="member-theme-milestone${completedClass}" title="${label}">${label}</span>`;
-    }).join('');
+    const [first, ...rest] = matches;
+    const firstLabel = escapeHtml(first.label || 'Milestone');
+    const firstCompletedClass = first.is_completed ? ' completed' : '';
+    const tooltip = escapeHtml(matches
+        .map((item) => `${item.is_completed ? '完了: ' : ''}${item.label || 'Milestone'}`)
+        .join('\n'));
+    const extraCount = rest.length > 0
+        ? `<span class="member-theme-milestone member-theme-milestone-count" title="${tooltip}">+${rest.length}</span>`
+        : '';
 
-    return `<div class="member-theme-milestones">${chips}</div>`;
+    return `<div class="member-theme-milestones" title="${tooltip}"><span class="member-theme-milestone${firstCompletedClass}" title="${tooltip}">${firstLabel}</span>${extraCount}</div>`;
 }
 
 function devCompleteBadge(theme, month, rate) {

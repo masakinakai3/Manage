@@ -197,9 +197,41 @@ describe('member-view milestones', () => {
         toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
         const cell = document.querySelector('.member-theme-cell');
-        expect(cell?.textContent).toContain('Review');
-        expect(cell?.querySelector('.member-theme-milestone.completed')).not.toBeNull();
+        expect(cell?.querySelector('.member-theme-milestone')?.textContent).toBe('Release');
+        expect(cell?.querySelector('.member-theme-milestone-count')?.textContent).toBe('+1');
+        expect(cell?.querySelector('.member-theme-milestones')?.getAttribute('title')).toContain('Review');
+        expect(cell?.querySelector('.member-theme-milestones')?.getAttribute('title')).toContain('完了: Review');
         expect(cell?.querySelector('.member-theme-dev-complete')).not.toBeNull();
+    });
+
+    it('collapses multiple milestones in one month to a lead chip plus overflow count', async () => {
+        themesList.mockResolvedValue([{
+            theme_id: 1,
+            name: 'Theme A',
+            color: '#00aaff',
+            category: 'Delivery',
+            status: 'active',
+            milestones: [
+                { month: '2026-04', label: 'Release Candidate', is_completed: false },
+                { month: '2026-04', label: 'Customer Review', is_completed: true },
+                { month: '2026-04', label: 'Launch', is_completed: false },
+            ],
+        }]);
+
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+
+        await refreshMemberView();
+
+        document.querySelector('.toggle-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        const chip = document.querySelector('.member-theme-cell .member-theme-milestone:not(.member-theme-milestone-count)');
+        const countChip = document.querySelector('.member-theme-cell .member-theme-milestone-count');
+        const group = document.querySelector('.member-theme-cell .member-theme-milestones');
+
+        expect(chip?.textContent).toBe('Release Candidate');
+        expect(countChip?.textContent).toBe('+2');
+        expect(group?.getAttribute('title')).toContain('Customer Review');
+        expect(group?.getAttribute('title')).toContain('Launch');
     });
 
     it('highlights only the clicked member-load month column and toggles off on repeat click', async () => {
