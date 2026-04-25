@@ -30,7 +30,7 @@
 | メンバー管理 | メンバー作成、部署、稼働率、アクティブ/非アクティブ管理 |
 | 配員編集 | Gantt セル編集、ドラッグ&ドロップ、複数セル貼り付け、メモ保存、**Undo / Redo** |
 | 負荷確認 | メンバー別負荷一覧、過負荷警告、余力確認 |
-| 分析 | 健全性チェック、将来不足予測、部署偏り、推奨アクション |
+| 分析 | シナリオシミュレーション、将来不足予測、部署偏り |
 | 復元/共有 | 保存ビュー、スナップショット、JSON バックアップの入出力 |
 | 出力 | CSV / XLSX / JSON エクスポート |
 
@@ -139,7 +139,7 @@ flowchart TD
 | モデル | `backend/models.py` | `User`, `Theme`, `ThemeMilestone`, `Member`, `Allocation`, `Snapshot`, `SavedView` 定義 |
 | ルート | `backend/routes/*.py` | 画面ごとの API 提供 |
 | サービス | `backend/services/allocation_service.py` | テーマ負荷、メンバー負荷、過負荷警告の集計 |
-| 分析 | `backend/routes/insights.py` | 健全性チェック、予測、推奨候補の生成 |
+| 分析 | `backend/routes/insights.py` | 内部指標の計算、予測、シナリオ候補の生成 |
 
 ### 5.2 フロントエンド
 
@@ -163,7 +163,7 @@ flowchart TD
 |---|---|---|
 | Gantt | テーマ×メンバー×月の編集 | `frontend/js/gantt/gantt-renderer.js` |
 | Member Load | メンバー単位の負荷確認 | `frontend/js/member/member-view.js` |
-| Insights | 健全性チェック、推奨、予測 | `frontend/js/insights-view.js` |
+| Insights | シナリオシミュレーション、予測、ダッシュボード | `frontend/js/insights-view.js` |
 | Themes | テーマ CRUD | `frontend/js/app.js` |
 | Members | メンバー CRUD | `frontend/js/app.js` |
 

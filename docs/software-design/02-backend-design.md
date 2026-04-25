@@ -87,7 +87,7 @@ flowchart TD
 
 | ファイル | 役割 |
 |---|---|
-| `insights.py` | ダッシュボード、健全性、将来予測、推奨 |
+| `insights.py` | ダッシュボード、将来予測、シナリオシミュレーション |
 | `snapshots.py` | スナップショット保存と比較元取得 |
 | `saved_views.py` | 表示条件保存 |
 | `export.py` | CSV / XLSX / JSON 出力 |
@@ -113,12 +113,12 @@ flowchart TD
 |---|---|
 | データ収集 | `_collect_context()` |
 | 予測用集計 | `_build_forecast()` |
-| 健全性チェック | `_build_health_checks()` |
-| 健全性グルーピング | `_group_health_checks()` |
+| 内部指標算出 | `_build_health_checks()` |
+| 指標グルーピング | `_group_health_checks()` |
 | サマリ生成 | `_build_gap_summary()` |
 | 部署分析 | `_build_department_load()` |
 | 影響テーマ分析 | `_build_impact_themes()` |
-| 推奨案生成 | `_build_recommendations()` |
+| シナリオ候補生成 | `_build_recommendations()` |
 
 ### 6.2 出力イメージ
 
@@ -129,7 +129,7 @@ flowchart TD
     B --> D["summary"]
     B --> E["dashboard"]
     C --> F["health_groups"]
-    A --> G["recommendations"]
+    A --> G["scenario candidates"]
     D --> H["/api/insights/overview response"]
     E --> H
     F --> H
