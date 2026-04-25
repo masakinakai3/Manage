@@ -59,7 +59,34 @@ def _upsert_allocation(theme_id, member_id, month, rate, memo=None):
 @allocations_bp.route('', methods=['GET'])
 @login_required
 def list_allocations():
-    """Get allocations with optional filters: theme_id, member_id, from, to."""
+    """
+    List allocations
+    ---
+    tags:
+      - Allocations
+    parameters:
+      - in: query
+        name: theme_id
+        schema:
+          type: integer
+      - in: query
+        name: member_id
+        schema:
+          type: integer
+      - in: query
+        name: from
+        schema:
+          type: string
+          example: "2025-01"
+      - in: query
+        name: to
+        schema:
+          type: string
+          example: "2025-12"
+    responses:
+      200:
+        description: List of allocations
+    """
     query = Allocation.query
     theme_id = request.args.get('theme_id', type=int)
     member_id = request.args.get('member_id', type=int)
@@ -84,7 +111,36 @@ def list_allocations():
 @allocations_bp.route('/bulk', methods=['PUT'])
 @login_required
 def bulk_update():
-    """Bulk update allocations. Expects JSON array of {theme_id, member_id, month, allocation_rate, memo?}."""
+    """
+    Bulk update allocations
+    ---
+    tags:
+      - Allocations
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: array
+            items:
+              type: object
+              properties:
+                theme_id:
+                  type: integer
+                member_id:
+                  type: integer
+                month:
+                  type: string
+                  example: "2025-01"
+                allocation_rate:
+                  type: integer
+                memo:
+                  type: string
+    responses:
+      200:
+        description: Number of updated records
+      400:
+        description: Invalid input
+    """
     data = request.get_json()
     if not isinstance(data, list):
         return jsonify({'error': 'Expected array'}), 400
@@ -114,7 +170,34 @@ def bulk_update():
 @allocations_bp.route('/single', methods=['PUT'])
 @login_required
 def update_single():
-    """Update a single allocation cell."""
+    """
+    Update a single allocation cell
+    ---
+    tags:
+      - Allocations
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              theme_id:
+                type: integer
+              member_id:
+                type: integer
+              month:
+                type: string
+                example: "2025-01"
+              allocation_rate:
+                type: integer
+              memo:
+                type: string
+    responses:
+      200:
+        description: Updated allocation or deletion confirmation
+      400:
+        description: Invalid input
+    """
     data = request.get_json()
     theme_id = data['theme_id']
     member_id = data['member_id']
@@ -142,7 +225,26 @@ def update_single():
 @allocations_bp.route('/load/themes', methods=['GET'])
 @login_required
 def theme_loads():
-    """Get theme monthly loads for gantt summary rows."""
+    """
+    Get theme monthly loads
+    ---
+    tags:
+      - Allocations
+    parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+          example: "2025-01"
+      - in: query
+        name: to
+        schema:
+          type: string
+          example: "2025-12"
+    responses:
+      200:
+        description: Theme load data
+    """
     from_month = request.args.get('from')
     to_month = request.args.get('to')
     loads = get_theme_loads(from_month, to_month)
@@ -152,7 +254,26 @@ def theme_loads():
 @allocations_bp.route('/load/members', methods=['GET'])
 @login_required
 def member_loads():
-    """Get member monthly loads for member view."""
+    """
+    Get member monthly loads
+    ---
+    tags:
+      - Allocations
+    parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+          example: "2025-01"
+      - in: query
+        name: to
+        schema:
+          type: string
+          example: "2025-12"
+    responses:
+      200:
+        description: Member load data
+    """
     from_month = request.args.get('from')
     to_month = request.args.get('to')
     loads = get_member_loads(from_month, to_month)
@@ -162,7 +283,26 @@ def member_loads():
 @allocations_bp.route('/warnings', methods=['GET'])
 @login_required
 def warnings():
-    """Get overload warnings."""
+    """
+    Get overload warnings
+    ---
+    tags:
+      - Allocations
+    parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+          example: "2025-01"
+      - in: query
+        name: to
+        schema:
+          type: string
+          example: "2025-12"
+    responses:
+      200:
+        description: List of overload warnings
+    """
     from_month = request.args.get('from')
     to_month = request.args.get('to')
     warns = get_warnings(from_month, to_month)

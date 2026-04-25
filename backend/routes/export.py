@@ -183,7 +183,27 @@ def _export_gantt_layout(workbook, headers, rows, header_labels=None):
 @export_bp.route('/csv', methods=['POST'])
 @admin_required
 def export_csv():
-    """Return client-generated CSV as a downloadable file."""
+    """
+    Export CSV
+    ---
+    tags:
+      - Export
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              content:
+                type: string
+              filename:
+                type: string
+    responses:
+      200:
+        description: CSV file download
+      400:
+        description: No CSV content provided
+    """
     if request.is_json:
         data = request.get_json()
         csv_content = data.get('content', '')
@@ -210,7 +230,36 @@ def export_csv():
 @export_bp.route('/xlsx', methods=['POST'])
 @admin_required
 def export_xlsx():
-    """Export gantt rows as an XLSX file."""
+    """
+    Export XLSX
+    ---
+    tags:
+      - Export
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              headers:
+                type: array
+                items:
+                  type: string
+              rows:
+                type: array
+                items:
+                  type: object
+              filename:
+                type: string
+              layout:
+                type: string
+                enum: [gantt, list]
+    responses:
+      200:
+        description: XLSX file download
+      400:
+        description: No data
+    """
     data = request.get_json()
     if not data:
         return {'error': 'No data'}, 400
@@ -240,10 +289,14 @@ def export_xlsx():
 @export_bp.route('/json', methods=['GET'])
 @admin_required
 def export_json():
-    """Export all application data as JSON.
-
-    The exported themes include the ``milestones`` array and
-    ``dev_complete_month`` so that a full round-trip is possible.
+    """
+    Export JSON backup
+    ---
+    tags:
+      - Export
+    responses:
+      200:
+        description: Full JSON backup file download
     """
     from models import ThemeMilestone  # local import to avoid circular issues
     themes = [theme.to_dict() for theme in Theme.query.order_by(Theme.theme_id).all()]

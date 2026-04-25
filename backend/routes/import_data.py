@@ -18,19 +18,30 @@ import_data_bp = Blueprint('import_data', __name__)
 @import_data_bp.route('/json', methods=['POST'])
 @admin_required
 def import_json():
-    """Replace all application data with the contents of an uploaded JSON backup.
-
-    Expects a multipart/form-data request with a 'file' field containing a
-    JSON file produced by the export endpoint.
-
-    The import is performed inside a single transaction:
-    1. Delete all allocations, theme-member associations, milestone rows,
-       themes, and members.
-    2. Re-create members (mapping old IDs to new DB-assigned IDs).
-    3. Re-create themes (mapping old IDs to new DB-assigned IDs).
-    4. Re-create theme milestones (from the ``milestones`` array on each theme).
-    5. Re-create theme-member associations.
-    6. Re-create allocations.
+    """
+    Import JSON backup
+    ---
+    tags:
+      - Import
+    requestBody:
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            required:
+              - file
+            properties:
+              file:
+                type: string
+                format: binary
+                description: JSON backup file exported from /api/export/json
+    responses:
+      200:
+        description: Import successful with counts of restored records
+      400:
+        description: Invalid file or missing required keys
+      500:
+        description: Import failed (transaction rolled back)
     """
     file = request.files.get('file')
     if not file:

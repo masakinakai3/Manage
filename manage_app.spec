@@ -11,6 +11,9 @@ frontend_dist = Path(
 build_profile = os.environ.get("MANAGE_BUILD_PROFILE", "release").strip().lower()
 custom_hook_dir = project_root / "pyinstaller_hooks"
 
+from PyInstaller.utils.hooks import collect_data_files
+flasgger_datas = collect_data_files('flasgger')
+
 # Keep the packaged app focused on the libraries we actually execute at runtime.
 # These modules were being pulled in by broad third-party hooks despite not being
 # used by this project's Flask + SQLite + XLSX export flow.
@@ -42,7 +45,7 @@ a = Analysis(
     [str(project_root / "backend" / "app.py")],
     pathex=[str(project_root / "backend"), str(project_root)],
     binaries=[],
-    datas=[(str(frontend_dist), "dist")],
+    datas=[(str(frontend_dist), "dist")] + flasgger_datas,
     hiddenimports=[],
     hookspath=[str(custom_hook_dir)],
     hooksconfig={},

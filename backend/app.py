@@ -14,6 +14,7 @@ import secrets
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 from flask_login import LoginManager
+from flasgger import Swagger
 from models import db, User, Theme, ThemeMilestone
 
 APP_HOST = os.environ.get('APP_HOST', '0.0.0.0')
@@ -122,6 +123,14 @@ def create_app(test_config=None):
     app.register_blueprint(snapshots_bp, url_prefix='/api/snapshots')
     app.register_blueprint(insights_bp, url_prefix='/api/insights')
     app.register_blueprint(saved_views_bp, url_prefix='/api/saved-views')
+
+    # Swagger / OpenAPI
+    app.config['SWAGGER'] = {
+        'title': 'Resource Manager API',
+        'uiversion': 3,
+        'openapi': '3.0.1'
+    }
+    Swagger(app)
 
     # Serve the bundled single-page app.
     @app.route('/', defaults={'path': ''})

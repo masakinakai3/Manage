@@ -1110,7 +1110,26 @@ def _normalize_scenario_payload(payload):
 @insights_bp.route("/overview", methods=["GET"])
 @login_required
 def overview():
-    """Return dashboard metrics, health checks, and staffing recommendations."""
+    """
+    Get insights overview
+    ---
+    tags:
+      - Insights
+    parameters:
+      - in: query
+        name: from
+        schema:
+          type: string
+          example: "2025-01"
+      - in: query
+        name: to
+        schema:
+          type: string
+          example: "2025-12"
+    responses:
+      200:
+        description: Dashboard metrics, health checks, and recommendations
+    """
     from_month = request.args.get("from")
     to_month = request.args.get("to")
     themes, members, allocations = _collect_context(from_month, to_month)
@@ -1148,7 +1167,39 @@ def overview():
 @insights_bp.route("/scenario-suggestions", methods=["POST"])
 @login_required
 def scenario_suggestions():
-    """Return candidate staffing and schedule suggestions for a hypothetical project."""
+    """
+    Get scenario staffing suggestions
+    ---
+    tags:
+      - Insights
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              start_month:
+                type: string
+                example: "2025-04"
+              duration_months:
+                type: integer
+                example: 6
+              effort_person_months:
+                type: number
+                example: 3.0
+              mode:
+                type: string
+                enum: [start_fixed, keep_schedule]
+              preferred_department:
+                type: string
+              target_theme_id:
+                type: integer
+    responses:
+      200:
+        description: Candidate staffing suggestions
+      400:
+        description: Invalid input
+    """
     payload = request.get_json(silent=True) or {}
     try:
         normalized = _normalize_scenario_payload(payload)

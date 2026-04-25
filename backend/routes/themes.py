@@ -90,22 +90,28 @@ def _replace_theme_milestones(theme, items):
 @themes_bp.route('', methods=['GET'])
 @login_required
 def list_themes():
+    """
+    List all themes
+    ---
+    tags:
+      - Themes
+    responses:
+      200:
+        description: List of themes with member counts and date ranges
+    """
     themes = Theme.query.order_by(Theme.theme_id).all()
     result = []
     for t in themes:
         td = t.to_dict()
-        # Add summary info
         allocs = Allocation.query.filter_by(theme_id=t.theme_id).filter(
             Allocation.allocation_rate > 0
         )
-        allocs_list = allocs.all()  # Execute query once
+        allocs_list = allocs.all()
         months = [a.month for a in allocs_list]
-        # Currently assigned members (via association) or those with allocations
         assigned_ids = set(m.member_id for m in t.members)
         alloc_ids = set(a.member_id for a in allocs_list)
         all_member_ids = assigned_ids | alloc_ids
-        
-        # Use stored dates or calculated fallback
+
         td['start_month'] = t.start_month or (min(months) if months else None)
         td['end_month'] = t.end_month or (max(months) if months else None)
         td['member_count'] = len(all_member_ids)
@@ -117,6 +123,52 @@ def list_themes():
 @themes_bp.route('', methods=['POST'])
 @login_required
 def create_theme():
+    """
+    Create a theme
+    ---
+    tags:
+      - Themes
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - name
+            properties:
+              name:
+                type: string
+              category:
+                type: string
+              status:
+                type: string
+                enum: [planning, active, completed, on_hold]
+              color:
+                type: string
+              priority:
+                type: integer
+              dev_rank:
+                type: string
+              start_month:
+                type: string
+                example: "2025-01"
+              end_month:
+                type: string
+                example: "2025-12"
+              milestones:
+                type: array
+                items:
+                  type: object
+              dev_complete_months:
+                type: array
+                items:
+                  type: object
+    responses:
+      201:
+        description: Theme created
+      400:
+        description: name is required
+    """
     data = request.get_json()
     if not data or not data.get('name'):
         return jsonify({'error': 'name is required'}), 400
@@ -140,6 +192,57 @@ def create_theme():
 @themes_bp.route('/<int:theme_id>', methods=['PUT'])
 @login_required
 def update_theme(theme_id):
+    """
+    Update a theme
+    ---
+    tags:
+      - Themes
+    parameters:
+      - in: path
+        name: theme_id
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              name:
+                type: string
+              category:
+                type: string
+              status:
+                type: string
+              color:
+                type: string
+              priority:
+                type: integer
+              dev_rank:
+                type: string
+              start_month:
+                type: string
+              end_month:
+                type: string
+              milestones:
+                type: array
+                items:
+                  type: object
+              dev_complete_months:
+                type: array
+                items:
+                  type: object
+              member_ids:
+                type: array
+                items:
+                  type: integer
+    responses:
+      200:
+        description: Updated theme
+      404:
+        description: Not found
+    """
     theme = db.session.get(Theme, theme_id)
     if not theme:
         return jsonify({'error': 'Not found'}), 404
@@ -156,11 +259,10 @@ def update_theme(theme_id):
 
     if 'milestones' in data or 'milestone_month' in data or 'milestone_label' in data:
         _replace_theme_milestones(theme, _normalize_milestones(data))
-    
-    # Optional: Bulk update member assignments if provided
+
     if 'member_ids' in data:
         theme.members = [db.session.get(Member, mid) for mid in data['member_ids'] if db.session.get(Member, mid)]
-        
+
     db.session.commit()
     return jsonify(theme.to_dict())
 
@@ -168,6 +270,23 @@ def update_theme(theme_id):
 @themes_bp.route('/<int:theme_id>', methods=['DELETE'])
 @login_required
 def delete_theme(theme_id):
+    """
+    Delete a theme
+    ---
+    tags:
+      - Themes
+    parameters:
+      - in: path
+        name: theme_id
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Deleted
+      404:
+        description: Not found
+    """
     theme = db.session.get(Theme, theme_id)
     if not theme:
         return jsonify({'error': 'Not found'}), 404
@@ -179,6 +298,33 @@ def delete_theme(theme_id):
 @themes_bp.route('/<int:theme_id>/members', methods=['POST'])
 @login_required
 def assign_member(theme_id):
+    """
+    Assign a single member to a theme
+    ---
+    tags:
+      - Themes
+    parameters:
+      - in: path
+        name: theme_id
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - member_id
+            properties:
+              member_id:
+                type: integer
+    responses:
+      200:
+        description: Updated theme
+      404:
+        description: Theme or member not found
+    """
     theme = db.session.get(Theme, theme_id)
     if not theme:
         return jsonify({'error': 'Theme not found'}), 404
@@ -187,7 +333,7 @@ def assign_member(theme_id):
     member = db.session.get(Member, member_id)
     if not member:
         return jsonify({'error': 'Member not found'}), 404
-    
+
     if member not in theme.members:
         theme.members.append(member)
         db.session.commit()
@@ -197,39 +343,91 @@ def assign_member(theme_id):
 @themes_bp.route('/<int:theme_id>/members/bulk', methods=['POST'])
 @login_required
 def assign_members_bulk(theme_id):
+    """
+    Bulk assign members to a theme
+    ---
+    tags:
+      - Themes
+    parameters:
+      - in: path
+        name: theme_id
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - member_ids
+            properties:
+              member_ids:
+                type: array
+                items:
+                  type: integer
+    responses:
+      200:
+        description: Number of members added and updated theme
+      400:
+        description: Invalid input
+      404:
+        description: Theme not found
+    """
     theme = db.session.get(Theme, theme_id)
     if not theme:
         return jsonify({'error': 'Theme not found'}), 404
     data = request.get_json()
     member_ids = data.get('member_ids', [])
-    
+
     if not isinstance(member_ids, list):
         return jsonify({'error': 'member_ids must be a list'}), 400
-    
+
     added_count = 0
     for mid in member_ids:
         member = db.session.get(Member, mid)
         if member and member not in theme.members:
             theme.members.append(member)
             added_count += 1
-            
+
     if added_count > 0:
         db.session.commit()
-        
-    return jsonify({'message': f'Added {added_count} members', 'theme': theme.to_dict()})
 
+    return jsonify({'message': f'Added {added_count} members', 'theme': theme.to_dict()})
 
 
 @themes_bp.route('/<int:theme_id>/members/<int:member_id>', methods=['DELETE'])
 @login_required
 def unassign_member(theme_id, member_id):
+    """
+    Unassign a member from a theme
+    ---
+    tags:
+      - Themes
+    parameters:
+      - in: path
+        name: theme_id
+        required: true
+        schema:
+          type: integer
+      - in: path
+        name: member_id
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Updated theme
+      404:
+        description: Theme or member not found
+    """
     theme = db.session.get(Theme, theme_id)
     if not theme:
         return jsonify({'error': 'Theme not found'}), 404
     member = db.session.get(Member, member_id)
     if not member:
         return jsonify({'error': 'Member not found'}), 404
-    
+
     if member in theme.members:
         theme.members.remove(member)
         db.session.commit()

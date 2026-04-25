@@ -16,7 +16,15 @@ snapshots_bp = Blueprint('snapshots', __name__)
 @snapshots_bp.route('', methods=['GET'])
 @login_required
 def list_snapshots():
-    """List all snapshots."""
+    """
+    List snapshots
+    ---
+    tags:
+      - Snapshots
+    responses:
+      200:
+        description: List of snapshots (without data blob)
+    """
     snapshots = Snapshot.query.order_by(Snapshot.created_at.desc()).all()
     # Don't return the full data blob by default
     res = []
@@ -31,7 +39,23 @@ def list_snapshots():
 @snapshots_bp.route('/<int:id>', methods=['GET'])
 @login_required
 def get_snapshot(id):
-    """Get a specific snapshot including data."""
+    """
+    Get a snapshot
+    ---
+    tags:
+      - Snapshots
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Snapshot including data
+      404:
+        description: Not found
+    """
     s = db.session.get(Snapshot, id)
     if not s:
         return {'error': 'Snapshot not found'}, 404
@@ -40,7 +64,30 @@ def get_snapshot(id):
 @snapshots_bp.route('', methods=['POST'])
 @login_required
 def create_snapshot():
-    """Create a new snapshot."""
+    """
+    Create a snapshot
+    ---
+    tags:
+      - Snapshots
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - name
+              - data
+            properties:
+              name:
+                type: string
+              data:
+                type: object
+    responses:
+      201:
+        description: Snapshot created
+      400:
+        description: Invalid payload
+    """
     req = request.get_json()
     if not req or 'name' not in req or 'data' not in req:
         return {'error': 'Invalid payload'}, 400
@@ -57,7 +104,23 @@ def create_snapshot():
 @snapshots_bp.route('/<int:id>', methods=['DELETE'])
 @login_required
 def delete_snapshot(id):
-    """Delete a snapshot."""
+    """
+    Delete a snapshot
+    ---
+    tags:
+      - Snapshots
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    responses:
+      204:
+        description: Deleted
+      404:
+        description: Not found
+    """
     s = db.session.get(Snapshot, id)
     if not s:
         return {'error': 'Snapshot not found'}, 404

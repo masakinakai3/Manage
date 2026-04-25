@@ -16,6 +16,22 @@ members_bp = Blueprint('members', __name__)
 @members_bp.route('', methods=['GET'])
 @login_required
 def list_members():
+    """
+    List members
+    ---
+    tags:
+      - Members
+    parameters:
+      - in: query
+        name: active
+        schema:
+          type: boolean
+          default: true
+        description: If true, return only active members
+    responses:
+      200:
+        description: List of members
+    """
     active_only = request.args.get('active', 'true').lower() == 'true'
     query = Member.query
     if active_only:
@@ -27,6 +43,32 @@ def list_members():
 @members_bp.route('', methods=['POST'])
 @login_required
 def create_member():
+    """
+    Create a member
+    ---
+    tags:
+      - Members
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - display_name
+            properties:
+              display_name:
+                type: string
+              department:
+                type: string
+              capacity:
+                type: integer
+                default: 100
+    responses:
+      201:
+        description: Member created
+      400:
+        description: display_name is required
+    """
     data = request.get_json()
     if not data or not data.get('display_name'):
         return jsonify({'error': 'display_name is required'}), 400
@@ -43,6 +85,37 @@ def create_member():
 @members_bp.route('/<int:member_id>', methods=['PUT'])
 @login_required
 def update_member(member_id):
+    """
+    Update a member
+    ---
+    tags:
+      - Members
+    parameters:
+      - in: path
+        name: member_id
+        required: true
+        schema:
+          type: integer
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              display_name:
+                type: string
+              department:
+                type: string
+              capacity:
+                type: integer
+              is_active:
+                type: boolean
+    responses:
+      200:
+        description: Updated member
+      404:
+        description: Not found
+    """
     member = db.session.get(Member, member_id)
     if not member:
         return jsonify({'error': 'Not found'}), 404
@@ -57,6 +130,23 @@ def update_member(member_id):
 @members_bp.route('/<int:member_id>', methods=['DELETE'])
 @login_required
 def delete_member(member_id):
+    """
+    Delete a member
+    ---
+    tags:
+      - Members
+    parameters:
+      - in: path
+        name: member_id
+        required: true
+        schema:
+          type: integer
+    responses:
+      200:
+        description: Deleted
+      404:
+        description: Not found
+    """
     member = db.session.get(Member, member_id)
     if not member:
         return jsonify({'error': 'Not found'}), 404
