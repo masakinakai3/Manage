@@ -27,7 +27,19 @@
 - Member load view: `frontend/js/member/member-view.js`
 - Insights view: `frontend/js/insights-view.js`
 - Backend app/auth/session setup: `backend/app.py`
+- Export endpoints: `backend/routes/export.py`
 - Insights API: `backend/routes/insights.py`
+
+## CSV Export Guidance
+
+- Use the `manage-csv-export` skill for CSV export requests, including Gantt CSV, member-load CSV, `/api/export/csv`, filename/content fixes, and Excel compatibility issues.
+- CSV output should match the live UI state the user is looking at: visible period/scale, active filters/search, row ordering, labels, rates, memos, milestones, and relevant theme/member metadata.
+- Keep Japanese column labels readable. Preserve explicit values such as `P0`, `-`, no-rank, stopped/completed status labels, and memo text instead of normalizing them away.
+- Prefer a shared, well-tested escaping path over ad hoc string joins when changing CSV shape. Quote cells containing commas, quotes, CR/LF, or leading/trailing whitespace, and preserve CRLF row endings where the existing flow uses them.
+- Keep Excel-on-Windows compatibility: `/api/export/csv` currently prepends a UTF-8 BOM and returns `text/csv; charset=utf-8`; do not remove that behavior unless the request explicitly changes the export contract.
+- If CSV behavior diverges between browser-generated downloads and `/api/export/csv`, document which path owns the behavior and add focused tests for that path.
+- Treat CSV changes as user-visible workflow changes: update `docs/APIContract.md`, `docs/software-design/04-data-and-api.md`, or nearby docs when request/response shape, columns, labels, permissions, or filename behavior changes.
+- For third-party CSV parsing/writing libraries or current framework-specific APIs, use the `context7` MCP server first. For OpenAI-related export automation questions, use `openaiDeveloperDocs` first.
 
 ## Verification
 
@@ -43,5 +55,6 @@
 - Keep changes end-to-end when a feature crosses data model, API, import/export, frontend rendering, docs, and tests.
 - Prefer durable repo-resident guidance, tests, and docs over chat-only advice.
 - If a request is about Web UI design quality, use the `manage-ui-design` skill.
+- If a request is about CSV export behavior or CSV output quality, use the `manage-csv-export` skill.
 - For OpenAI, Codex, ChatGPT, Apps SDK, or OpenAI API questions, use the `openaiDeveloperDocs` MCP server before general web search.
 - For current third-party library/framework usage, prefer the `context7` MCP server when available before relying on stale memory.
