@@ -265,4 +265,22 @@ describe('member-view milestones', () => {
         expect(document.querySelector('th[data-member-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
         expect(document.querySelector('td[data-member-cell="10-2026-05"]')?.classList.contains('month-selected')).toBe(false);
     });
+
+    it('renders compact single-line summary cards', async () => {
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+
+        await refreshMemberView();
+
+        const summary = document.getElementById('member-load-summary');
+        const labels = Array.from(summary?.querySelectorAll('.summary-label') || []).map((node) => node.textContent);
+
+        expect(summary?.querySelectorAll('.summary-card')).toHaveLength(2);
+        expect(summary?.querySelectorAll('.member-load-summary-card')).toHaveLength(2);
+        expect(summary?.querySelectorAll('.member-load-summary-main')).toHaveLength(2);
+        expect(labels).toEqual(['平均負荷', '過負荷メンバー']);
+        expect(summary?.textContent).toContain('全メンバーの月平均');
+        expect(summary?.textContent).toContain('警告セル 0 件');
+        expect(summary?.textContent).not.toContain('余力あり');
+        expect(summary?.textContent).not.toContain('未割当');
+    });
 });

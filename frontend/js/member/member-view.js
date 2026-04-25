@@ -153,6 +153,55 @@ function renderSummary(memberLoads, warnings) {
     const summary = document.getElementById('member-load-summary');
     if (!summary) return;
 
+    {
+        const summaryMembersWithData = allMembers.length;
+        let summaryOverloadedMembers = 0;
+        let summaryAverageLoad = 0;
+
+        allMembers.forEach((member) => {
+            const loads = Object.values(memberLoads[member.member_id] || {});
+            const maxLoad = loads.length ? Math.max(...loads) : 0;
+            const avg = loads.length ? Math.round(loads.reduce((sum, value) => sum + value, 0) / loads.length) : 0;
+            summaryAverageLoad += avg;
+
+            if (maxLoad > member.capacity) summaryOverloadedMembers += 1;
+        });
+
+        const avgLoadDisplay = summaryMembersWithData > 0 ? Math.round(summaryAverageLoad / summaryMembersWithData) : 0;
+
+        summary.innerHTML = `
+            <article class="summary-card member-load-summary-card">
+                <div class="member-load-summary-main">
+                    <div class="summary-label">平均負荷</div>
+                    <div class="summary-value">${avgLoadDisplay}%</div>
+                </div>
+                <div class="summary-subtext member-load-summary-meta">全メンバーの月平均</div>
+            </article>
+            <article class="summary-card member-load-summary-card">
+                <div class="member-load-summary-main">
+                    <div class="summary-label">過負荷メンバー</div>
+                    <div class="summary-value">${summaryOverloadedMembers}</div>
+                </div>
+                <div class="summary-subtext member-load-summary-meta">警告セル ${warnings.length} 件</div>
+            </article>
+        `;
+        return;
+
+        summary.innerHTML = `
+            <article class="summary-card">
+                <div class="summary-label">平均負荷</div>
+                <div class="summary-value">${avgLoadDisplay}%</div>
+                <div class="summary-subtext">全メンバーの月平均</div>
+            </article>
+            <article class="summary-card">
+                <div class="summary-label">過負荷メンバー</div>
+                <div class="summary-value">${summaryOverloadedMembers}</div>
+                <div class="summary-subtext">警告セル ${warnings.length} 件</div>
+            </article>
+        `;
+        return;
+    }
+
     const membersWithData = allMembers.length;
     let overloadedMembers = 0;
     let slackMembers = 0;
