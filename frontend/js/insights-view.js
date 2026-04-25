@@ -892,6 +892,9 @@ function renderScenarioResults(result) {
         <article class="insight-scenario-card${candidate.recommended ? ' is-recommended' : ''}">
             <div class="insight-scenario-header">
                 <div>
+                    <div class="candidate-body">
+                        <span class="dashboard-pill">${escapeHtml(getScenarioCandidateLabel(index))}</span>
+                    </div>
                     <strong>${escapeHtml(candidate.title || `候補 ${index + 1}`)}</strong>
                     <p class="summary-subtext">${escapeHtml(candidate.summary || '')}</p>
                 </div>
@@ -961,9 +964,10 @@ function renderScenarioResults(result) {
 
     target.querySelectorAll('[data-scenario-preview-index]').forEach((button) => {
         button.addEventListener('click', () => {
-            const candidate = candidates[Number.parseInt(button.dataset.scenarioPreviewIndex || '-1', 10)];
+            const candidateIndex = Number.parseInt(button.dataset.scenarioPreviewIndex || '-1', 10);
+            const candidate = candidates[candidateIndex];
             if (!candidate) return;
-            openCandidateInGantt(candidate);
+            openCandidateInGantt(candidate, candidateIndex);
         });
     });
 }
@@ -978,15 +982,18 @@ function formatPersonMonths(value) {
     return Number.isInteger(number) ? String(number) : number.toFixed(1);
 }
 
-function openCandidateInGantt(candidate) {
-    const scenarioInput = currentScenarioResult?.input || {};
-    const themeOptions = currentOverview?.dashboard?.theme_options || [];
-    const targetThemeId = Number.parseInt(String(scenarioInput.target_theme_id || ''), 10);
-    const targetTheme = themeOptions.find((item) => item.theme_id === targetThemeId);
-    const preview = {
-        title: candidate.title || '提案プレビュー',
+function getScenarioCandidateLabel(index) {
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    return alphabet[index] || String(index + 1);
+}
+
+function buildScenarioPreviewCandidate(candidate, candidateIndex, scenarioInput, targetTheme) {
+    const candidateLabel = getScenarioCandidateLabel(candidateIndex);
+    return {
+        scenarioLabel: candidateLabel,
+        title: `[${candidateLabel}] ${candidate.title || '提案プレビュー'}`,
         startMonth: candidate.start_month || scenarioInput.start_month || '',
-        previewThemeName: targetTheme?.name ? `提案追加: ${targetTheme.name}` : '提案案件',
+        previewThemeName: targetTheme?.name ? `[${candidateLabel}] 提案追加: ${targetTheme.name}` : `[${candidateLabel}] 提案案件`,
         assignments: (candidate.monthly_plan || []).flatMap((monthPlan) => (monthPlan.assignments || []).map((assignment) => ({
             month: monthPlan.month,
             memberId: assignment.member_id,
@@ -1002,8 +1009,22 @@ function openCandidateInGantt(candidate) {
             rate: Number.parseInt(String(suggestion.released_points ?? Math.round((suggestion.released_person_months || 0) * 100)), 10) || 0,
         })),
     };
+}
 
-    showScenarioPreview(preview);
+function openCandidateInGantt(candidate, candidateIndex = 0) {
+    const scenarioInput = currentScenarioResult?.input || {};
+    const candidates = currentScenarioResult?.candidates || [];
+    const themeOptions = currentOverview?.dashboard?.theme_options || [];
+    const targetThemeId = Number.parseInt(String(scenarioInput.target_theme_id || ''), 10);
+    const targetTheme = themeOptions.find((item) => item.theme_id === targetThemeId);
+    const previews = candidates.length
+        ? candidates.map((item, index) => buildScenarioPreviewCandidate(item, index, scenarioInput, targetTheme))
+        : [buildScenarioPreviewCandidate(candidate, candidateIndex, scenarioInput, targetTheme)];
+
+    showScenarioPreview({
+        previews,
+        selectedIndex: candidateIndex,
+    });
     updateViewState({
         startMonth: candidate.start_month || currentState.startMonth,
         scale: 1,

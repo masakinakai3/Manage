@@ -36,6 +36,36 @@
     backdrop-filter: blur(10px);
 }
 
+.gantt-scenario-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    pointer-events: auto;
+}
+
+.gantt-scenario-select {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(10px);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+}
+
+.gantt-scenario-select select {
+    min-width: 220px;
+    border: none;
+    background: transparent;
+    color: var(--color-text);
+    font: inherit;
+}
+
 .gantt-table {
     border-collapse: separate;
     border-spacing: 0;

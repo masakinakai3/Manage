@@ -281,9 +281,10 @@ describe('gantt-renderer regressions', () => {
 
         await refreshGantt();
         showScenarioPreview({
-            title: 'Scenario A',
+            scenarioLabel: 'A',
+            title: '[A] Scenario A',
             startMonth: '2026-04',
-            previewThemeName: 'Preview Theme',
+            previewThemeName: '[A] Preview Theme',
             assignments: [{
                 month: '2026-04',
                 memberId: 10,
@@ -300,11 +301,67 @@ describe('gantt-renderer regressions', () => {
 
         const returnButton = document.querySelector('[data-scenario-return-toolbar="true"]');
         expect(returnButton).not.toBeNull();
+        expect(document.querySelector('.gantt-row-scenario .theme-priority-badge')?.textContent).toBe('A');
+        expect(document.querySelector('.scenario-preview-card .summary-value')?.textContent).toContain('[A]');
 
         returnButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
         expect(navClick).toHaveBeenCalledTimes(1);
         expect(document.querySelector('[data-scenario-return-toolbar="true"]')).toBeNull();
+    });
+
+    it('switches scenario previews from the toolbar dropdown', async () => {
+        const { refreshGantt, showScenarioPreview } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+        showScenarioPreview({
+            previews: [
+                {
+                    scenarioLabel: 'A',
+                    title: '[A] Scenario A',
+                    startMonth: '2026-04',
+                    previewThemeName: '[A] Preview Theme',
+                    assignments: [{
+                        month: '2026-04',
+                        memberId: 10,
+                        displayName: 'Alice',
+                        department: 'Dev',
+                        rate: 30,
+                    }],
+                    shiftSuggestions: [],
+                },
+                {
+                    scenarioLabel: 'B',
+                    title: '[B] Scenario B',
+                    startMonth: '2026-04',
+                    previewThemeName: '[B] Backup Theme',
+                    assignments: [{
+                        month: '2026-04',
+                        memberId: 11,
+                        displayName: 'Bob',
+                        department: 'QA',
+                        rate: 40,
+                    }],
+                    shiftSuggestions: [],
+                },
+            ],
+            selectedIndex: 0,
+        });
+
+        const select = document.querySelector('[data-scenario-select-toolbar="true"]');
+        expect(select).not.toBeNull();
+        expect(select?.value).toBe('0');
+        expect(document.querySelector('.scenario-preview-card .summary-value')?.textContent).toContain('[A]');
+        expect(document.querySelector('.gantt-row-scenario .theme-priority-badge')?.textContent).toBe('A');
+
+        select.value = '1';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+
+        await vi.waitFor(() => {
+            expect(document.querySelector('.scenario-preview-card .summary-value')?.textContent).toContain('[B]');
+            expect(document.querySelector('.gantt-row-scenario .theme-priority-badge')?.textContent).toBe('B');
+            expect(document.querySelector('.gantt-row-scenario .theme-name-text')?.textContent).toContain('[B]');
+        });
     });
 
     it('builds gantt-shaped Excel export data', async () => {

@@ -56,18 +56,63 @@ let selectionAnchor = null;
 let selectedRange = null;
 let copiedRange = null;
 let ganttKeyboardBound = false;
-let scenarioPreview = null;
+let scenarioPreviewState = null;
 let scenarioPreviewContext = null;
 
 export function showScenarioPreview(preview) {
-    scenarioPreview = preview || null;
+    scenarioPreviewState = normalizeScenarioPreviewState(preview);
     rerenderGanttView();
 }
 
 export function clearScenarioPreview() {
-    if (!scenarioPreview) return;
-    scenarioPreview = null;
+    if (!scenarioPreviewState) return;
+    scenarioPreviewState = null;
     rerenderGanttView();
+}
+
+function normalizeScenarioPreviewState(preview) {
+    if (!preview) return null;
+    const previews = (Array.isArray(preview.previews) ? preview.previews : [preview]).filter(Boolean);
+    if (!previews.length) return null;
+    const rawIndex = Number.parseInt(String(preview.selectedIndex ?? 0), 10);
+    const selectedIndex = Number.isFinite(rawIndex) ? Math.min(Math.max(rawIndex, 0), previews.length - 1) : 0;
+    return { previews, selectedIndex };
+}
+
+function getActiveScenarioPreview() {
+    if (!scenarioPreviewState?.previews?.length) return null;
+    return scenarioPreviewState.previews[scenarioPreviewState.selectedIndex] || scenarioPreviewState.previews[0] || null;
+}
+
+function getScenarioPreviewOptionLabel(preview, index) {
+    const label = preview?.scenarioLabel || String(index + 1);
+    const title = String(preview?.title || '').trim();
+    if (!title) return label;
+    return title.startsWith(`[${label}]`) ? title : `[${label}] ${title}`;
+}
+
+function selectScenarioPreview(index, { syncViewState = false } = {}) {
+    if (!scenarioPreviewState?.previews?.length) return;
+    const normalizedIndex = Math.min(Math.max(index, 0), scenarioPreviewState.previews.length - 1);
+    if (scenarioPreviewState.selectedIndex === normalizedIndex && !syncViewState) {
+        rerenderGanttView();
+        return;
+    }
+
+    scenarioPreviewState = {
+        ...scenarioPreviewState,
+        selectedIndex: normalizedIndex,
+    };
+
+    const activePreview = getActiveScenarioPreview();
+    rerenderGanttView();
+
+    if (syncViewState && activePreview?.startMonth) {
+        updateViewState({
+            startMonth: activePreview.startMonth,
+            scale: 1,
+        });
+    }
 }
 
 function returnToInsightsFromScenarioPreview() {
@@ -80,7 +125,7 @@ function renderScenarioToolbarActions() {
     if (!toolbar) return;
 
     let container = document.getElementById('gantt-scenario-actions');
-    if (!scenarioPreview) {
+    if (!scenarioPreviewState) {
         container?.remove();
         return;
     }
@@ -92,10 +137,24 @@ function renderScenarioToolbarActions() {
         toolbar.prepend(container);
     }
 
+    const options = scenarioPreviewState.previews.map((preview, index) => `
+        <option value="${index}" ${index === scenarioPreviewState.selectedIndex ? 'selected' : ''}>${escapeHtml(getScenarioPreviewOptionLabel(preview, index))}</option>
+    `).join('');
+
     container.innerHTML = `
+        ${scenarioPreviewState.previews.length > 1 ? `
+            <label class="gantt-scenario-select">
+                <span>提案</span>
+                <select data-scenario-select-toolbar="true">${options}</select>
+            </label>
+        ` : ''}
         <button class="btn btn-primary btn-sm" type="button" data-scenario-return-toolbar="true">${SCENARIO_RETURN_LABEL}</button>
         <button class="btn btn-ghost btn-sm" type="button" data-scenario-clear-toolbar="true">${SCENARIO_CLEAR_LABEL}</button>
     `;
+    container.querySelector('[data-scenario-select-toolbar="true"]')?.addEventListener('change', (event) => {
+        const nextIndex = Number.parseInt(event.target.value, 10);
+        selectScenarioPreview(Number.isFinite(nextIndex) ? nextIndex : 0, { syncViewState: true });
+    });
     container.querySelector('[data-scenario-return-toolbar="true"]')?.addEventListener('click', () => returnToInsightsFromScenarioPreview());
     container.querySelector('[data-scenario-clear-toolbar="true"]')?.addEventListener('click', () => clearScenarioPreview());
 }
@@ -183,6 +242,7 @@ function rerenderGanttView() {
 }
 
 function buildScenarioPreviewContext() {
+    const scenarioPreview = getActiveScenarioPreview();
     if (!scenarioPreview) return null;
 
     const assignmentByKey = new Map();
@@ -218,6 +278,7 @@ function buildScenarioPreviewContext() {
     });
 
     return {
+        scenarioLabel: scenarioPreview.scenarioLabel || '提案',
         title: scenarioPreview.title || '提案プレビュー',
         startMonth: scenarioPreview.startMonth || '',
         previewThemeName: scenarioPreview.previewThemeName || '提案案件',
@@ -255,7 +316,7 @@ function renderScenarioPreviewRows(months, current) {
                         <span class="theme-name-text">${escapeHtml(scenarioPreviewContext.previewThemeName)}</span>
                     </div>
                     <div class="theme-label-actions">
-                        <span class="theme-priority-badge">提案</span>
+                        <span class="theme-priority-badge">${escapeHtml(scenarioPreviewContext.scenarioLabel || '提案')}</span>
                     </div>
                 </div>
             </td>
