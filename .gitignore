@@ -11,6 +11,8 @@ venv/
 # Flask / SQLite
 backend/database.db
 backend/instance/
+backend/secret_key.txt
+dist/secret_key.txt
 
 # Node.js
 node_modules/
@@ -25,8 +27,10 @@ dist_build/
 build/
 build_temp/
 .build_exe_state.json
+.playwright-cli/
 test_output.txt
 test_error.txt
+tools/*.log
 
 # IDE
 .vscode/
