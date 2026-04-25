@@ -181,7 +181,7 @@ export async function initGantt() {
         priorityFilter = next.ganttPriority || 'all';
         groupBy = next.groupBy || 'none';
         syncFilterInputs();
-        syncScaleButtons();
+        syncPeriodControls();
         refreshGantt();
     });
     hydrateCollapsed();
@@ -193,7 +193,7 @@ function ensureInlinePeriodControls() {
     const toolbar = document.querySelector('.gantt-floating-actions');
     const scaleSwitcher = document.getElementById('scale-switcher');
     const presetSelect = document.getElementById('shared-period-preset');
-    const monthNav = document.querySelector('.gantt-control-row-primary .month-nav');
+    const monthNav = document.getElementById('gantt-prev')?.closest('.month-nav') || document.querySelector('.gantt-control-row-primary .month-nav');
     if (!toolbar || !scaleSwitcher || !presetSelect || !monthNav) return;
 
     let tableActions = document.getElementById('gantt-table-actions');
@@ -217,6 +217,16 @@ function ensureInlinePeriodControls() {
     }
 
     inlineControls.append(scaleSwitcher, presetSelect, monthNav);
+    syncPeriodControls();
+}
+
+function syncPeriodControls() {
+    const state = loadViewState();
+    const presetSelect = document.getElementById('shared-period-preset');
+    if (presetSelect && presetSelect.value !== state.preset) {
+        presetSelect.value = state.preset;
+    }
+    syncScaleButtons();
 }
 
 export async function refreshGantt() {
@@ -375,7 +385,17 @@ function focusScenarioPreview() {
 
 function bindControls() {
     ensureGanttFilterControls();
-    document.querySelectorAll('#scale-switcher .scale-btn').forEach((button) => button.addEventListener('click', () => updateViewState({ scale: Number.parseInt(button.dataset.scale, 10) })));
+    document.addEventListener('click', (event) => {
+        const scaleButton = event.target.closest('#scale-switcher .scale-btn');
+        if (!scaleButton) return;
+        const nextScale = Number.parseInt(scaleButton.dataset.scale, 10);
+        if (Number.isFinite(nextScale)) updateViewState({ scale: nextScale });
+    });
+    document.addEventListener('change', (event) => {
+        if (event.target.id !== 'shared-period-preset') return;
+        const preset = event.target.value || 'rolling-6';
+        updateViewState({ preset, ...getPresetConfig(preset) });
+    });
     document.getElementById('gantt-theme-filter')?.addEventListener('change', (event) => updateViewState({ ganttSearch: event.target.value }));
     document.getElementById('gantt-category-filter')?.addEventListener('change', (event) => updateViewState({ ganttCategory: event.target.value }));
     document.getElementById('gantt-owner-filter')?.addEventListener('change', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }));

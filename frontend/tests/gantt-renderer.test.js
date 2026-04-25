@@ -110,7 +110,10 @@ vi.mock('../js/api.js', () => ({
 function renderBaseDom() {
     document.body.innerHTML = `
         <button class="nav-item" data-view="insights" type="button">insights</button>
-        <div id="scale-switcher"><button class="scale-btn" data-scale="1" type="button">1</button></div>
+        <div id="scale-switcher">
+            <button class="scale-btn" data-scale="1" type="button">1</button>
+            <button class="scale-btn" data-scale="3" type="button">3</button>
+        </div>
         <div id="view-gantt" class="view active"></div>
         <div class="gantt-floating-actions">
             <button id="gantt-expand-all" type="button"></button>
@@ -124,10 +127,17 @@ function renderBaseDom() {
         <select id="gantt-priority-filter"><option value="all">all priorities</option><option value="1">p1</option></select>
         <select id="gantt-group-by"><option value="none" selected>none</option></select>
         <button id="gantt-filter-reset" type="button"></button>
-        <button id="gantt-prev" type="button"></button>
-        <button id="gantt-next" type="button"></button>
-        <button id="gantt-today" type="button"></button>
-        <select id="shared-period-preset"><option value="rolling-6" selected>rolling-6</option></select>
+        <div class="gantt-control-row-primary">
+            <div class="month-nav">
+                <button id="gantt-prev" type="button"></button>
+                <button id="gantt-next" type="button"></button>
+                <button id="gantt-today" type="button"></button>
+            </div>
+        </div>
+        <select id="shared-period-preset">
+            <option value="rolling-6" selected>rolling-6</option>
+            <option value="rolling-12">rolling-12</option>
+        </select>
         <button id="snapshot-save-btn" type="button"></button>
         <select id="snapshot-select"></select>
         <div id="gantt-summary"></div>
@@ -420,6 +430,40 @@ describe('gantt-renderer regressions', () => {
         const button = actions?.querySelector('#gantt-export-csv');
 
         expect(button).not.toBeNull();
+    });
+
+    it('keeps moved period controls available across gantt refreshes', async () => {
+        const { initGantt, refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await initGantt();
+        await refreshGantt();
+
+        const inlineControls = document.getElementById('gantt-inline-period-controls');
+        expect(inlineControls?.querySelector('#scale-switcher')).not.toBeNull();
+        expect(inlineControls?.querySelector('#shared-period-preset')).not.toBeNull();
+        expect(inlineControls?.querySelector('.month-nav #gantt-prev')).not.toBeNull();
+    });
+
+    it('handles moved scale and preset controls from the inline toolbar', async () => {
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        const { updateViewState } = await import('../js/shared-state.js');
+
+        await initGantt();
+
+        document.querySelector('#scale-switcher .scale-btn[data-scale="3"]')
+            ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+        expect(updateViewState).toHaveBeenCalledWith({ scale: 3 });
+
+        const preset = document.getElementById('shared-period-preset');
+        preset.value = 'rolling-12';
+        preset.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+
+        expect(updateViewState).toHaveBeenCalledWith({
+            preset: 'rolling-12',
+            startMonth: '2026-04',
+            scale: 1,
+        });
     });
 
     it('renders milestone markers on the matching theme month', async () => {
