@@ -77,34 +77,17 @@ export async function refreshMemberView() {
 
 function setupControls() {
     const switcher = document.getElementById('member-scale-switcher');
-    if (switcher && !document.getElementById('member-expand-all')) {
+    if (switcher && !document.getElementById('member-export-csv')) {
         const container = document.createElement('div');
+        container.className = 'member-toolbar-actions';
         container.style.display = 'flex';
         container.style.gap = '8px';
         container.style.marginRight = '16px';
         container.innerHTML = `
-            <button class="btn btn-ghost btn-sm" id="member-expand-all" type="button">すべて展開</button>
-            <button class="btn btn-ghost btn-sm" id="member-collapse-all" type="button">すべて折りたたみ</button>
             <button class="btn btn-ghost btn-sm" id="member-export-csv" type="button">CSV 出力</button>
         `;
         switcher.parentNode.insertBefore(container, switcher);
     }
-
-    document.getElementById('member-expand-all')?.addEventListener('click', () => {
-        document.querySelectorAll('.theme-row').forEach((row) => row.classList.remove('hidden'));
-        document.querySelectorAll('.toggle-btn').forEach((button) => {
-            button.classList.add('expanded');
-            button.textContent = '▼';
-        });
-    });
-
-    document.getElementById('member-collapse-all')?.addEventListener('click', () => {
-        document.querySelectorAll('.theme-row').forEach((row) => row.classList.add('hidden'));
-        document.querySelectorAll('.toggle-btn').forEach((button) => {
-            button.classList.remove('expanded');
-            button.textContent = '▶';
-        });
-    });
 
     document.getElementById('member-export-csv')?.addEventListener('click', exportCSV);
 
@@ -316,13 +299,42 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
 function renderHeader(months) {
     const thead = document.getElementById('member-load-thead');
     const current = currentMonth();
-    let html = '<tr><th>メンバー</th>';
+    let html = `<tr><th>
+        <div class="member-header-actions">
+            <span>メンバー</span>
+            <span class="member-header-buttons">
+                <button class="btn btn-ghost btn-sm" id="member-expand-all" type="button">すべて展開</button>
+                <button class="btn btn-ghost btn-sm" id="member-collapse-all" type="button">すべて折りたたみ</button>
+            </span>
+        </div>
+    </th>`;
     months.forEach((month) => {
         const label = formatMonthHeader(month, scale);
         html += `<th class="${month === current ? 'month-current' : ''}" data-member-month="${month}" style="width:${MEMBER_MONTH_COLUMN_WIDTH}px;min-width:${MEMBER_MONTH_COLUMN_WIDTH}px;max-width:${MEMBER_MONTH_COLUMN_WIDTH}px;">${label.replace('\n', '<br>')}</th>`;
     });
     html += '</tr>';
     thead.innerHTML = html;
+    bindHeaderActions();
+}
+
+function bindHeaderActions() {
+    document.getElementById('member-expand-all')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        document.querySelectorAll('.theme-row').forEach((row) => row.classList.remove('hidden'));
+        document.querySelectorAll('.toggle-btn').forEach((button) => {
+            button.classList.add('expanded');
+            button.textContent = '▼';
+        });
+    });
+
+    document.getElementById('member-collapse-all')?.addEventListener('click', (event) => {
+        event.stopPropagation();
+        document.querySelectorAll('.theme-row').forEach((row) => row.classList.add('hidden'));
+        document.querySelectorAll('.toggle-btn').forEach((button) => {
+            button.classList.remove('expanded');
+            button.textContent = '▶';
+        });
+    });
 }
 
 function buildMemberThemeLoads(allocationsList) {

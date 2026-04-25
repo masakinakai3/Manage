@@ -283,4 +283,27 @@ describe('member-view milestones', () => {
         expect(summary?.textContent).not.toContain('余力あり');
         expect(summary?.textContent).not.toContain('未割当');
     });
+
+    it('places member expand controls beside the member column header', async () => {
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+
+        await refreshMemberView();
+
+        const firstHeader = document.querySelector('#member-load-thead th:first-child');
+        const expandButton = firstHeader?.querySelector('#member-expand-all');
+        const collapseButton = firstHeader?.querySelector('#member-collapse-all');
+
+        expect(firstHeader?.querySelector('.member-header-actions')?.textContent).toContain('メンバー');
+        expect(expandButton?.textContent).toBe('すべて展開');
+        expect(collapseButton?.textContent).toBe('すべて折りたたみ');
+
+        document.querySelector('.toggle-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.querySelector('.theme-row')?.classList.contains('hidden')).toBe(false);
+
+        collapseButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.querySelector('.theme-row')?.classList.contains('hidden')).toBe(true);
+
+        expandButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.querySelector('.theme-row')?.classList.contains('hidden')).toBe(false);
+    });
 });
