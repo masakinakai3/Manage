@@ -39,8 +39,6 @@ export async function refreshInsightsView() {
         const overview = await insights.overview(from, toEnd);
         currentOverview = overview;
         renderFocusPanels(overview.summary || {}, overview.dashboard || {}, overview.health_groups || []);
-        renderHealthChecks(overview.health_checks || [], overview.health_groups || []);
-        renderRecommendations(overview.recommendations || []);
         renderDashboard(overview.dashboard || {}, overview.health_groups || []);
         renderScenarioPlanner(overview);
         if (currentScenarioResult) {
@@ -124,102 +122,9 @@ function renderFocusPanels(summary, dashboard, healthGroups) {
     })).slice(0, 3));
 }
 
-function renderHealthChecks(items, healthGroups) {
-    const target = document.getElementById('health-check-list');
-    if (!target) return;
 
-    if (items.length === 0) {
-        target.innerHTML = '<div class="empty-panel">重大な健全性リスクは見つかりませんでした。</div>';
-        return;
-    }
 
-    const groupedMarkup = healthGroups.map((group) => `
-        <article class="insight-item insight-group-card">
-            <div class="insight-header">
-                <strong>${escapeHtml(group.label)}</strong>
-                <span>${group.count} 件 / 高 ${group.high_count} 件</span>
-            </div>
-            <div class="candidate-body">
-                ${(group.items || []).slice(0, 3).map((item) => `
-                    <span class="dashboard-pill">${escapeHtml(item.entity_name || item.code)} / ${labelSeverity(item.severity)}</span>
-                `).join('') || '<span class="summary-subtext">該当なし</span>'}
-            </div>
-        </article>
-    `).join('');
 
-    const topItemsMarkup = items.slice(0, 8).map((item) => `
-        <article class="insight-item insight-${item.severity}">
-            <div class="insight-header">
-                <strong>${labelSeverity(item.severity)}</strong>
-                <span>${escapeHtml(item.entity_name || item.code)}</span>
-            </div>
-            <div class="insight-meta-row">
-                <span class="dashboard-pill">${escapeHtml(HEALTH_CATEGORY_LABELS[item.category] || item.category || '未分類')}</span>
-                <span class="summary-subtext">${escapeHtml(item.code)}</span>
-            </div>
-            <p>${escapeHtml(item.message || '')}</p>
-            <div class="insight-actions">
-                ${buildHealthAction(item)}
-            </div>
-        </article>
-    `).join('');
-
-    target.innerHTML = `${groupedMarkup}${topItemsMarkup}`;
-    bindActionButtons(target);
-}
-
-function renderRecommendations(items) {
-    const target = document.getElementById('recommendation-list');
-    if (!target) return;
-
-    if (items.length === 0) {
-        target.innerHTML = '<div class="empty-panel">現時点では再配置が必要な超過はありません。</div>';
-        return;
-    }
-
-    target.innerHTML = items.slice(0, 6).map((item) => {
-        const best = item.best_option;
-        return `
-            <article class="insight-item">
-                <div class="insight-header">
-                    <strong>${escapeHtml(item.display_name)}</strong>
-                    <span>${escapeHtml(item.month)} / ${item.load}% / 容量 ${item.capacity}%</span>
-                </div>
-                <div class="insight-meta-row">
-                    <span class="dashboard-pill">超過 ${item.excess}%</span>
-                    ${best ? `<span class="dashboard-pill">最大解消 ${best.resolution_ratio}% </span>` : ''}
-                </div>
-                ${best ? `
-                    <p>
-                        ${escapeHtml(best.theme_name)} を ${escapeHtml(best.display_name)} に ${best.feasible_shift}% 移すと、
-                        元の負荷は ${best.source_load_after_shift}% まで下がります。
-                    </p>
-                ` : '<p>受け手候補が見つかりませんでした。優先順位の再調整かテーマ分割が必要です。</p>'}
-                <div class="candidate-list">
-                    ${item.themes.map((theme) => `
-                        <div class="candidate-card">
-                            <div class="candidate-title">${escapeHtml(theme.theme_name)} / 移管候補 ${theme.suggested_shift}% / 解消率 ${theme.recommended_resolution_ratio}%</div>
-                            <div class="candidate-body">
-                                ${(theme.candidate_members || []).map((member) => `
-                                    <span class="candidate-chip">
-                                        ${escapeHtml(member.display_name)}
-                                        (${member.current_load}% -> ${member.target_load_after_shift}% / 解消 ${member.resolution_ratio}%)
-                                    </span>
-                                `).join('') || '<span class="summary-subtext">受け手候補なし</span>'}
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-                <div class="insight-actions">
-                    <button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load" data-member-search="${escapeHtmlAttr(item.display_name)}">負荷表で確認</button>
-                    ${best ? `<button class="btn btn-ghost btn-sm" type="button" data-open-view="gantt" data-theme-filter="${escapeHtmlAttr(best.theme_name)}">テーマを開く</button>` : ''}
-                </div>
-            </article>
-        `;
-    }).join('');
-
-    bindActionButtons(target);
-}
 
 function renderDashboard(dashboard, healthGroups) {
     renderSimpleTable(
@@ -1094,71 +999,6 @@ renderSummary = function(summary) {
     `;
 };
 
-renderHealthChecks = function(items) {
-    const target = document.getElementById('health-check-list');
-    if (!target) return;
-
-    const prioritized = [...items]
-        .sort((left, right) => severityRank(right.severity) - severityRank(left.severity))
-        .slice(0, 5);
-
-    if (prioritized.length === 0) {
-        target.innerHTML = '<div class="empty-panel">現在、優先して確認すべきアラートはありません。</div>';
-        return;
-    }
-
-    target.innerHTML = prioritized.map((item) => `
-        <article class="insight-item insight-${item.severity}">
-            <div class="insight-header">
-                <strong>${labelSeverity(item.severity)}</strong>
-                <span>${escapeHtml(item.entity_name || item.code)}</span>
-            </div>
-            <div class="insight-meta-row">
-                <span class="dashboard-pill">${escapeHtml(HEALTH_CATEGORY_LABELS[item.category] || item.category || '未分類')}</span>
-                <span class="summary-subtext">${escapeHtml(item.code)}</span>
-            </div>
-            <p>${escapeHtml(item.message || '')}</p>
-            <div class="insight-actions">
-                ${buildHealthAction(item)}
-            </div>
-        </article>
-    `).join('');
-    bindActionButtons(target);
-};
-
-renderRecommendations = function(items) {
-    const target = document.getElementById('recommendation-list');
-    if (!target) return;
-
-    if (items.length === 0) {
-        target.innerHTML = '<div class="empty-panel">今すぐ確認が必要な対応候補はありません。</div>';
-        return;
-    }
-
-    target.innerHTML = items.slice(0, 3).map((item) => {
-        const best = item.best_option;
-        return `
-            <article class="insight-item">
-                <div class="insight-header">
-                    <strong>${escapeHtml(item.display_name)}</strong>
-                    <span>${escapeHtml(item.month)} / ${item.load}% / 容量 ${item.capacity}%</span>
-                </div>
-                <div class="insight-meta-row">
-                    <span class="dashboard-pill">超過 ${item.excess}%</span>
-                    ${best ? `<span class="dashboard-pill">最大解消 ${best.resolution_ratio}%</span>` : ''}
-                </div>
-                <p>${best
-                    ? `${escapeHtml(best.theme_name)} を ${escapeHtml(best.display_name)} に ${best.feasible_shift}% 移すと、負荷を ${best.source_load_after_shift}% まで下げられます。`
-                    : '有効な移管候補はまだ見つかっていません。'}</p>
-                <div class="insight-actions">
-                    <button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load" data-member-search="${escapeHtmlAttr(item.display_name)}">負荷表で確認</button>
-                    ${best ? `<button class="btn btn-ghost btn-sm" type="button" data-open-view="gantt" data-theme-filter="${escapeHtmlAttr(best.theme_name)}">ガントで確認</button>` : ''}
-                </div>
-            </article>
-        `;
-    }).join('');
-    bindActionButtons(target);
-};
 
 function renderError(message) {
     const target = document.getElementById('dashboard-project-ribbon');
