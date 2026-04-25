@@ -1,5 +1,5 @@
 import { insights } from './api.js';
-import { showScenarioPreview } from './gantt/gantt-renderer.js';
+import { clearScenarioPreview, showScenarioPreview } from './gantt/gantt-renderer.js';
 import { loadViewState, subscribeViewState, updateViewState } from './shared-state.js';
 import { addMonths, getVisibleMonths } from './utils/date-utils.js';
 import { formatError, setBusyState } from './ui.js';
@@ -46,7 +46,9 @@ export async function refreshInsightsView() {
         }
         renderProjectRibbon('dashboard-project-ribbon', overview.dashboard?.project_ribbon || {});
     } catch (error) {
+        currentScenarioResult = null;
         renderError(formatError(error, 'インサイトの読み込みに失敗しました。'));
+        updateScenarioClearButton();
     } finally {
         setBusyState(false);
     }
@@ -218,6 +220,8 @@ function bindActionButtons(root) {
             document.querySelector(`.nav-item[data-view="${button.dataset.openView}"]`)?.click();
         });
     });
+
+    updateScenarioClearButton();
 }
 
 function renderProjectRibbon(targetId, ribbonData) {
@@ -691,6 +695,50 @@ function initScenarioPlanner() {
     const modeSelect = document.getElementById('insight-scenario-mode');
     if (!form) return;
 
+    form.classList.add('insight-scenario-form-enhanced');
+    document.getElementById('insight-scenario-hint')?.remove();
+    document.getElementById('insight-scenario-mode')?.closest('.form-field')?.classList.add('insight-scenario-field-wide');
+    document.getElementById('insight-scenario-theme')?.closest('.form-field')?.classList.add('insight-scenario-field-wide');
+    document.getElementById('insight-scenario-start-month')?.closest('.form-field')?.classList.add('insight-scenario-field-medium');
+    document.getElementById('insight-scenario-duration')?.closest('.form-field')?.classList.add('insight-scenario-field-compact');
+    document.getElementById('insight-scenario-effort')?.closest('.form-field')?.classList.add('insight-scenario-field-compact');
+    document.getElementById('insight-scenario-department')?.closest('.form-field')?.classList.add('insight-scenario-field-medium');
+    const actionsContainer = document.querySelector('.insight-scenario-actions');
+    actionsContainer?.classList.add('insight-scenario-actions-inline');
+
+    const submitButton = document.getElementById('insight-scenario-submit');
+    const headerActions = document.getElementById('insight-scenario-header-actions');
+    let actionButtons = document.querySelector('.insight-scenario-action-buttons');
+    if (submitButton) {
+        submitButton.setAttribute('form', 'insight-scenario-form');
+    }
+    if (!actionButtons && submitButton) {
+        actionButtons = document.createElement('div');
+        actionButtons.className = 'insight-scenario-action-buttons';
+    }
+    if (actionButtons && headerActions && actionButtons.parentElement !== headerActions) {
+        headerActions.appendChild(actionButtons);
+    }
+    if (submitButton && actionButtons && submitButton.parentElement !== actionButtons) {
+        actionButtons.appendChild(submitButton);
+    }
+    if (actionsContainer && !actionsContainer.children.length) {
+        actionsContainer.remove();
+    }
+
+    let clearButton = document.getElementById('insight-scenario-clear');
+    if (!clearButton) {
+        if (submitButton && actionButtons) {
+            clearButton = document.createElement('button');
+            clearButton.id = 'insight-scenario-clear';
+            clearButton.className = 'btn btn-secondary';
+            clearButton.type = 'button';
+            clearButton.textContent = '\u30AF\u30EA\u30A2';
+            clearButton.disabled = true;
+            actionButtons.appendChild(clearButton);
+        }
+    }
+
     if (!form.dataset.bound) {
         form.dataset.bound = 'true';
         form.addEventListener('submit', async (event) => {
@@ -703,6 +751,13 @@ function initScenarioPlanner() {
         modeSelect.dataset.bound = 'true';
         modeSelect.addEventListener('change', updateScenarioHint);
     }
+
+    if (clearButton && !clearButton.dataset.bound) {
+        clearButton.dataset.bound = 'true';
+        clearButton.addEventListener('click', clearScenarioPlanner);
+    }
+
+    updateScenarioClearButton();
 }
 
 function renderScenarioPlanner(overview) {
@@ -749,6 +804,24 @@ function updateScenarioHint() {
         : '開始月を固定して、割当候補と必要なら後ろ倒し候補を返します。';
 }
 
+function updateScenarioClearButton() {
+    const clearButton = document.getElementById('insight-scenario-clear');
+    if (!clearButton) return;
+    clearButton.disabled = !currentScenarioResult;
+}
+
+function clearScenarioPlanner() {
+    currentScenarioResult = null;
+    clearScenarioPreview();
+
+    const target = document.getElementById('insight-scenario-results');
+    if (target) {
+        target.innerHTML = '';
+    }
+
+    updateScenarioClearButton();
+}
+
 async function submitScenarioPlanner() {
     const submitButton = document.getElementById('insight-scenario-submit');
     const payload = {
@@ -770,8 +843,11 @@ async function submitScenarioPlanner() {
         renderScenarioMessage('候補を計算しています...');
         currentScenarioResult = await insights.scenarioSuggestions(payload);
         renderScenarioResults(currentScenarioResult);
+        updateScenarioClearButton();
     } catch (error) {
+        currentScenarioResult = null;
         renderScenarioMessage(formatError(error, '候補の計算に失敗しました。'));
+        updateScenarioClearButton();
     } finally {
         if (submitButton) submitButton.disabled = false;
     }
@@ -789,6 +865,7 @@ function renderScenarioResults(result) {
 
     const candidates = result?.candidates || [];
     if (!candidates.length) {
+        updateScenarioClearButton();
         target.innerHTML = '<div class="empty-panel">候補は見つかりませんでした。</div>';
         return;
     }

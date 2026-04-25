@@ -276,6 +276,18 @@ body {
     box-shadow: var(--shadow-glow);
 }
 
+.btn-secondary {
+    background: var(--color-bg-hover);
+    color: var(--color-text);
+    border-color: var(--color-border-light);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--color-bg-active);
+    border-color: var(--color-primary);
+    color: var(--color-text);
+}
+
 .btn-ghost {
     background: transparent;
     color: var(--color-text-secondary);
@@ -306,6 +318,11 @@ body {
 .btn-sm {
     padding: var(--space-1) var(--space-2);
     font-size: var(--text-xs);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: default;
 }
 
 .btn-icon {
@@ -2031,6 +2048,30 @@ td.out-period {
     grid-column: span 2;
 }
 
+.insight-card-wide:has(.insight-scenario-form) {
+    padding: var(--space-3) var(--space-4);
+}
+
+.insight-layout:has(.insight-scenario-form) {
+    padding-bottom: var(--space-2);
+}
+
+.insight-scenario-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-2);
+}
+
+.insight-scenario-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
 .insight-list {
     display: grid;
     gap: var(--space-3);
@@ -2095,19 +2136,146 @@ td.out-period {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: var(--space-3);
     margin-top: var(--space-3);
+    align-items: end;
+}
+
+.insight-scenario-form .form-field {
+    min-width: 0;
 }
 
 .insight-scenario-actions {
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
-    gap: var(--space-2);
+    gap: 0;
+    min-width: 0;
+}
+
+.insight-scenario-action-buttons {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.4rem;
+    width: auto;
+    margin-left: 0;
+}
+
+.insight-scenario-action-buttons .btn {
+    flex: 0 0 auto;
+    min-width: 0;
+    min-height: 1.9rem;
+    padding: 0.22rem 0.65rem;
+    font-size: 0.72rem;
+    line-height: 1.1;
+    white-space: nowrap;
+}
+
+.insight-scenario-field-compact {
+    max-width: 12rem;
+}
+
+.insight-scenario-field-compact .view-input {
+    width: 100%;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced {
+    display: grid;
+    grid-template-columns:
+        minmax(12rem, 1.25fr)
+        minmax(12rem, 1.2fr)
+        minmax(9rem, 0.75fr)
+        minmax(5.5rem, 0.48fr)
+        minmax(6.25rem, 0.55fr)
+        minmax(8.5rem, 0.72fr)
+        minmax(11rem, 0.85fr);
+    align-items: flex-end;
+    column-gap: var(--space-2);
+    row-gap: 0.4rem;
+    margin-top: 0.35rem;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced .form-field,
+.insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-actions-inline {
+    min-width: 0;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced .form-field span {
+    margin-bottom: 0.15rem;
+    font-size: var(--text-xs);
+    line-height: 1.05;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced .view-select,
+.insight-scenario-form.insight-scenario-form-enhanced .view-input {
+    width: 100%;
+    min-width: 0;
+    height: 2.1rem;
+    padding-block: 0.3rem;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-field-wide {
+    max-width: none;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-field-medium {
+    max-width: none;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-field-compact {
+    max-width: none;
+}
+
+.insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-actions-inline {
+    max-width: none;
+    align-self: flex-end;
+}
+
+@media (max-width: 1280px) {
+    .insight-scenario-form.insight-scenario-form-enhanced {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-field-wide {
+        grid-column: span 2;
+    }
+
+    .insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-actions-inline {
+        grid-column: span 2;
+    }
+}
+
+@media (max-width: 760px) {
+    .insight-scenario-card-header {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .insight-scenario-header-actions {
+        width: 100%;
+    }
+
+    .insight-scenario-form.insight-scenario-form-enhanced {
+        grid-template-columns: 1fr;
+    }
+
+    .insight-scenario-form.insight-scenario-form-enhanced .form-field,
+    .insight-scenario-form.insight-scenario-form-enhanced .insight-scenario-actions-inline {
+        grid-column: 1;
+    }
+
+    .insight-scenario-action-buttons {
+        width: 100%;
+        margin-left: 0;
+    }
 }
 
 .insight-scenario-results {
     display: grid;
     gap: var(--space-3);
     margin-top: var(--space-4);
+}
+
+.insight-scenario-results:empty {
+    display: none;
+    margin-top: 0;
 }
 
 .insight-scenario-card {
