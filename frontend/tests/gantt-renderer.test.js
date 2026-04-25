@@ -112,7 +112,11 @@ function renderBaseDom() {
         <button class="nav-item" data-view="insights" type="button">insights</button>
         <div id="scale-switcher"><button class="scale-btn" data-scale="1" type="button">1</button></div>
         <div id="view-gantt" class="view active"></div>
-        <div class="gantt-floating-actions"></div>
+        <div class="gantt-floating-actions">
+            <button id="gantt-expand-all" type="button"></button>
+            <button id="gantt-collapse-all" type="button"></button>
+            <button id="gantt-export-csv" type="button"></button>
+        </div>
         <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-category-filter"><option value="">all categories</option></select>
         <select id="gantt-owner-filter"><option value="">all members</option></select>
@@ -124,9 +128,6 @@ function renderBaseDom() {
         <button id="gantt-next" type="button"></button>
         <button id="gantt-today" type="button"></button>
         <select id="shared-period-preset"><option value="rolling-6" selected>rolling-6</option></select>
-        <button id="gantt-expand-all" type="button"></button>
-        <button id="gantt-collapse-all" type="button"></button>
-        <button id="gantt-export-csv" type="button"></button>
         <button id="snapshot-save-btn" type="button"></button>
         <select id="snapshot-select"></select>
         <div id="gantt-summary"></div>
@@ -396,6 +397,29 @@ describe('gantt-renderer regressions', () => {
                 }],
             },
         ]);
+    });
+
+    it('builds gantt-shaped CSV content from the visible grid', async () => {
+        const { refreshGantt, buildGanttGridCsvContent } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        expect(buildGanttGridCsvContent()).toBe([
+            'Theme / Member,2026-04',
+            'Theme A / Rank S / Active,"20%\nReview"',
+            'Alice (Dev / Capacity 100%),20%',
+        ].join('\r\n'));
+    });
+
+    it('keeps the CSV export button in the visible floating gantt actions', async () => {
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await initGantt();
+
+        const actions = document.querySelector('.gantt-floating-actions');
+        const button = actions?.querySelector('#gantt-export-csv');
+
+        expect(button).not.toBeNull();
     });
 
     it('renders milestone markers on the matching theme month', async () => {

@@ -90,6 +90,7 @@
 - `GET /export/json`
 - `POST /export/csv`
   - Body: `content`, `filename`
+  - Gantt screen CSV is generated in the browser from the visible grid dataset. It preserves the current visible period, active filters, row order, collapsed rows, labels, rates, milestone text, and memo-derived cell text, then downloads a UTF-8 BOM CSV directly.
 - `POST /export/xlsx`
   - Body: `headers`, `rows`, `filename`, optional `layout` (`gantt` for structured layout), `header_labels`
 - `POST /import/json`

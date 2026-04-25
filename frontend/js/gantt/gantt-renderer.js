@@ -1395,14 +1395,12 @@ async function clearSelectedRange() {
 }
 
 function exportCsv() {
-    const { headers, rows } = getGanttExportDataset(['Theme', 'Member', 'Department', 'Month', 'Allocation', 'Memo']);
-    rows.unshift(headers);
-    const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\r\n');
+    const csv = buildGanttGridCsvContent();
     const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'gantt_export.csv';
+    link.download = buildGanttExportFilename('csv');
     link.click();
     URL.revokeObjectURL(url);
     showToast('CSV を書き出しました。', 'success');
@@ -1682,7 +1680,20 @@ function getGroupKey(theme) {
     return theme.category || 'Uncategorized';
 }
 function rateClass(rate) { if (rate <= 0) return ''; if (rate <= 30) return 'rate-low'; if (rate <= 60) return 'rate-mid'; if (rate < 100) return 'rate-high'; if (rate === 100) return 'rate-full'; return 'rate-over'; }
-function csvEscape(value) { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
+function csvEscape(value) { const text = String(value ?? ''); return /[",\r\n]|^\s|\s$/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
+function getExportCellText(value) { if (value && typeof value === 'object') return value.text ?? ''; return value ?? ''; }
+export function buildGanttGridCsvContent() {
+    const dataset = getGanttGridExportDataset();
+    const header = dataset.header_labels || dataset.headers;
+    const rows = dataset.rows.map((row) => [row.label, ...row.values.map(getExportCellText)]);
+    return [header, ...rows].map((row) => row.map(csvEscape).join(',')).join('\r\n');
+}
+function buildGanttExportFilename(extension) {
+    const months = getVisibleMonths(startMonth, visibleCount, scale);
+    const from = months[0] || startMonth;
+    const to = months[months.length - 1] || from;
+    return `gantt_${from}_${to}.${extension}`;
+}
 function escapeHtml(value) { return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
 function escapeHtmlAttr(value) { return escapeHtml(value).replaceAll('`', '&#96;'); }
 function diffChip(rate, month, themeId, memberId, members = []) { if (snapshotAllocations.length === 0 || scale !== 1) return ''; const oldRate = memberId == null ? members.reduce((sum, member) => sum + lookupRate(snapshotAllocations, themeId, member.member_id, month), 0) : lookupRate(snapshotAllocations, themeId, memberId, month); if (oldRate === rate) return ''; const diff = rate - oldRate; return `<span class="diff-chip ${diff > 0 ? 'diff-plus' : 'diff-minus'}">${diff > 0 ? '+' : ''}${diff}</span>`; }
