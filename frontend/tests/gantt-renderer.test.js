@@ -109,8 +109,10 @@ vi.mock('../js/api.js', () => ({
 
 function renderBaseDom() {
     document.body.innerHTML = `
+        <button class="nav-item" data-view="insights" type="button">insights</button>
         <div id="scale-switcher"><button class="scale-btn" data-scale="1" type="button">1</button></div>
         <div id="view-gantt" class="view active"></div>
+        <div class="gantt-floating-actions"></div>
         <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-category-filter"><option value="">all categories</option></select>
         <select id="gantt-owner-filter"><option value="">all members</option></select>
@@ -272,6 +274,37 @@ describe('gantt-renderer regressions', () => {
 
         const summaryCell = document.querySelector('.gantt-row-summary .gantt-cell');
         expect(summaryCell?.textContent).toContain('20%');
+    });
+
+    it('returns to insights and clears the scenario preview', async () => {
+        const { refreshGantt, showScenarioPreview } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+        showScenarioPreview({
+            title: 'Scenario A',
+            startMonth: '2026-04',
+            previewThemeName: 'Preview Theme',
+            assignments: [{
+                month: '2026-04',
+                memberId: 10,
+                displayName: 'Alice',
+                department: 'Dev',
+                rate: 30,
+            }],
+            shiftSuggestions: [],
+        });
+
+        const insightsNav = document.querySelector('.nav-item[data-view="insights"]');
+        const navClick = vi.fn();
+        insightsNav?.addEventListener('click', navClick);
+
+        const returnButton = document.querySelector('[data-scenario-return-toolbar="true"]');
+        expect(returnButton).not.toBeNull();
+
+        returnButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(navClick).toHaveBeenCalledTimes(1);
+        expect(document.querySelector('[data-scenario-return-toolbar="true"]')).toBeNull();
     });
 
     it('builds gantt-shaped Excel export data', async () => {

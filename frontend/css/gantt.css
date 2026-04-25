@@ -65,6 +65,8 @@
     left: 0;
     z-index: 6;
     min-width: 280px;
+    width: 280px;
+    max-width: 280px;
     text-align: left;
     padding-left: var(--space-4);
 }
@@ -113,6 +115,8 @@
     white-space: nowrap;
     font-weight: 500;
     min-width: 280px;
+    width: 280px;
+    max-width: 280px;
 }
 
 /* Theme summary row */
@@ -166,10 +170,23 @@
     opacity: 0.45;
 }
 
+.theme-row-completed .theme-toggle {
+    background: rgba(255, 255, 255, 0.02);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
 .theme-toggle {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
+    flex: 0 1 auto;
+    max-width: clamp(128px, 15vw, 190px);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
     cursor: pointer;
     user-select: none;
 }
@@ -564,9 +581,10 @@
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
     min-width: 0;
+    overflow: hidden;
 }
 
 .member-label-cell {
@@ -585,21 +603,44 @@
 }
 
 .theme-toggle {
-    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
+    padding: 7px 10px 7px 6px;
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(56, 189, 248, 0.08)),
+        rgba(255, 255, 255, 0.02);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+        0 10px 22px rgba(15, 23, 42, 0.18);
+    transition: background var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+
+.gantt-row-summary td:first-child:hover .theme-toggle {
+    background:
+        linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(56, 189, 248, 0.12)),
+        rgba(255, 255, 255, 0.03);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+        0 12px 26px rgba(15, 23, 42, 0.24);
 }
 
 .theme-name-text {
+    max-width: clamp(88px, 11vw, 132px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    color: #f5f7ff;
+    text-shadow: 0 0 14px rgba(99, 102, 241, 0.14);
 }
 
 .theme-label-actions {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     flex: 0 0 auto;
 }
 

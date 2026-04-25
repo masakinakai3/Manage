@@ -7,6 +7,8 @@ import { initGanttDnD } from './gantt-dnd.js';
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', stop: 'STOP', completed: 'Completed', cancelled: 'Cancelled' };
 const DEV_RANK_LABELS = { '': '-', S: 'S', M: 'M', L: 'L' };
+const SCENARIO_RETURN_LABEL = '\u30A4\u30F3\u30B5\u30A4\u30C8\u306B\u623B\u308B';
+const SCENARIO_CLEAR_LABEL = '\u89E3\u9664';
 
 export const HistoryManager = {
     stack: [],
@@ -66,6 +68,36 @@ export function clearScenarioPreview() {
     if (!scenarioPreview) return;
     scenarioPreview = null;
     rerenderGanttView();
+}
+
+function returnToInsightsFromScenarioPreview() {
+    clearScenarioPreview();
+    document.querySelector('.nav-item[data-view="insights"]')?.click();
+}
+
+function renderScenarioToolbarActions() {
+    const toolbar = document.querySelector('.gantt-floating-actions');
+    if (!toolbar) return;
+
+    let container = document.getElementById('gantt-scenario-actions');
+    if (!scenarioPreview) {
+        container?.remove();
+        return;
+    }
+
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'gantt-scenario-actions';
+        container.className = 'gantt-scenario-actions';
+        toolbar.prepend(container);
+    }
+
+    container.innerHTML = `
+        <button class="btn btn-primary btn-sm" type="button" data-scenario-return-toolbar="true">${SCENARIO_RETURN_LABEL}</button>
+        <button class="btn btn-ghost btn-sm" type="button" data-scenario-clear-toolbar="true">${SCENARIO_CLEAR_LABEL}</button>
+    `;
+    container.querySelector('[data-scenario-return-toolbar="true"]')?.addEventListener('click', () => returnToInsightsFromScenarioPreview());
+    container.querySelector('[data-scenario-clear-toolbar="true"]')?.addEventListener('click', () => clearScenarioPreview());
 }
 
 export async function initGantt() {
@@ -147,6 +179,7 @@ function rerenderGanttView() {
     renderSnapshotSummaryCards(months);
     renderTable(months);
     renderDetailPanelV2();
+    renderScenarioToolbarActions();
 }
 
 function buildScenarioPreviewContext() {

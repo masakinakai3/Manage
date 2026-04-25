@@ -5,7 +5,7 @@
  */
 
 import { auth, themes as themesApi, members as membersApi, allocations, dataBackup, savedViews as savedViewsApi } from './api.js';
-import { initGantt, refreshGantt, HistoryManager } from './gantt/gantt-renderer.js';
+import { initGantt, refreshGantt, clearScenarioPreview, HistoryManager } from './gantt/gantt-renderer.js';
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
@@ -372,6 +372,7 @@ function switchView(viewName) {
         view.classList.toggle('active', view.id === `view-${viewName}`);
     });
 
+    if (viewName === 'insights') clearScenarioPreview();
     if (viewName === 'gantt') refreshGantt();
     if (viewName === 'member-load') refreshMemberView();
     if (viewName === 'insights') refreshInsightsView();
