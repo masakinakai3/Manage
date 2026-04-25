@@ -56,8 +56,8 @@
                 <span class="sidebar-title">Resource Manager</span>
             </div>
 
-            <ul class="nav-list">
-                <li><a href="#" class="nav-item active" data-view="gantt"><span>ガントチャート</span></a></li>
+            <ul class="nav-list" aria-label="主要ナビゲーション">
+                <li><a href="#" class="nav-item active" data-view="gantt" aria-current="page"><span>ガントチャート</span></a></li>
                 <li><a href="#" class="nav-item" data-view="member-load"><span>メンバー負荷</span></a></li>
                 <li><a href="#" class="nav-item" data-view="insights"><span>インサイト</span></a></li>
                 <li><a href="#" class="nav-item" data-view="themes"><span>テーマ一覧</span></a></li>
@@ -230,7 +230,7 @@
                         <div class="gantt-floating-actions">
                             <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたむ</button>
-                            <button id="gantt-export-csv" class="btn btn-primary btn-sm" type="button">CSV出力</button>
+                            <button id="gantt-export-csv" class="btn btn-primary btn-sm" type="button" aria-label="現在表示中のガントチャートをCSV出力">CSV出力</button>
                         </div>
                         <div id="gantt-mobile-theme-list" class="gantt-mobile-theme-list" hidden></div>
                         <table class="gantt-table" id="gantt-table">

@@ -196,6 +196,18 @@ function ensureInlinePeriodControls() {
     const monthNav = document.querySelector('.gantt-control-row-primary .month-nav');
     if (!toolbar || !scaleSwitcher || !presetSelect || !monthNav) return;
 
+    let tableActions = document.getElementById('gantt-table-actions');
+    if (!tableActions) {
+        tableActions = document.createElement('div');
+        tableActions.id = 'gantt-table-actions';
+        tableActions.className = 'gantt-table-actions';
+        toolbar.prepend(tableActions);
+    }
+    ['gantt-expand-all', 'gantt-collapse-all', 'gantt-export-csv'].forEach((id) => {
+        const action = document.getElementById(id);
+        if (action && action.parentElement !== tableActions) tableActions.append(action);
+    });
+
     let inlineControls = document.getElementById('gantt-inline-period-controls');
     if (!inlineControls) {
         inlineControls = document.createElement('div');

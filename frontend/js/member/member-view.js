@@ -80,9 +80,6 @@ function setupControls() {
     if (switcher && !document.getElementById('member-export-csv')) {
         const container = document.createElement('div');
         container.className = 'member-toolbar-actions';
-        container.style.display = 'flex';
-        container.style.gap = '8px';
-        container.style.marginRight = '16px';
         container.innerHTML = `
             <button class="btn btn-ghost btn-sm" id="member-export-csv" type="button">CSV 出力</button>
         `;

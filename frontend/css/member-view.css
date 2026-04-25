@@ -109,6 +109,19 @@
     white-space: nowrap;
 }
 
+@media (min-width: 721px) and (max-width: 1024px) {
+    #member-load-summary {
+        grid-template-columns: repeat(2, minmax(220px, 300px));
+    }
+
+    .member-load-table thead th:first-child,
+    .member-load-table tbody td:first-child {
+        width: 280px;
+        min-width: 280px;
+        max-width: 280px;
+    }
+}
+
 .member-load-table thead th.month-current {
     color: var(--color-primary-hover);
     border-bottom-color: var(--color-primary);

@@ -39,6 +39,8 @@
 
     /* Layout */
     --sidebar-width: 220px;
+    --control-height: 36px;
+    --focus-ring: 0 0 0 3px var(--color-primary-subtle);
 
     /* Configs */
     --cell-width: 56px;
@@ -52,6 +54,7 @@
     --color-bg-hover: #2a2a3a;
     --color-bg-active: #323246;
     --color-surface: #1e1e2a;
+    --color-bg-subtle: #171720;
 
     --color-border: #2e2e42;
     --color-border-light: #3a3a52;
@@ -88,6 +91,7 @@
     --color-bg-hover: #e2e8f0;
     --color-bg-active: #cbd5e1;
     --color-surface: #ffffff;
+    --color-bg-subtle: #f8fafc;
 
     --color-border: #e2e8f0;
     --color-border-light: #cbd5e1;
@@ -136,7 +140,7 @@ body {
     font-size: var(--text-base);
     color: var(--color-text);
     background: var(--color-bg);
-    line-height: 1.5;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     transition: background-color var(--transition-base), color var(--transition-base);
 }
@@ -207,35 +211,46 @@ body {
    ========================================== */
 
 .form-field {
+    display: grid;
+    gap: 6px;
     margin-bottom: var(--space-4);
 }
 
 .form-field label {
     display: block;
     font-size: var(--text-sm);
-    font-weight: 500;
+    font-weight: 650;
     color: var(--color-text-secondary);
-    margin-bottom: var(--space-1);
+    margin-bottom: 0;
 }
 
 .form-field input,
-.form-field select {
+.form-field select,
+.form-field textarea,
+.view-input,
+.view-select,
+.dialog-input {
     width: 100%;
-    padding: var(--space-2) var(--space-3);
+    min-height: var(--control-height);
+    padding: 7px var(--space-3);
     background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     color: var(--color-text);
     font-size: var(--text-base);
     font-family: var(--font-sans);
-    transition: border-color var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background-color var(--transition-fast);
     outline: none;
 }
 
 .form-field input:focus,
-.form-field select:focus {
+.form-field select:focus,
+.form-field textarea:focus,
+.view-input:focus,
+.view-select:focus,
+.dialog-input:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px var(--color-primary-subtle);
+    box-shadow: var(--focus-ring);
 }
 
 .error-message {
@@ -255,25 +270,27 @@ body {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
-    padding: var(--space-2) var(--space-4);
+    min-height: var(--control-height);
+    padding: 7px var(--space-4);
     border: 1px solid transparent;
     border-radius: var(--radius-md);
     font-family: var(--font-sans);
     font-size: var(--text-sm);
-    font-weight: 500;
+    font-weight: 650;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: background-color var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
     white-space: nowrap;
 }
 
 .btn-primary {
     background: var(--color-primary);
     color: white;
+    box-shadow: 0 1px 0 color-mix(in srgb, white 18%, transparent) inset, var(--shadow-sm);
 }
 
 .btn-primary:hover {
     background: var(--color-primary-hover);
-    box-shadow: var(--shadow-glow);
+    box-shadow: var(--shadow-md);
 }
 
 .btn-secondary {
@@ -289,7 +306,7 @@ body {
 }
 
 .btn-ghost {
-    background: transparent;
+    background: color-mix(in srgb, var(--color-bg-elevated) 62%, transparent);
     color: var(--color-text-secondary);
     border-color: var(--color-border);
 }
@@ -316,8 +333,18 @@ body {
 }
 
 .btn-sm {
-    padding: var(--space-1) var(--space-2);
+    min-height: 30px;
+    padding: 5px var(--space-2);
     font-size: var(--text-xs);
+}
+
+.btn:focus-visible,
+.nav-item:focus-visible,
+.scale-btn:focus-visible,
+.modal-close:focus-visible,
+.sidebar-toggle-btn:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
 }
 
 .btn:disabled {
@@ -345,7 +372,7 @@ body {
     width: var(--sidebar-width);
     min-width: var(--sidebar-width);
     height: 100vh;
-    background: var(--color-bg-elevated);
+    background: color-mix(in srgb, var(--color-bg-elevated) 94%, var(--color-bg) 6%);
     border-right: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
@@ -356,31 +383,34 @@ body {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-4) var(--space-4);
+    padding: var(--space-5) var(--space-4) var(--space-4);
     border-bottom: 1px solid var(--color-border);
 }
 
 .sidebar-title {
-    font-weight: 600;
+    font-weight: 750;
     font-size: var(--text-base);
+    letter-spacing: 0;
 }
 
 .nav-list {
     list-style: none;
-    padding: var(--space-3);
+    padding: var(--space-3) var(--space-2);
     flex: 1;
 }
 
 .nav-item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--space-3);
+    min-height: 36px;
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-md);
     color: var(--color-text-secondary);
     text-decoration: none;
     font-size: var(--text-sm);
-    font-weight: 500;
+    font-weight: 650;
     transition: all var(--transition-fast);
     margin-bottom: var(--space-1);
 }
@@ -393,6 +423,16 @@ body {
 .nav-item.active {
     background: var(--color-primary-subtle);
     color: var(--color-primary-hover);
+    box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.nav-item.active::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-primary);
+    margin-left: auto;
 }
 
 .nav-icon {
@@ -406,7 +446,7 @@ body {
     border-top: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-3);
 }
 
 .backup-actions {
@@ -521,27 +561,34 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-4) var(--space-6) var(--space-4) 48px;
+    gap: var(--space-5);
+    min-height: 72px;
+    padding: var(--space-3) var(--space-6) var(--space-3) 48px;
     border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
+    background: color-mix(in srgb, var(--color-bg-elevated) 92%, var(--color-bg) 8%);
     flex-shrink: 0;
 }
 
 .view-header h2 {
+    flex: 0 0 auto;
     font-size: var(--text-lg);
-    font-weight: 600;
+    font-weight: 750;
+    line-height: 1.25;
 }
 
 .view-header-gantt {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: var(--space-4);
+    gap: var(--space-3);
+    min-height: 0;
+    padding-top: var(--space-3);
+    padding-bottom: var(--space-3);
 }
 
 .gantt-header-top {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
 }
@@ -554,6 +601,7 @@ body {
 .view-subtitle {
     color: var(--color-text-secondary);
     font-size: var(--text-sm);
+    max-width: 64ch;
 }
 
 .gantt-header-status {
@@ -581,17 +629,29 @@ body {
 }
 
 .view-controls {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(260px, 1fr) minmax(140px, 180px) auto;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-2);
+    width: min(640px, 58vw);
+}
+
+.view-controls .view-input,
+.view-controls .view-select {
+    min-width: 0;
+}
+
+.view-controls .btn {
+    justify-content: center;
 }
 
 .gantt-view-controls {
     display: grid;
-    grid-template-columns: minmax(360px, 0.95fr) minmax(520px, 1.25fr);
+    grid-template-columns: minmax(340px, 0.9fr) minmax(520px, 1.3fr);
     align-items: start;
     gap: var(--space-2);
     flex: 1;
+    width: 100%;
 }
 
 .gantt-controls-toggle {
@@ -605,11 +665,12 @@ body {
 
 .gantt-control-section {
     display: grid;
-    gap: var(--space-2);
-    padding: var(--space-3);
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    background: var(--color-bg);
+    background: color-mix(in srgb, var(--color-bg) 88%, var(--color-bg-elevated) 12%);
+    box-shadow: 0 1px 0 color-mix(in srgb, white 5%, transparent) inset;
 }
 
 .gantt-control-section:nth-child(2) {
@@ -623,7 +684,7 @@ body {
 }
 
 .gantt-section-heading {
-    display: flex;
+    display: none;
     align-items: baseline;
     justify-content: space-between;
     gap: var(--space-3);
@@ -633,7 +694,7 @@ body {
 .gantt-section-eyebrow {
     font-size: var(--text-xs);
     font-weight: 700;
-    letter-spacing: 0.04em;
+    letter-spacing: 0;
     text-transform: uppercase;
     color: var(--color-primary-hover);
 }
@@ -649,19 +710,19 @@ body {
 }
 
 .gantt-control-row-primary {
-    grid-template-columns: minmax(160px, 220px) minmax(190px, 1fr) auto;
+    grid-template-columns: minmax(156px, 190px) minmax(220px, 1fr) minmax(136px, auto);
     align-items: center;
 }
 
 .gantt-filter-bar {
     display: grid;
-    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
     align-items: center;
     gap: var(--space-2);
 }
 
 .gantt-filter-bar #gantt-filter-reset {
-    grid-column: 1 / -1;
+    grid-column: auto;
 }
 
 .gantt-grouping-controls {
@@ -712,8 +773,43 @@ body {
 }
 
 .gantt-control-row-actions {
-    grid-template-columns: minmax(240px, 1fr) minmax(170px, 0.7fr);
+    grid-template-columns: minmax(260px, 1.1fr) minmax(190px, 0.9fr);
     align-items: stretch;
+}
+
+#view-member-load .view-controls {
+    grid-template-columns: auto minmax(204px, 242px) minmax(220px, 290px) minmax(220px, 1fr) minmax(136px, auto);
+    width: min(940px, calc(100vw - 360px));
+}
+
+#view-member-load .member-toolbar-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+#view-member-load #member-search {
+    min-width: 0;
+}
+
+#view-member-load .view-header,
+#view-themes .view-header,
+#view-members .view-header,
+#view-users .view-header {
+    align-items: center;
+}
+
+#view-themes .view-controls,
+#view-members .view-controls,
+#view-users .view-controls {
+    justify-self: end;
+}
+
+#view-insights .view-controls {
+    display: flex;
+    justify-content: flex-end;
+    width: min(560px, 52vw);
 }
 
 .gantt-view-controls .view-select,
@@ -731,13 +827,14 @@ body {
 }
 
 .scale-btn {
+    min-height: 34px;
     padding: var(--space-1) var(--space-3);
     background: transparent;
     border: none;
     color: var(--color-text-muted);
     font-family: var(--font-sans);
     font-size: var(--text-xs);
-    font-weight: 600;
+    font-weight: 700;
     cursor: pointer;
     transition: all var(--transition-fast);
 }
@@ -762,26 +859,27 @@ body {
    ========================================== */
 
 .card-list {
-    padding: var(--space-6);
+    padding: var(--space-4) var(--space-6) var(--space-6);
     overflow-y: auto;
     flex: 1;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: var(--space-4);
     align-content: start;
 }
 
 .card {
-    background: var(--color-bg-card);
+    background: color-mix(in srgb, var(--color-bg-card) 92%, var(--color-bg-elevated) 8%);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     padding: var(--space-4);
-    transition: all var(--transition-fast);
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
 }
 
 .card:hover {
     border-color: var(--color-border-light);
     box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
 }
 
 .card-header {
@@ -789,10 +887,11 @@ body {
     align-items: center;
     justify-content: space-between;
     margin-bottom: var(--space-3);
+    gap: var(--space-3);
 }
 
 .card-title {
-    font-weight: 600;
+    font-weight: 750;
     font-size: var(--text-base);
     display: flex;
     align-items: center;
@@ -810,12 +909,19 @@ body {
     font-size: var(--text-xs);
     color: var(--color-text-muted);
     display: flex;
-    gap: var(--space-4);
+    gap: var(--space-2);
+    flex-wrap: wrap;
 }
 
 .card-actions {
     display: flex;
     gap: var(--space-2);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.card-actions .btn {
+    min-height: 28px;
 }
 
 .status-badge {
@@ -873,9 +979,9 @@ body {
 .modal {
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
-    width: 440px;
-    max-height: 80vh;
+    border-radius: var(--radius-lg);
+    width: min(560px, calc(100vw - 32px));
+    max-height: min(86vh, 820px);
     overflow-y: auto;
     box-shadow: var(--shadow-lg);
 }
@@ -884,13 +990,13 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-4) var(--space-5);
+    padding: var(--space-5) var(--space-6) var(--space-4);
     border-bottom: 1px solid var(--color-border);
 }
 
 .modal-header h3 {
     font-size: var(--text-lg);
-    font-weight: 600;
+    font-weight: 750;
 }
 
 .modal-close {
@@ -907,7 +1013,7 @@ body {
 }
 
 .modal-body {
-    padding: var(--space-5);
+    padding: var(--space-5) var(--space-6);
 }
 
 #modal-color-picker {
@@ -948,7 +1054,7 @@ body {
 }
 
 .modal-footer {
-    padding: var(--space-3) var(--space-5);
+    padding: var(--space-4) var(--space-6);
     border-top: 1px solid var(--color-border);
     display: flex;
     justify-content: flex-end;
@@ -1135,18 +1241,28 @@ body {
 }
 
 .gantt-floating-actions {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: var(--space-2);
-    flex-wrap: wrap;
     margin-bottom: var(--space-3);
 }
 
-.gantt-inline-period-controls {
+.gantt-table-actions {
     display: flex;
     align-items: center;
     gap: var(--space-2);
     flex-wrap: wrap;
+    min-width: 0;
+}
+
+.gantt-inline-period-controls {
+    display: grid;
+    grid-template-columns: minmax(204px, auto) minmax(220px, 260px) minmax(136px, auto);
+    align-items: center;
+    gap: var(--space-2);
+    justify-self: end;
+    min-width: 0;
 }
 
 .gantt-inline-period-controls #shared-period-preset {
@@ -2650,10 +2766,20 @@ kbd {
         display: flex;
         overflow-x: auto;
         gap: var(--space-2);
+        padding: var(--space-2) var(--space-3);
     }
 
     .nav-item {
         margin-bottom: 0;
+        flex: 0 0 auto;
+    }
+
+    .nav-item.active {
+        box-shadow: inset 0 -3px 0 var(--color-primary);
+    }
+
+    .nav-item.active::after {
+        display: none;
     }
 
     .gantt-workspace,
@@ -2695,6 +2821,12 @@ kbd {
         padding-right: var(--space-4);
     }
 
+    .view-header {
+        padding-top: var(--space-4);
+        gap: var(--space-3);
+        min-height: 0;
+    }
+
     .onboarding-panel {
         margin-left: var(--space-4);
         margin-right: var(--space-4);
@@ -2713,11 +2845,48 @@ kbd {
         flex-wrap: wrap;
     }
 
-    .view-input,
-    .view-select,
-    .btn {
+    .view-controls,
+    #view-member-load .view-controls,
+    #view-insights .view-controls {
+        grid-template-columns: 1fr;
         width: 100%;
+    }
+
+    #view-member-load .member-toolbar-actions {
+        justify-content: stretch;
+    }
+
+    #view-member-load .member-toolbar-actions .btn,
+    #view-member-load .scale-switcher,
+    #view-member-load .month-nav {
+        width: 100%;
+    }
+
+    #view-member-load .scale-btn {
+        flex: 1 1 0;
+    }
+
+    #view-member-load .month-nav .btn {
+        flex: 1 1 0;
+    }
+
+    .view-input,
+    .view-select {
+        width: 100%;
+    }
+
+    .btn {
+        width: auto;
         justify-content: center;
+    }
+
+    .view-controls > .btn,
+    .view-controls > .view-input,
+    .view-controls > .view-select,
+    .saved-view-controls .btn,
+    .snapshot-controls .btn,
+    .onboarding-actions .btn {
+        width: 100%;
     }
 
     .gantt-view-controls {
@@ -2742,6 +2911,17 @@ kbd {
     .gantt-filter-bar,
     .gantt-control-row-actions {
         grid-template-columns: 1fr;
+    }
+
+    .gantt-floating-actions,
+    .gantt-inline-period-controls {
+        grid-template-columns: 1fr;
+        justify-self: stretch;
+        width: 100%;
+    }
+
+    .gantt-table-actions {
+        width: 100%;
     }
 
     .saved-view-controls,
@@ -2775,6 +2955,52 @@ kbd {
 }
 
 @media (min-width: 721px) and (max-width: 1280px) {
+    .view-header {
+        align-items: flex-start;
+    }
+
+    .view-controls {
+        grid-template-columns: minmax(220px, 1fr) minmax(140px, 180px) auto;
+        width: min(680px, 64vw);
+    }
+
+    #view-member-load .view-header {
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+        align-items: start;
+        column-gap: var(--space-4);
+        row-gap: var(--space-3);
+        padding-top: var(--space-3);
+        padding-bottom: var(--space-3);
+    }
+
+    #view-member-load .view-header h2 {
+        padding-top: 5px;
+    }
+
+    #view-member-load .view-controls {
+        grid-template-columns: auto minmax(168px, max-content) minmax(160px, 1fr) minmax(132px, auto);
+        width: 100%;
+        gap: var(--space-2);
+    }
+
+    #view-member-load .member-toolbar-actions {
+        justify-content: flex-start;
+    }
+
+    #view-member-load #member-period-preset {
+        grid-column: 3 / -1;
+    }
+
+    #view-member-load #member-search {
+        grid-column: 1 / 4;
+    }
+
+    #view-member-load .view-controls .month-nav {
+        grid-column: 4;
+        justify-self: end;
+    }
+
     .gantt-view-controls {
         grid-template-columns: 1fr;
     }
@@ -2801,6 +3027,16 @@ kbd {
     .gantt-filter-bar,
     .gantt-control-row-actions {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .gantt-floating-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .gantt-inline-period-controls {
+        grid-template-columns: minmax(204px, auto) minmax(220px, 1fr) minmax(136px, auto);
+        justify-self: stretch;
+        width: 100%;
     }
 
     .saved-view-controls,
