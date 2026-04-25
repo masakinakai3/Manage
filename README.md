@@ -13,6 +13,7 @@ Resource Manager は、テーマ、メンバー、アロケーション、イン
 - ダッシュボード形式のインサイトとシナリオシミュレーション
 - JSON バックアップのエクスポート / インポート
 - CSV / XLSX エクスポート
+- API 仕様書 (Swagger UI) の自動生成
 - Undo / Redo とキーボードショートカット
 
 ## 技術スタック
@@ -67,6 +68,7 @@ cd backend
 アクセス先:
 
 - Backend API / 静的配信: `http://127.0.0.1:5001`
+- API ドキュメント (Swagger UI): `http://127.0.0.1:5001/apidocs`
 
 ### 2. Vite 開発サーバーを起動
 

@@ -89,6 +89,7 @@ flowchart LR
 | ORM | Flask-SQLAlchemy / SQLAlchemy | モデル定義と DB アクセス |
 | DB | SQLite | ローカル完結の永続化 |
 | Excel 出力 | openpyxl | XLSX ファイル出力 |
+| API ドキュメント | Flasgger | Swagger UI による API 仕様書自動生成 |
 | テスト | pytest / Vitest | Python / JavaScript の回帰確認 |
 | 配布 | PyInstaller | Windows 向け EXE 化 |
 
@@ -270,6 +271,7 @@ erDiagram
 | Snapshots | `/api/snapshots*` | Gantt スナップショット保存 |
 | Saved Views | `/api/saved-views*` | 表示条件保存 |
 | Export / Import | `/api/export/*`, `/api/import/json` | データ入出力 |
+| API Docs | `/apidocs` | Swagger UI による API 仕様書 |
 
 ### 8.2 配員更新の流れ
 

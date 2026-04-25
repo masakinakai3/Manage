@@ -39,6 +39,13 @@ excluded_modules = [
     "sqlalchemy.dialects.mysql",
     "sqlalchemy.dialects.oracle",
     "sqlalchemy.dialects.postgresql",
+    "sqlalchemy.testing",
+    "IPython",
+    "notebook",
+    "jedi",
+    "pygments",
+    "cryptography",
+    "pycryptodome",
 ]
 
 a = Analysis(
@@ -66,7 +73,7 @@ if build_profile == "dev":
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
-        upx=True,
+        upx=False,
         upx_exclude=[],
         runtime_tmpdir=None,
         console=True,
@@ -82,7 +89,7 @@ if build_profile == "dev":
         a.binaries,
         a.datas,
         strip=False,
-        upx=True,
+        upx=False,
         upx_exclude=[],
         name="manage_app",
     )
@@ -97,7 +104,7 @@ else:
         debug=False,
         bootloader_ignore_signals=False,
         strip=False,
-        upx=True,
+        upx=False,
         upx_exclude=[],
         runtime_tmpdir=None,
         console=True,

@@ -5,6 +5,7 @@
 - Base path: `/api`
 - Auth: session cookie
 - Format: `application/json` unless file upload/download
+- **Interactive Documentation**: `/apidocs` (Swagger UI) にて詳細なスキーマと実行環境を提供しています。
 
 ## Auth
 
