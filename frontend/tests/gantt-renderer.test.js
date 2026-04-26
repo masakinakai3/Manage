@@ -432,16 +432,23 @@ describe('gantt-renderer regressions', () => {
         expect(button).not.toBeNull();
     });
 
-    it('keeps moved period controls available across gantt refreshes', async () => {
+    it('mounts toolbar controls into interactive surfaces across gantt refreshes', async () => {
         const { initGantt, refreshGantt } = await import('../js/gantt/gantt-renderer.js');
 
         await initGantt();
         await refreshGantt();
 
+        const toolbar = document.querySelector('.gantt-floating-actions');
         const inlineControls = document.getElementById('gantt-inline-period-controls');
+        const tableActions = document.getElementById('gantt-table-actions');
+        expect(toolbar?.classList.contains('pointer-shield')).toBe(true);
+        expect(inlineControls?.getAttribute('data-interactive-surface')).toBe('true');
+        expect(tableActions?.getAttribute('data-interactive-surface')).toBe('true');
         expect(inlineControls?.querySelector('#scale-switcher')).not.toBeNull();
         expect(inlineControls?.querySelector('#shared-period-preset')).not.toBeNull();
         expect(inlineControls?.querySelector('.month-nav #gantt-prev')).not.toBeNull();
+        expect(document.getElementById('scale-switcher')?.parentElement?.id).toBe('gantt-inline-period-controls');
+        expect(document.getElementById('gantt-export-csv')?.parentElement?.id).toBe('gantt-table-actions');
     });
 
     it('handles moved scale and preset controls from the inline toolbar', async () => {

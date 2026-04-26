@@ -18,6 +18,15 @@
     background: var(--color-bg);
 }
 
+.pointer-shield {
+    pointer-events: none;
+}
+
+.pointer-shield [data-interactive-surface="true"],
+.pointer-shield [data-interactive-surface="true"] * {
+    pointer-events: auto;
+}
+
 .gantt-floating-actions {
     position: sticky;
     top: 8px;
@@ -28,25 +37,13 @@
     gap: var(--space-1);
     width: calc(100% - 16px);
     margin: 8px auto 0 8px;
-    pointer-events: none;
 }
 
 .gantt-floating-actions .btn {
     min-height: 28px;
-    pointer-events: auto;
     box-shadow: var(--shadow-sm);
     background: color-mix(in srgb, var(--color-bg-elevated) 88%, transparent);
     backdrop-filter: blur(10px);
-}
-
-.gantt-floating-actions .gantt-table-actions,
-.gantt-floating-actions .gantt-inline-period-controls,
-.gantt-floating-actions .gantt-scenario-actions,
-.gantt-floating-actions .gantt-scenario-select,
-.gantt-floating-actions .scale-switcher,
-.gantt-floating-actions .scale-btn,
-.gantt-floating-actions select {
-    pointer-events: auto;
 }
 
 .gantt-floating-actions #gantt-export-csv {

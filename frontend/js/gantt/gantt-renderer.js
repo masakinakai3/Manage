@@ -120,22 +120,53 @@ function returnToInsightsFromScenarioPreview() {
     document.querySelector('.nav-item[data-view="insights"]')?.click();
 }
 
-function renderScenarioToolbarActions() {
+function ensureToolbar() {
     const toolbar = document.querySelector('.gantt-floating-actions');
-    if (!toolbar) return;
+    if (!toolbar) return null;
+    toolbar.classList.add('pointer-shield');
+    return toolbar;
+}
 
-    let container = document.getElementById('gantt-scenario-actions');
+function markInteractiveSurface(element) {
+    if (!element) return null;
+    element.setAttribute('data-interactive-surface', 'true');
+    return element;
+}
+
+function ensureToolbarSlot(id, className, { prepend = false } = {}) {
+    const toolbar = ensureToolbar();
+    if (!toolbar) return null;
+
+    let slot = document.getElementById(id);
+    if (!slot) {
+        slot = document.createElement('div');
+        slot.id = id;
+        slot.className = className;
+        prepend ? toolbar.prepend(slot) : toolbar.appendChild(slot);
+    }
+
+    return markInteractiveSurface(slot);
+}
+
+function moveControlsToToolbarSlot(slot, controls) {
+    if (!slot) return;
+    controls.filter(Boolean).forEach((control) => {
+        markInteractiveSurface(control);
+        if (control.parentElement !== slot) {
+            slot.append(control);
+        }
+    });
+}
+
+function renderScenarioToolbarActions() {
+    const container = ensureToolbarSlot('gantt-scenario-actions', 'gantt-scenario-actions', { prepend: true });
+    if (!container) return;
     if (!scenarioPreviewState) {
-        container?.remove();
+        container.hidden = true;
+        container.innerHTML = '';
         return;
     }
-
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'gantt-scenario-actions';
-        container.className = 'gantt-scenario-actions';
-        toolbar.prepend(container);
-    }
+    container.hidden = false;
 
     const options = scenarioPreviewState.previews.map((preview, index) => `
         <option value="${index}" ${index === scenarioPreviewState.selectedIndex ? 'selected' : ''}>${escapeHtml(getScenarioPreviewOptionLabel(preview, index))}</option>
@@ -190,33 +221,20 @@ export async function initGantt() {
 }
 
 function ensureInlinePeriodControls() {
-    const toolbar = document.querySelector('.gantt-floating-actions');
+    const toolbar = ensureToolbar();
     const scaleSwitcher = document.getElementById('scale-switcher');
     const presetSelect = document.getElementById('shared-period-preset');
     const monthNav = document.getElementById('gantt-prev')?.closest('.month-nav') || document.querySelector('.gantt-control-row-primary .month-nav');
     if (!toolbar || !scaleSwitcher || !presetSelect || !monthNav) return;
 
-    let tableActions = document.getElementById('gantt-table-actions');
-    if (!tableActions) {
-        tableActions = document.createElement('div');
-        tableActions.id = 'gantt-table-actions';
-        tableActions.className = 'gantt-table-actions';
-        toolbar.prepend(tableActions);
-    }
+    const tableActions = ensureToolbarSlot('gantt-table-actions', 'gantt-table-actions', { prepend: true });
     ['gantt-expand-all', 'gantt-collapse-all', 'gantt-export-csv'].forEach((id) => {
         const action = document.getElementById(id);
-        if (action && action.parentElement !== tableActions) tableActions.append(action);
+        moveControlsToToolbarSlot(tableActions, [action]);
     });
 
-    let inlineControls = document.getElementById('gantt-inline-period-controls');
-    if (!inlineControls) {
-        inlineControls = document.createElement('div');
-        inlineControls.id = 'gantt-inline-period-controls';
-        inlineControls.className = 'gantt-inline-period-controls';
-        toolbar.appendChild(inlineControls);
-    }
-
-    inlineControls.append(scaleSwitcher, presetSelect, monthNav);
+    const inlineControls = ensureToolbarSlot('gantt-inline-period-controls', 'gantt-inline-period-controls');
+    moveControlsToToolbarSlot(inlineControls, [scaleSwitcher, presetSelect, monthNav]);
     syncPeriodControls();
 }
 
