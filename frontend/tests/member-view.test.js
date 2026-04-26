@@ -306,4 +306,45 @@ describe('member-view milestones', () => {
         expandButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         expect(document.querySelector('.theme-row')?.classList.contains('hidden')).toBe(false);
     });
+
+    it('shows the active member search filter count and lets the user clear it', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-04',
+            scale: 1,
+            memberSearch: 'alice',
+            preset: 'rolling-6',
+        });
+        membersList.mockResolvedValue([
+            { member_id: 10, display_name: 'Alice', department: 'Dev', capacity: 100 },
+            { member_id: 20, display_name: 'Bob', department: 'Ops', capacity: 100 },
+            { member_id: 30, display_name: 'Carol', department: 'QA', capacity: 100 },
+        ]);
+        themesList.mockResolvedValue([
+            { theme_id: 1, name: 'Theme A', color: '#00aaff', milestones: [] },
+            { theme_id: 2, name: 'Theme B', color: '#22c55e', milestones: [] },
+        ]);
+        allocationsList = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 2, member_id: 20, month: '2026-04', allocation_rate: 10, memo: '' },
+        ];
+        memberLoads.mockResolvedValue({
+            10: { '2026-04': 20 },
+            20: { '2026-04': 10 },
+            30: {},
+        });
+
+        const { initMemberView } = await import('../js/member/member-view.js');
+
+        await initMemberView();
+
+        expect(document.querySelectorAll('tr.member-row')).toHaveLength(1);
+        expect(document.getElementById('member-search-status')?.textContent).toBe('1 / 3 名を表示');
+        expect(document.getElementById('member-search-clear')?.hidden).toBe(false);
+
+        document.getElementById('member-search-clear')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(document.getElementById('member-search')?.value).toBe('');
+        expect(sharedState.updateViewState).toHaveBeenCalledWith({ memberSearch: '' });
+    });
 });

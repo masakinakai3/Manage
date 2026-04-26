@@ -210,6 +210,22 @@ describe('gantt-renderer regressions', () => {
         localStorage.clear();
     });
 
+    it('keeps only the latest 50 history entries', async () => {
+        const { HistoryManager } = await import('../js/gantt/gantt-renderer.js');
+
+        HistoryManager.stack = [];
+        HistoryManager.index = -1;
+
+        for (let i = 0; i < 55; i += 1) {
+            HistoryManager.push([{ month: `undo-${i}` }], [{ month: `redo-${i}` }]);
+        }
+
+        expect(HistoryManager.stack).toHaveLength(50);
+        expect(HistoryManager.index).toBe(49);
+        expect(HistoryManager.stack[0].redo[0].month).toBe('redo-5');
+        expect(HistoryManager.stack.at(-1).redo[0].month).toBe('redo-54');
+    });
+
     it('opens the inline editor on single click', async () => {
         const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
 

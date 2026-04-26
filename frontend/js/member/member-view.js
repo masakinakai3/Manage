@@ -41,6 +41,7 @@ export async function initMemberView() {
         if (presetInput) presetInput.value = nextState.preset;
 
         syncScaleButtons();
+        syncMemberSearchControls();
         refreshMemberView();
     });
 
@@ -96,6 +97,17 @@ function setupControls() {
     });
 
     const searchInput = document.getElementById('member-search');
+    if (searchInput && !document.getElementById('member-search-tools')) {
+        const tools = document.createElement('div');
+        tools.className = 'member-search-tools';
+        tools.id = 'member-search-tools';
+        tools.innerHTML = `
+            <span id="member-search-status" class="member-search-status summary-subtext" hidden></span>
+            <button class="btn btn-ghost btn-sm" id="member-search-clear" type="button" hidden>検索解除</button>
+        `;
+        searchInput.insertAdjacentElement('afterend', tools);
+    }
+
     if (searchInput) {
         searchInput.value = memberSearchQuery;
         searchInput.addEventListener('input', (event) => {
@@ -103,6 +115,12 @@ function setupControls() {
             updateViewState({ memberSearch: memberSearchQuery });
         });
     }
+    document.getElementById('member-search-clear')?.addEventListener('click', () => {
+        memberSearchQuery = '';
+        if (searchInput) searchInput.value = '';
+        updateViewState({ memberSearch: '' });
+    });
+    syncMemberSearchControls();
 
     document.getElementById('member-prev').addEventListener('click', () => {
         startMonth = addMonths(startMonth, -scale * 3);
@@ -237,6 +255,7 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
     const memberThemeLoads = buildMemberThemeLoads(allocationsList);
 
     const filteredMembers = allMembers.filter((member) => matchesMemberSearch(member, memberThemeLoads[member.member_id] || {}));
+    syncMemberSearchControls(filteredMembers.length);
 
     let html = '';
     filteredMembers.forEach((member) => {
@@ -287,7 +306,10 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
         });
     });
 
-    tbody.innerHTML = html || `<tr><td colspan="${months.length + 1}" class="summary-subtext">条件に一致するメンバーがありません。</td></tr>`;
+    const emptyMessage = memberSearchQuery
+        ? '検索条件に一致するメンバーがありません。'
+        : '表示するメンバーがありません。';
+    tbody.innerHTML = html || `<tr><td colspan="${months.length + 1}" class="summary-subtext">${emptyMessage}</td></tr>`;
 
     bindTableInteractions(tbody);
     syncSelectedMonthStyles();
@@ -353,6 +375,25 @@ function matchesMemberSearch(member, memberThemes) {
 
     return [member.display_name, member.department || '', themeNames]
         .some((value) => value.toLowerCase().includes(memberSearchQuery));
+}
+
+function syncMemberSearchControls(filteredCount = allMembers.length) {
+    const clearButton = document.getElementById('member-search-clear');
+    const status = document.getElementById('member-search-status');
+    if (!clearButton || !status) return;
+
+    const hasSearch = Boolean(memberSearchQuery);
+    clearButton.hidden = !hasSearch;
+    clearButton.disabled = !hasSearch;
+
+    if (!hasSearch) {
+        status.hidden = true;
+        status.textContent = '';
+        return;
+    }
+
+    status.hidden = false;
+    status.textContent = `${filteredCount} / ${allMembers.length} 名を表示`;
 }
 
 function buildStackedBar(month, memberThemes, capacity) {

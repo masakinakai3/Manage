@@ -11,12 +11,17 @@ const SCENARIO_RETURN_LABEL = '\u30A4\u30F3\u30B5\u30A4\u30C8\u306B\u623B\u308B'
 const SCENARIO_CLEAR_LABEL = '\u89E3\u9664';
 
 export const HistoryManager = {
+    limit: 50,
     stack: [],
     index: -1,
     push(undo, redo) {
         this.stack = this.stack.slice(0, this.index + 1);
         this.stack.push({ undo, redo });
-        this.index += 1;
+        if (this.stack.length > this.limit) {
+            const overflow = this.stack.length - this.limit;
+            this.stack.splice(0, overflow);
+        }
+        this.index = this.stack.length - 1;
     },
     async perform(data) {
         await allocations.bulkUpdate(data);
