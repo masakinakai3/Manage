@@ -23,6 +23,18 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const rect = cellEl.getBoundingClientRect();
     const initialValue = options.initialValue ?? currentRate;
     const selectOnOpen = options.selectOnOpen !== false;
+    const commitChange = options.commitChange || ((allocationRate) => allocations.updateSingle({
+        theme_id: themeId,
+        member_id: memberId,
+        month,
+        allocation_rate: allocationRate,
+    }));
+    const clearChange = options.clearChange || (() => allocations.updateSingle({
+        theme_id: themeId,
+        member_id: memberId,
+        month,
+        allocation_rate: 0,
+    }));
 
     editor.style.left = `${rect.left}px`;
     editor.style.top = `${rect.bottom + 4}px`;
@@ -47,12 +59,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         if (onSave) onSave(clampedRate);
 
         // Background save
-        allocations.updateSingle({
-            theme_id: themeId,
-            member_id: memberId,
-            month: month,
-            allocation_rate: clampedRate,
-        }).then(() => {
+        Promise.resolve(commitChange(clampedRate)).then(() => {
             setSaveState('saved', `${month} の配分を保存しました`);
         }).catch(err => {
             console.error('Failed to save:', err);
@@ -100,12 +107,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         saving = true;
         setSaveState('saving', 'セルをクリアしています...');
         try {
-            await allocations.updateSingle({
-                theme_id: themeId,
-                member_id: memberId,
-                month: month,
-                allocation_rate: 0,
-            });
+            await Promise.resolve(clearChange());
             closeCellEditor();
             onSave();
             setSaveState('saved', `${month} の配分をクリアしました`);

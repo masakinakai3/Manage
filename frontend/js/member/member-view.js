@@ -5,6 +5,7 @@
  */
 
 import { openCellEditor } from '../gantt/gantt-editor.js';
+import { HistoryManager, refreshGantt } from '../gantt/gantt-renderer.js';
 import { allocations, members as membersApi, themes as themesApi } from '../api.js';
 import { currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate, shortenMonth } from '../utils/date-utils.js';
 import { getPresetConfig, loadViewState, subscribeViewState, updateViewState } from '../shared-state.js';
@@ -19,6 +20,50 @@ let scale = 1;
 let memberSearchQuery = '';
 let selectedMonth = null;
 const MEMBER_MONTH_COLUMN_WIDTH = 88;
+
+function buildMemberAllocationSnapshot(themeId, memberId, month) {
+    const current = lastAllocations.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
+    return {
+        theme_id: themeId,
+        member_id: memberId,
+        month,
+        allocation_rate: current?.allocation_rate || 0,
+        memo: current?.memo || '',
+    };
+}
+
+async function applyMemberHistoryChange(data) {
+    await allocations.bulkUpdate(data);
+    await Promise.all([refreshGantt(), refreshMemberView()]);
+}
+
+async function commitMemberCellChange(themeId, memberId, month, allocationRate) {
+    const nextRate = Math.max(0, Math.min(100, Number.parseInt(allocationRate || '0', 10) || 0));
+    const undo = buildMemberAllocationSnapshot(themeId, memberId, month);
+    const redo = {
+        theme_id: themeId,
+        member_id: memberId,
+        month,
+        allocation_rate: nextRate,
+        memo: undo.memo || '',
+    };
+
+    if (undo.allocation_rate === redo.allocation_rate) {
+        return false;
+    }
+
+    HistoryManager.push([undo], [redo], { apply: applyMemberHistoryChange });
+    try {
+        await applyMemberHistoryChange([redo]);
+        return true;
+    } catch (error) {
+        if (HistoryManager.index >= 0) {
+            HistoryManager.stack.splice(HistoryManager.index, 1);
+            HistoryManager.index -= 1;
+        }
+        throw error;
+    }
+}
 
 export async function initMemberView() {
     const state = loadViewState();
@@ -486,6 +531,9 @@ function bindTableInteractions(tbody) {
                     updateThemeCell(cell, memberId, themeId, month, newRate);
                 }
                 moveEditorFocus(cell, direction);
+            }, {
+                commitChange: (nextRate) => commitMemberCellChange(themeId, memberId, month, nextRate),
+                clearChange: () => commitMemberCellChange(themeId, memberId, month, 0),
             });
         });
     });

@@ -80,4 +80,23 @@ describe('gantt-editor regressions', () => {
         expect(editor.hidden).toBe(false);
         expect(onSave).not.toHaveBeenCalled();
     });
+
+    it('uses a custom commit handler when provided', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onSave = vi.fn();
+        const onNavigate = vi.fn();
+        const commitChange = vi.fn(() => Promise.resolve(true));
+        const clearChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, onNavigate, { commitChange, clearChange });
+        input.value = '50';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await Promise.resolve();
+
+        expect(onSave).toHaveBeenCalledWith(50);
+        expect(commitChange).toHaveBeenCalledWith(50);
+        expect(updateSingle).not.toHaveBeenCalled();
+    });
 });

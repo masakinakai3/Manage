@@ -1,5 +1,6 @@
 import { allocations, members as membersApi, snapshots as snapshotsApi, themes as themesApi } from '../api.js';
 import { getPresetConfig, loadViewState, subscribeViewState, updateViewState } from '../shared-state.js';
+import { shouldIgnoreShortcut } from '../shortcut-utils.js';
 import { addMonths, currentMonth, formatMonthHeader, getVisibleMonths } from '../utils/date-utils.js';
 import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from '../ui.js';
 import { isCellEditorOpen, openCellEditor } from './gantt-editor.js';
@@ -14,9 +15,9 @@ export const HistoryManager = {
     limit: 50,
     stack: [],
     index: -1,
-    push(undo, redo) {
+    push(undo, redo, options = {}) {
         this.stack = this.stack.slice(0, this.index + 1);
-        this.stack.push({ undo, redo });
+        this.stack.push({ undo, redo, apply: options.apply || null });
         if (this.stack.length > this.limit) {
             const overflow = this.stack.length - this.limit;
             this.stack.splice(0, overflow);
@@ -24,20 +25,72 @@ export const HistoryManager = {
         this.index = this.stack.length - 1;
     },
     async perform(data) {
-        await allocations.bulkUpdate(data);
-        await refreshGantt();
+        applyHistoryRowsOptimistically(data);
+        try {
+            await allocations.bulkUpdate(data);
+            await refreshGantt();
+        } catch (error) {
+            await refreshGantt();
+            throw error;
+        }
     },
     async undo() {
         if (this.index < 0) return;
         const action = this.stack[this.index--];
-        await this.perform(action.undo);
+        await (action.apply || this.perform.bind(this))(action.undo);
     },
     async redo() {
         if (this.index >= this.stack.length - 1) return;
         const action = this.stack[++this.index];
-        await this.perform(action.redo);
+        await (action.apply || this.perform.bind(this))(action.redo);
     },
 };
+
+function buildAllocationSnapshot(themeId, memberId, month) {
+    const current = allAllocations.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
+    return {
+        theme_id: themeId,
+        member_id: memberId,
+        month,
+        allocation_rate: current?.allocation_rate || 0,
+        memo: current?.memo || '',
+    };
+}
+
+async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '' } = {}) {
+    const nextRate = Math.max(0, Math.min(100, Number.parseInt(allocationRate || '0', 10) || 0));
+    const nextMemo = String(memo || '');
+    const undo = buildAllocationSnapshot(themeId, memberId, month);
+    const redo = {
+        theme_id: themeId,
+        member_id: memberId,
+        month,
+        allocation_rate: nextRate,
+        memo: nextMemo,
+    };
+
+    if (undo.allocation_rate === redo.allocation_rate && undo.memo === redo.memo) {
+        return false;
+    }
+
+    if (optimisticButton) {
+        applyCellValue(optimisticButton, nextRate, nextMemo);
+    }
+
+    HistoryManager.push([undo], [redo]);
+
+    try {
+        await HistoryManager.perform([redo]);
+        if (successMessage) setSaveState('saved', successMessage);
+        return true;
+    } catch (error) {
+        if (HistoryManager.index >= 0) {
+            HistoryManager.stack.splice(HistoryManager.index, 1);
+            HistoryManager.index -= 1;
+        }
+        throw error;
+    }
+}
 
 let allThemes = [];
 let allMembers = [];
@@ -443,7 +496,7 @@ function bindControls() {
     document.getElementById('gantt-export-csv')?.addEventListener('click', exportCsv);
     document.getElementById('snapshot-save-btn')?.addEventListener('click', saveSnapshot);
     document.getElementById('snapshot-select')?.addEventListener('change', loadSelectedSnapshot);
-    document.getElementById('detail-save')?.addEventListener('click', saveSelectedCell);
+    document.getElementById('detail-save')?.addEventListener('click', saveSelectedCellWithHistory);
     document.getElementById('detail-prev')?.addEventListener('click', () => moveSelection(-1));
     document.getElementById('detail-next')?.addEventListener('click', () => moveSelection(1));
     document.getElementById('detail-next-empty')?.addEventListener('click', () => jumpToMatchingCell((button) => Number.parseInt(button.dataset.rate || '0', 10) === 0));
@@ -770,7 +823,11 @@ function renderDetailPanelV2() {
     if (monthName) monthName.textContent = selectedCell.month;
     if (detailTarget) detailTarget.textContent = `${theme?.name || ''} / ${member?.display_name || ''} / ${selectedCell.month}`;
     if (detailRate) detailRate.value = allocation?.allocation_rate || 0;
-    if (detailMemo) detailMemo.value = allocation?.memo || '';
+    if (detailMemo) {
+        const persistedMemo = allocation?.memo || '';
+        detailMemo.value = persistedMemo;
+        detailMemo.dataset.persistedValue = persistedMemo;
+    }
     if (detailBulkRate) detailBulkRate.value = allocation?.allocation_rate || 0;
     if (detailMessage) {
         detailMessage.textContent = isWarning
@@ -976,9 +1033,81 @@ function openEditorForButton(button, options = {}) {
         month,
         currentRate,
         (nextRate) => applyCellValue(button, nextRate, button.dataset.memo || ''),
-        (direction, changed, newRate) => handleEditorNavigation(button, direction, changed, newRate),
-        options,
+        (direction, changed, newRate) => handleEditorNavigationWithHistory(button, direction, changed, newRate),
+        {
+            ...options,
+            commitChange: (nextRate) => commitSingleCellChange(
+                themeId,
+                memberId,
+                month,
+                nextRate,
+                button.dataset.memo || '',
+                { successMessage: `${month} 縺ｮ雋闕ｷ邇・ｒ菫晏ｭ倥＠縺ｾ縺励◆` },
+            ),
+            clearChange: () => commitSingleCellChange(
+                themeId,
+                memberId,
+                month,
+                0,
+                button.dataset.memo || '',
+                { successMessage: `${month} 縺ｮ雋闕ｷ繧偵け繝ｪ繧｢縺励∪縺励◆` },
+            ),
+        },
     );
+}
+
+async function saveSelectedCellWithHistory() {
+    if (!selectedCell) return;
+    const rate = Number.parseInt(document.getElementById('detail-rate').value || '0', 10);
+    const memo = document.getElementById('detail-memo').value.trim();
+    const changed = await commitSingleCellChange(
+        selectedCell.themeId,
+        selectedCell.memberId,
+        selectedCell.month,
+        rate,
+        memo,
+        { successMessage: 'セルを保存しました' },
+    );
+    if (changed) {
+        showToast('セルを保存しました', 'success');
+    }
+}
+
+function handleEditorNavigationWithHistory(button, direction, changed, newRate) {
+    const themeId = Number.parseInt(button.dataset.theme, 10);
+    const memberId = Number.parseInt(button.dataset.member, 10);
+    const month = button.dataset.month;
+    const memo = button.dataset.memo || '';
+
+    const moveToNext = () => {
+        const nextButton = findAdjacentCell(button, direction);
+        if (!nextButton) return;
+
+        selectedCell = {
+            themeId: Number.parseInt(nextButton.dataset.theme, 10),
+            memberId: Number.parseInt(nextButton.dataset.member, 10),
+            month: nextButton.dataset.month,
+        };
+        renderDetailPanelV2();
+        openEditorForButton(nextButton);
+    };
+
+    if (!changed) {
+        moveToNext();
+        return;
+    }
+
+    const nextRate = Math.max(0, Math.min(100, Number.parseInt(newRate || '0', 10)));
+    applyCellValue(button, nextRate, memo);
+    moveToNext();
+
+    commitSingleCellChange(themeId, memberId, month, nextRate, memo, {
+        successMessage: `${month} の負荷率を保存しました`,
+    }).catch((error) => {
+        setSaveState('error', 'セル保存に失敗しました');
+        showToast(`セル保存に失敗しました: ${formatError(error)}`, 'error');
+        refreshGantt();
+    });
 }
 
 function handleEditorNavigation(button, direction, changed, newRate) {
@@ -1147,6 +1276,17 @@ function bindKeyboardInteractions() {
     ganttKeyboardBound = true;
 
     document.addEventListener('keydown', (event) => {
+        if (shouldHandleGanttHistoryShortcut(event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            if ((event.shiftKey && String(event.key).toLowerCase() === 'z') || String(event.key).toLowerCase() === 'y') {
+                void HistoryManager.redo();
+            } else {
+                void HistoryManager.undo();
+            }
+            return;
+        }
+
         if (!isGanttKeyboardContext(event)) return;
         if (!selectedCell) return;
 
@@ -1203,6 +1343,21 @@ function bindKeyboardInteractions() {
         const text = event.clipboardData?.getData('text/plain') || '';
         pasteFromClipboard(text);
     });
+}
+
+function shouldHandleGanttHistoryShortcut(event) {
+    const key = String(event.key || '').toLowerCase();
+    const isUndo = key === 'z' && !event.shiftKey;
+    const isRedo = (key === 'z' && event.shiftKey) || key === 'y';
+    if (!(event.ctrlKey || event.metaKey) || (!isUndo && !isRedo)) return false;
+    if (!document.getElementById('view-gantt')?.classList.contains('active')) return false;
+    if (shouldIgnoreShortcut(event)) return false;
+
+    const target = event.target;
+    return Boolean(
+        selectedCell ||
+        target?.closest?.('#gantt-container, #gantt-detail-panel, #cell-editor'),
+    );
 }
 
 function isGanttKeyboardContext(event) {
@@ -1534,6 +1689,45 @@ async function showAssignMemberModal(themeId) {
             showToast(`メンバー更新に失敗しました: ${error?.message || error}`, 'error');
         }
     };
+}
+
+function applyAllocationRowToState(row) {
+    const themeId = Number.parseInt(row.theme_id, 10);
+    const memberId = Number.parseInt(row.member_id, 10);
+    const month = row.month;
+    const nextRate = Math.max(0, Math.min(100, Number.parseInt(row.allocation_rate || '0', 10) || 0));
+    const allocationIndex = allAllocations.findIndex((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
+    const nextMemo = row.memo ?? (allocationIndex >= 0 ? allAllocations[allocationIndex].memo : '') ?? '';
+
+    if (nextRate <= 0) {
+        if (allocationIndex >= 0) {
+            allAllocations.splice(allocationIndex, 1);
+        }
+        return;
+    }
+
+    const nextRow = {
+        theme_id: themeId,
+        member_id: memberId,
+        month,
+        allocation_rate: nextRate,
+        memo: nextMemo,
+    };
+
+    if (allocationIndex >= 0) {
+        allAllocations[allocationIndex] = {
+            ...allAllocations[allocationIndex],
+            ...nextRow,
+        };
+    } else {
+        allAllocations.push(nextRow);
+    }
+}
+
+function applyHistoryRowsOptimistically(rows) {
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    rows.forEach(applyAllocationRowToState);
+    rerenderGanttView();
 }
 
 function closeSharedModal() {

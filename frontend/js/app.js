@@ -8,6 +8,7 @@ import { auth, themes as themesApi, members as membersApi, allocations, dataBack
 import { initGantt, refreshGantt, clearScenarioPreview, HistoryManager } from './gantt/gantt-renderer.js';
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
+import { shouldIgnoreShortcut } from './shortcut-utils.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
 
@@ -179,7 +180,7 @@ function initNavigation() {
     });
 
     document.addEventListener('keydown', (event) => {
-        if (shouldIgnoreShortcut(event)) return;
+        if (event.defaultPrevented || shouldIgnoreShortcut(event)) return;
 
         if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'z') {
             event.preventDefault();
@@ -1380,14 +1381,6 @@ function focusCurrentSearch() {
     const input = document.getElementById(targets[currentView] || 'gantt-theme-filter');
     input?.focus();
     input?.select?.();
-}
-
-function shouldIgnoreShortcut(event) {
-    const target = event.target;
-    return Boolean(
-        event.altKey ||
-        target?.closest?.('input, textarea, select, [contenteditable="true"]'),
-    );
 }
 
 function downloadBlob(blob, filename) {

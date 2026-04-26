@@ -7,6 +7,9 @@ const setBusyState = vi.fn();
 const setSaveState = vi.fn();
 const showToast = vi.fn();
 const formatError = vi.fn((error) => error.message);
+const bulkUpdate = vi.fn(async () => ({}));
+const historyPush = vi.fn();
+const refreshGantt = vi.fn(async () => {});
 
 let visibleMonths = ['2026-04'];
 let allocationsList = [{
@@ -42,6 +45,15 @@ const allocationsApiList = vi.fn(async () => allocationsList);
 
 vi.mock('../js/gantt/gantt-editor.js', () => ({
     openCellEditor,
+}));
+
+vi.mock('../js/gantt/gantt-renderer.js', () => ({
+    HistoryManager: {
+        push: historyPush,
+        stack: [],
+        index: -1,
+    },
+    refreshGantt,
 }));
 
 vi.mock('../js/ui.js', () => ({
@@ -94,6 +106,7 @@ vi.mock('../js/api.js', () => ({
         memberLoads,
         warnings,
         list: allocationsApiList,
+        bulkUpdate,
     },
     members: {
         list: membersList,
@@ -138,6 +151,9 @@ describe('member-view milestones', () => {
         setBusyState.mockClear();
         setSaveState.mockClear();
         showToast.mockClear();
+        bulkUpdate.mockClear();
+        historyPush.mockClear();
+        refreshGantt.mockClear();
         membersList.mockClear();
         themesList.mockClear();
         memberLoads.mockClear();
@@ -346,5 +362,45 @@ describe('member-view milestones', () => {
 
         expect(document.getElementById('member-search')?.value).toBe('');
         expect(sharedState.updateViewState).toHaveBeenCalledWith({ memberSearch: '' });
+    });
+
+    it('passes undo-aware commit handlers into member-load cell editing', async () => {
+        allocationsList = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 30, memo: '' },
+        ];
+
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        document.querySelector('.toggle-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.querySelector('.member-theme-cell')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(openCellEditor).toHaveBeenCalledTimes(1);
+        expect(openCellEditor.mock.calls[0][7].commitChange).toEqual(expect.any(Function));
+        expect(openCellEditor.mock.calls[0][7].clearChange).toEqual(expect.any(Function));
+    });
+
+    it('records member-load edits in history and persists them through bulk update', async () => {
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        document.querySelector('.toggle-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.querySelector('.member-theme-cell')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        await openCellEditor.mock.calls[0][7].commitChange(35);
+
+        expect(historyPush).toHaveBeenCalledTimes(1);
+        expect(historyPush.mock.calls[0][0]).toEqual([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+        ]);
+        expect(historyPush.mock.calls[0][1]).toEqual([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 35, memo: '' },
+        ]);
+        expect(historyPush.mock.calls[0][2]).toMatchObject({ apply: expect.any(Function) });
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 35, memo: '' },
+        ]);
+        expect(refreshGantt).toHaveBeenCalledTimes(1);
     });
 });

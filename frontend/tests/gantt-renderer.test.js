@@ -10,7 +10,26 @@ const showToast = vi.fn();
 const showConfirmDialog = vi.fn();
 const showPromptDialog = vi.fn();
 const formatError = vi.fn((error) => error.message);
-const bulkUpdate = vi.fn(async () => ({}));
+const bulkUpdate = vi.fn(async (rows) => {
+    rows.forEach((row) => {
+        const index = allocationRows.findIndex((item) => item.theme_id === row.theme_id
+            && item.member_id === row.member_id
+            && item.month === row.month);
+        const nextRate = Number.parseInt(row.allocation_rate || '0', 10) || 0;
+        const nextMemo = row.memo ?? allocationRows[index]?.memo ?? '';
+        if (nextRate <= 0) {
+            if (index >= 0) allocationRows.splice(index, 1);
+            return;
+        }
+        if (index >= 0) {
+            allocationRows[index] = { ...allocationRows[index], ...row, allocation_rate: nextRate, memo: nextMemo };
+        } else {
+            allocationRows.push({ ...row, allocation_rate: nextRate, memo: nextMemo });
+        }
+    });
+    return {};
+});
+const updateSingle = vi.fn(async () => ({}));
 let visibleMonths = ['2026-04'];
 let allocationRows = [{
     theme_id: 1,
@@ -89,7 +108,7 @@ vi.mock('../js/api.js', () => ({
         list: allocationList,
         warnings,
         memberLoads,
-        updateSingle: vi.fn(async () => ({})),
+        updateSingle,
         bulkUpdate,
     },
     members: {
@@ -191,6 +210,7 @@ describe('gantt-renderer regressions', () => {
         showConfirmDialog.mockClear();
         showPromptDialog.mockClear();
         bulkUpdate.mockClear();
+        updateSingle.mockClear();
         themeList.mockClear();
         memberList.mockClear();
         allocationList.mockClear();
@@ -263,7 +283,9 @@ describe('gantt-renderer regressions', () => {
 
         expect(openCellEditor).toHaveBeenCalledTimes(1);
         expect(openCellEditor.mock.calls[0][0]).toBe(cells[1]);
-        expect(openCellEditor.mock.calls[0][7]).toEqual({ initialValue: '7', selectOnOpen: false });
+        expect(openCellEditor.mock.calls[0][7]).toMatchObject({ initialValue: '7', selectOnOpen: false });
+        expect(openCellEditor.mock.calls[0][7].commitChange).toEqual(expect.any(Function));
+        expect(openCellEditor.mock.calls[0][7].clearChange).toEqual(expect.any(Function));
     });
 
     it('copies and pastes a month range with bulk update', async () => {
@@ -291,6 +313,60 @@ describe('gantt-renderer regressions', () => {
         expect(bulkUpdate).toHaveBeenCalledWith([
             { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 10 },
             { theme_id: 1, member_id: 10, month: '2026-06', allocation_rate: 20 },
+        ]);
+    });
+
+    it('adds single-cell edits to undo history from the detail panel', async () => {
+        const { initGantt, HistoryManager } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cell = document.querySelector('.gantt-cell[data-theme]');
+        cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        document.getElementById('detail-rate').value = '60';
+        document.getElementById('detail-save').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(updateSingle).not.toHaveBeenCalled();
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 60, memo: '' },
+        ]);
+
+        bulkUpdate.mockClear();
+        await HistoryManager.undo();
+
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+        ]);
+    });
+
+    it('handles Ctrl+Z from the detail memo field after a saved change', async () => {
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cell = document.querySelector('.gantt-cell[data-theme]');
+        cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        const detailRate = document.getElementById('detail-rate');
+        const detailMemo = document.getElementById('detail-memo');
+        detailRate.value = '60';
+        document.getElementById('detail-save').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        bulkUpdate.mockClear();
+        detailMemo.focus();
+        detailMemo.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'z',
+            ctrlKey: true,
+            bubbles: true,
+        }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
         ]);
     });
 
