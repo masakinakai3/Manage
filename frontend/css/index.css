@@ -778,8 +778,11 @@ body {
 }
 
 #view-member-load .view-controls {
-    grid-template-columns: auto minmax(204px, 242px) minmax(220px, 290px) minmax(220px, 1fr) minmax(136px, auto);
-    width: min(940px, calc(100vw - 360px));
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    width: min(100%, 1120px);
 }
 
 #view-member-load .member-toolbar-actions {
@@ -790,7 +793,23 @@ body {
 }
 
 #view-member-load #member-search {
+    flex: 1 1 280px;
     min-width: 0;
+}
+
+#view-member-load #member-period-preset {
+    flex: 0 0 204px;
+}
+
+#view-member-load #member-search-tools {
+    display: inline-flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+}
+
+#view-member-load .view-controls .month-nav {
+    flex: 0 0 auto;
+    margin-left: auto;
 }
 
 #view-member-load .view-header,
@@ -2852,13 +2871,23 @@ kbd {
         width: 100%;
     }
 
+    #view-member-load .view-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        justify-content: flex-start;
+    }
+
     #view-member-load .member-toolbar-actions {
         justify-content: stretch;
     }
 
     #view-member-load .member-toolbar-actions .btn,
     #view-member-load .scale-switcher,
-    #view-member-load .month-nav {
+    #view-member-load .month-nav,
+    #view-member-load #member-period-preset,
+    #view-member-load #member-search,
+    #view-member-load #member-search-tools {
         width: 100%;
     }
 
@@ -2979,7 +3008,9 @@ kbd {
     }
 
     #view-member-load .view-controls {
-        grid-template-columns: auto minmax(168px, max-content) minmax(160px, 1fr) minmax(132px, auto);
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
         width: 100%;
         gap: var(--space-2);
     }
@@ -2989,16 +3020,15 @@ kbd {
     }
 
     #view-member-load #member-period-preset {
-        grid-column: 3 / -1;
+        flex-basis: 188px;
     }
 
     #view-member-load #member-search {
-        grid-column: 1 / 4;
+        flex-basis: 220px;
     }
 
     #view-member-load .view-controls .month-nav {
-        grid-column: 4;
-        justify-self: end;
+        margin-left: 0;
     }
 
     .gantt-view-controls {
