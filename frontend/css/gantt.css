@@ -39,6 +39,16 @@
     backdrop-filter: blur(10px);
 }
 
+.gantt-floating-actions .gantt-table-actions,
+.gantt-floating-actions .gantt-inline-period-controls,
+.gantt-floating-actions .gantt-scenario-actions,
+.gantt-floating-actions .gantt-scenario-select,
+.gantt-floating-actions .scale-switcher,
+.gantt-floating-actions .scale-btn,
+.gantt-floating-actions select {
+    pointer-events: auto;
+}
+
 .gantt-floating-actions #gantt-export-csv {
     background: var(--color-primary);
     color: white;
