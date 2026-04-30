@@ -13,7 +13,9 @@ const API_BASE = '/api';
 
 async function request(path, options = {}) {
     const url = `${API_BASE}${path}`;
+    const method = String(options.method || 'GET').toUpperCase();
     const res = await fetch(url, {
+        cache: options.cache || (method === 'GET' || method === 'HEAD' ? 'no-store' : 'default'),
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', ...options.headers },
         ...options,

@@ -5,10 +5,11 @@
  */
 
 import { auth, themes as themesApi, members as membersApi, allocations, dataBackup, savedViews as savedViewsApi } from './api.js';
+import { flushCellEditorChanges } from './gantt/gantt-editor.js';
 import { initGantt, refreshGantt, clearScenarioPreview, HistoryManager } from './gantt/gantt-renderer.js';
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
-import { shouldIgnoreShortcut } from './shortcut-utils.js';
+import { getShortcutKey, shouldIgnoreShortcut } from './shortcut-utils.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
 
@@ -181,9 +182,11 @@ function initNavigation() {
 
     document.addEventListener('keydown', (event) => {
         if (event.defaultPrevented || shouldIgnoreShortcut(event)) return;
+        const shortcutKey = getShortcutKey(event);
 
-        if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'z') {
+        if ((event.ctrlKey || event.metaKey) && shortcutKey === 'z') {
             event.preventDefault();
+            event.stopImmediatePropagation();
             if (event.shiftKey) {
                 HistoryManager.redo();
             } else {
@@ -191,8 +194,9 @@ function initNavigation() {
             }
         }
 
-        if ((event.ctrlKey || event.metaKey) && String(event.key).toLowerCase() === 'y') {
+        if ((event.ctrlKey || event.metaKey) && shortcutKey === 'y') {
             event.preventDefault();
+            event.stopImmediatePropagation();
             HistoryManager.redo();
         }
 
@@ -352,9 +356,14 @@ function initUiConfig() {
     }
 }
 
-function switchView(viewName) {
+async function switchView(viewName) {
     if (viewName === 'users' && currentUser?.role !== 'admin') {
         showToast('ユーザ管理は管理者のみ利用できます。', 'warning');
+        return;
+    }
+    try {
+        await flushCellEditorChanges({ close: true });
+    } catch {
         return;
     }
     currentView = viewName;

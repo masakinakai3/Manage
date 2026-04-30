@@ -87,10 +87,11 @@ describe('gantt-editor regressions', () => {
         const onNavigate = vi.fn();
         const commitChange = vi.fn(() => Promise.resolve(true));
         const clearChange = vi.fn(() => Promise.resolve(true));
+        const onHistoryShortcut = vi.fn();
         const cell = document.getElementById('cell');
         const input = document.getElementById('cell-editor-input');
 
-        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, onNavigate, { commitChange, clearChange });
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, onNavigate, { commitChange, clearChange, onHistoryShortcut });
         input.value = '50';
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         await Promise.resolve();
@@ -98,5 +99,71 @@ describe('gantt-editor regressions', () => {
         expect(onSave).toHaveBeenCalledWith(50);
         expect(commitChange).toHaveBeenCalledWith(50);
         expect(updateSingle).not.toHaveBeenCalled();
+    });
+
+    it('does not apply optimistic UI before commit when optimisticSave is disabled', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onSave = vi.fn();
+        const commitChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, vi.fn(), { commitChange, optimisticSave: false });
+        input.value = '40';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+        expect(onSave).not.toHaveBeenCalled();
+        await Promise.resolve();
+        expect(commitChange).toHaveBeenCalledWith(40);
+    });
+
+    it('routes Ctrl+Z in the inline editor to the history shortcut handler', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onHistoryShortcut = vi.fn();
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, vi.fn(), vi.fn(), { onHistoryShortcut });
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true, cancelable: true }));
+
+        expect(onHistoryShortcut).toHaveBeenCalledWith(
+            expect.objectContaining({ isRedo: false }),
+        );
+    });
+
+    it('flushes unsaved inline edits before closing the editor', async () => {
+        const { openCellEditor, flushCellEditorChanges, isCellEditorOpen } = await import('../js/gantt/gantt-editor.js');
+        const onSave = vi.fn();
+        const commitChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, vi.fn(), { commitChange });
+        input.value = '55';
+
+        await flushCellEditorChanges({ close: true });
+
+        expect(onSave).toHaveBeenCalledWith(55);
+        expect(commitChange).toHaveBeenCalledWith(55);
+        expect(isCellEditorOpen()).toBe(false);
+    });
+
+    it('saves changed values on outside click instead of discarding them', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const commitChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, vi.fn(), vi.fn(), { commitChange });
+        input.value = '65';
+
+        await new Promise((resolve) => setTimeout(resolve, 120));
+        document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(commitChange).toHaveBeenCalledWith(65);
+        expect(document.getElementById('cell-editor').hidden).toBe(true);
     });
 });

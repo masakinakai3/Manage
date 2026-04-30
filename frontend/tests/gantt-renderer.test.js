@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const openCellEditor = vi.fn();
+const closeCellEditor = vi.fn();
 const isCellEditorOpen = vi.fn(() => false);
 const setBusyState = vi.fn();
 const setSaveState = vi.fn();
@@ -67,6 +68,7 @@ const themeUpdate = vi.fn(async () => ({}));
 const openThemeEditListener = vi.fn();
 
 vi.mock('../js/gantt/gantt-editor.js', () => ({
+    closeCellEditor,
     openCellEditor,
     isCellEditorOpen,
 }));
@@ -197,10 +199,21 @@ function renderBaseDom() {
     document.addEventListener('open-theme-edit', openThemeEditListener);
 }
 
+function createDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+    return { promise, resolve, reject };
+}
+
 describe('gantt-renderer regressions', () => {
     beforeEach(() => {
         vi.resetModules();
         renderBaseDom();
+        closeCellEditor.mockClear();
         openCellEditor.mockClear();
         isCellEditorOpen.mockClear();
         isCellEditorOpen.mockReturnValue(false);
@@ -235,6 +248,7 @@ describe('gantt-renderer regressions', () => {
 
         HistoryManager.stack = [];
         HistoryManager.index = -1;
+        HistoryManager.isApplyingHistory = false;
 
         for (let i = 0; i < 55; i += 1) {
             HistoryManager.push([{ month: `undo-${i}` }], [{ month: `redo-${i}` }]);
@@ -244,6 +258,37 @@ describe('gantt-renderer regressions', () => {
         expect(HistoryManager.index).toBe(49);
         expect(HistoryManager.stack[0].redo[0].month).toBe('redo-5');
         expect(HistoryManager.stack.at(-1).redo[0].month).toBe('redo-54');
+    });
+
+    it('ignores concurrent undo calls while one history action is already running', async () => {
+        const deferred = createDeferred();
+        bulkUpdate.mockImplementationOnce(() => deferred.promise);
+
+        const { initGantt, HistoryManager } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cell = document.querySelector('.gantt-cell[data-theme]');
+        cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        document.getElementById('detail-rate').value = '60';
+        document.getElementById('detail-save').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        bulkUpdate.mockClear();
+
+        const firstUndo = HistoryManager.undo();
+        const secondUndo = HistoryManager.undo();
+
+        expect(HistoryManager.isApplyingHistory).toBe(true);
+        expect(bulkUpdate).toHaveBeenCalledTimes(1);
+
+        deferred.resolve({});
+        await firstUndo;
+        await secondUndo;
+
+        expect(HistoryManager.isApplyingHistory).toBe(false);
+        expect(bulkUpdate).toHaveBeenCalledTimes(1);
     });
 
     it('opens the inline editor on single click', async () => {
@@ -281,11 +326,13 @@ describe('gantt-renderer regressions', () => {
 
         document.dispatchEvent(new KeyboardEvent('keydown', { key: '7', bubbles: true }));
 
-        expect(openCellEditor).toHaveBeenCalledTimes(1);
-        expect(openCellEditor.mock.calls[0][0]).toBe(cells[1]);
-        expect(openCellEditor.mock.calls[0][7]).toMatchObject({ initialValue: '7', selectOnOpen: false });
-        expect(openCellEditor.mock.calls[0][7].commitChange).toEqual(expect.any(Function));
-        expect(openCellEditor.mock.calls[0][7].clearChange).toEqual(expect.any(Function));
+        expect(openCellEditor.mock.calls.length).toBeGreaterThanOrEqual(1);
+        const latestCall = openCellEditor.mock.calls.at(-1);
+        expect(latestCall[0]).toBe(cells[1]);
+        expect(latestCall[7]).toMatchObject({ initialValue: '7', selectOnOpen: false });
+        expect(latestCall[7]).toMatchObject({ optimisticSave: false });
+        expect(latestCall[7].commitChange).toEqual(expect.any(Function));
+        expect(latestCall[7].clearChange).toEqual(expect.any(Function));
     });
 
     it('copies and pastes a month range with bulk update', async () => {
@@ -341,6 +388,78 @@ describe('gantt-renderer regressions', () => {
         ]);
     });
 
+    it('closes the inline editor before rerendering an undo change', async () => {
+        const { initGantt, HistoryManager } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cell = document.querySelector('.gantt-cell[data-theme]');
+        cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        document.getElementById('detail-rate').value = '60';
+        document.getElementById('detail-save').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        closeCellEditor.mockClear();
+        await HistoryManager.undo();
+
+        expect(closeCellEditor).toHaveBeenCalled();
+    });
+
+    it('blurs the focused detail input before rerendering an undo change', async () => {
+        const { initGantt, HistoryManager } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cell = document.querySelector('.gantt-cell[data-theme]');
+        cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        const detailRate = document.getElementById('detail-rate');
+        detailRate.focus();
+        document.getElementById('detail-rate').value = '60';
+        document.getElementById('detail-save').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        await HistoryManager.undo();
+
+        expect(document.activeElement).not.toBe(detailRate);
+    });
+
+    it('ignores stale refresh results that return after a newer undo refresh', async () => {
+        const firstAllocations = createDeferred();
+        const secondAllocations = createDeferred();
+
+        allocationList
+            .mockImplementationOnce(() => firstAllocations.promise)
+            .mockImplementationOnce(() => secondAllocations.promise);
+
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        const firstRefresh = refreshGantt();
+        const secondRefresh = refreshGantt();
+
+        secondAllocations.resolve([{
+            theme_id: 1,
+            member_id: 10,
+            month: '2026-04',
+            allocation_rate: 20,
+            memo: '',
+        }]);
+        await secondRefresh;
+
+        firstAllocations.resolve([{
+            theme_id: 1,
+            member_id: 10,
+            month: '2026-04',
+            allocation_rate: 60,
+            memo: '',
+        }]);
+        await firstRefresh;
+
+        const cell = document.querySelector('.gantt-cell[data-theme="1"][data-member="10"][data-month="2026-04"]');
+        expect(cell?.dataset.rate).toBe('20');
+    });
+
     it('handles Ctrl+Z from the detail memo field after a saved change', async () => {
         const { initGantt } = await import('../js/gantt/gantt-renderer.js');
         await initGantt();
@@ -361,6 +480,35 @@ describe('gantt-renderer regressions', () => {
             key: 'z',
             ctrlKey: true,
             bubbles: true,
+        }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+        ]);
+    });
+
+    it('handles Ctrl+Z from the detail rate input after a saved change', async () => {
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cell = document.querySelector('.gantt-cell[data-theme]');
+        cell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        const detailRate = document.getElementById('detail-rate');
+        detailRate.value = '60';
+        document.getElementById('detail-save').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        bulkUpdate.mockClear();
+        detailRate.focus();
+        detailRate.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'z',
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
         }));
         await Promise.resolve();
         await Promise.resolve();

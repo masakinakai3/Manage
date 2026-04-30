@@ -14,6 +14,12 @@ import { formatError, setSaveState, showToast } from '../ui.js';
 
 let activeEditor = null;
 let saving = false;
+let pendingCommitPromise = null;
+
+function clampRate(value) {
+    const parsed = Number.parseInt(String(value || '0'), 10) || 0;
+    return Math.max(0, Math.min(100, parsed));
+}
 
 export function openCellEditor(cellEl, themeId, memberId, month, currentRate, onSave, onNavigate, options = {}) {
     closeCellEditor();
@@ -23,6 +29,8 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const rect = cellEl.getBoundingClientRect();
     const initialValue = options.initialValue ?? currentRate;
     const selectOnOpen = options.selectOnOpen !== false;
+    const optimisticSave = options.optimisticSave !== false;
+    const onHistoryShortcut = options.onHistoryShortcut || null;
     const commitChange = options.commitChange || ((allocationRate) => allocations.updateSingle({
         theme_id: themeId,
         member_id: memberId,
@@ -48,29 +56,58 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         input.setSelectionRange(end, end);
     }
 
-    const save = () => {
-        if (saving) return;
+    let outsideClickListener = null;
+
+    const readClampedRate = () => clampRate(input.value);
+
+    const save = ({ closeAfterSave = false } = {}) => {
+        if (!activeEditor) return Promise.resolve(false);
+        if (saving) {
+            if (closeAfterSave) {
+                activeEditor.closeAfterSave = true;
+            }
+            return pendingCommitPromise || Promise.resolve(false);
+        }
+
+        const clampedRate = readClampedRate();
+        if (clampedRate === activeEditor.lastCommittedRate) {
+            if (closeAfterSave) closeCellEditor();
+            return Promise.resolve(false);
+        }
+
         saving = true;
-        setSaveState('saving', 'セルを保存しています...');
-        const newRate = parseInt(input.value) || 0;
-        const clampedRate = Math.max(0, Math.min(100, newRate));
+        activeEditor.closeAfterSave = activeEditor.closeAfterSave || closeAfterSave;
+        setSaveState('saving', '繧ｻ繝ｫ繧剃ｿ晏ｭ倥＠縺ｦ縺・∪縺・..');
 
-        // Optimistic: Update UI immediately via callback
-        if (onSave) onSave(clampedRate);
+        if (optimisticSave && onSave) onSave(clampedRate);
 
-        // Background save
-        Promise.resolve(commitChange(clampedRate)).then(() => {
-            setSaveState('saved', `${month} の配分を保存しました`);
-        }).catch(err => {
+        pendingCommitPromise = Promise.resolve(commitChange(clampedRate)).then(() => {
+            if (activeEditor) {
+                activeEditor.lastCommittedRate = clampedRate;
+            }
+            setSaveState('saved', `${month} 縺ｮ驟榊・繧剃ｿ晏ｭ倥＠縺ｾ縺励◆`);
+            return true;
+        }).catch((err) => {
             console.error('Failed to save:', err);
-            setSaveState('error', 'セル保存に失敗しました');
-            showToast(`セル保存に失敗しました: ${formatError(err)}`, 'error');
+            setSaveState('error', '繧ｻ繝ｫ菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆');
+            showToast(`繧ｻ繝ｫ菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆: ${formatError(err)}`, 'error');
+            throw err;
         }).finally(() => {
+            const shouldClose = Boolean(activeEditor?.closeAfterSave);
             saving = false;
+            pendingCommitPromise = null;
+            if (shouldClose) {
+                closeCellEditor();
+                return;
+            }
+
+            if (document.activeElement !== input) {
+                input.focus();
+            }
+            input.select();
         });
 
-        // Editor stays open — only Esc closes it
-        input.select();
+        return pendingCommitPromise;
     };
 
     const cancel = () => {
@@ -79,18 +116,32 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     };
 
     const handleKeydown = (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); save(); }
+        const key = String(e.key || '').toLowerCase();
+        if ((e.ctrlKey || e.metaKey) && (key === 'z' || key === 'y')) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            if (onHistoryShortcut) {
+                onHistoryShortcut({
+                    isRedo: key === 'y' || (key === 'z' && e.shiftKey),
+                    originalEvent: e,
+                });
+            }
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            void save();
+        }
         if (e.key === 'Escape') { cancel(); }
         if (onNavigate && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
             e.preventDefault();
-            // Check if saving is needed
-            const newRate = parseInt(input.value) || 0;
-            const hasChanged = newRate !== currentRate;
+            const newRate = readClampedRate();
+            const hasChanged = newRate !== activeEditor.lastCommittedRate;
             onNavigate(e.key, hasChanged, newRate);
         }
     };
 
-    // Clean up previous listeners
     const saveBtn = document.getElementById('cell-editor-save');
     const cancelBtn = document.getElementById('cell-editor-cancel');
     const clearBtn = document.getElementById('cell-editor-clear');
@@ -105,46 +156,73 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const clearRate = async () => {
         if (saving) return;
         saving = true;
-        setSaveState('saving', 'セルをクリアしています...');
+        setSaveState('saving', '繧ｻ繝ｫ繧偵け繝ｪ繧｢縺励※縺・∪縺・..');
         try {
             await Promise.resolve(clearChange());
             closeCellEditor();
-            onSave();
-            setSaveState('saved', `${month} の配分をクリアしました`);
+            if (onSave) onSave();
+            setSaveState('saved', `${month} 縺ｮ驟榊・繧偵け繝ｪ繧｢縺励∪縺励◆`);
         } catch (err) {
             console.error('Failed to clear:', err);
-            setSaveState('error', 'セルのクリアに失敗しました');
-            showToast(`セルのクリアに失敗しました: ${formatError(err)}`, 'error');
+            setSaveState('error', '繧ｻ繝ｫ縺ｮ繧ｯ繝ｪ繧｢縺ｫ螟ｱ謨励＠縺ｾ縺励◆');
+            showToast(`繧ｻ繝ｫ縺ｮ繧ｯ繝ｪ繧｢縺ｫ螟ｱ謨励＠縺ｾ縺励◆: ${formatError(err)}`, 'error');
         } finally {
             saving = false;
+            pendingCommitPromise = null;
         }
     };
 
-    newSaveBtn.addEventListener('click', save);
+    newSaveBtn.addEventListener('click', () => { void save(); });
     newCancelBtn.addEventListener('click', cancel);
     newClearBtn.addEventListener('click', clearRate);
     input.addEventListener('keydown', handleKeydown);
 
     activeEditor = {
-        cleanup: () => input.removeEventListener('keydown', handleKeydown),
-        cellEl: cellEl
+        cleanup: () => {
+            input.removeEventListener('keydown', handleKeydown);
+            if (outsideClickListener) {
+                document.removeEventListener('mousedown', outsideClickListener);
+                outsideClickListener = null;
+            }
+        },
+        cellEl,
+        input,
+        save,
+        closeAfterSave: false,
+        lastCommittedRate: clampRate(currentRate),
     };
 
-    // Close on outside click
     setTimeout(() => {
-        const outsideClick = (e) => {
+        outsideClickListener = (e) => {
             if (!editor.contains(e.target)) {
-                closeCellEditor();
-                document.removeEventListener('mousedown', outsideClick);
+                void flushCellEditorChanges({ close: true });
             }
         };
-        document.addEventListener('mousedown', outsideClick);
+        document.addEventListener('mousedown', outsideClickListener);
     }, 100);
+}
+
+export function flushCellEditorChanges(options = {}) {
+    const { close = false } = options;
+
+    if (!activeEditor) {
+        return pendingCommitPromise || Promise.resolve(false);
+    }
+
+    const clampedRate = clampRate(activeEditor.input?.value);
+    if (clampedRate === activeEditor.lastCommittedRate) {
+        if (close) closeCellEditor();
+        return pendingCommitPromise || Promise.resolve(false);
+    }
+
+    return activeEditor.save({ closeAfterSave: close });
 }
 
 export function closeCellEditor() {
     const editor = document.getElementById('cell-editor');
-    editor.hidden = true;
+    if (editor) {
+        editor.hidden = true;
+    }
     if (activeEditor) {
         activeEditor.cleanup();
         activeEditor = null;

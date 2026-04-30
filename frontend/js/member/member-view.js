@@ -532,6 +532,7 @@ function bindTableInteractions(tbody) {
                 }
                 moveEditorFocus(cell, direction);
             }, {
+                optimisticSave: false,
                 commitChange: (nextRate) => commitMemberCellChange(themeId, memberId, month, nextRate),
                 clearChange: () => commitMemberCellChange(themeId, memberId, month, 0),
             });

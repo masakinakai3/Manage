@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { shouldIgnoreShortcut } from '../js/shortcut-utils.js';
+import { getShortcutKey, isUndoRedoShortcut, shouldIgnoreShortcut } from '../js/shortcut-utils.js';
 
 function createShortcutEvent(target, overrides = {}) {
     return {
@@ -14,6 +14,14 @@ function createShortcutEvent(target, overrides = {}) {
 }
 
 describe('shouldIgnoreShortcut', () => {
+    it('detects undo and redo by physical key code when event.key is unreliable', () => {
+        expect(getShortcutKey({ ctrlKey: true, code: 'KeyZ', key: 'Process' })).toBe('z');
+        expect(getShortcutKey({ ctrlKey: true, code: 'KeyY', key: 'Unidentified' })).toBe('y');
+        expect(getShortcutKey({ ctrlKey: true, keyCode: 90, key: '' })).toBe('z');
+        expect(getShortcutKey({ ctrlKey: true, which: 89, key: '' })).toBe('y');
+        expect(isUndoRedoShortcut({ ctrlKey: true, metaKey: false, code: 'KeyZ', key: 'Process' })).toBe(true);
+    });
+
     it('allows undo and redo shortcuts in the saved detail memo field', () => {
         document.body.innerHTML = '<textarea id="detail-memo"></textarea>';
         const detailMemo = document.getElementById('detail-memo');

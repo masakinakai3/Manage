@@ -1,9 +1,9 @@
 import { allocations, members as membersApi, snapshots as snapshotsApi, themes as themesApi } from '../api.js';
 import { getPresetConfig, loadViewState, subscribeViewState, updateViewState } from '../shared-state.js';
-import { shouldIgnoreShortcut } from '../shortcut-utils.js';
+import { getShortcutKey, shouldIgnoreShortcut } from '../shortcut-utils.js';
 import { addMonths, currentMonth, formatMonthHeader, getVisibleMonths } from '../utils/date-utils.js';
 import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from '../ui.js';
-import { isCellEditorOpen, openCellEditor } from './gantt-editor.js';
+import { closeCellEditor, isCellEditorOpen, openCellEditor } from './gantt-editor.js';
 import { initGanttDnD } from './gantt-dnd.js';
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', stop: 'STOP', completed: 'Completed', cancelled: 'Cancelled' };
@@ -15,6 +15,7 @@ export const HistoryManager = {
     limit: 50,
     stack: [],
     index: -1,
+    isApplyingHistory: false,
     push(undo, redo, options = {}) {
         this.stack = this.stack.slice(0, this.index + 1);
         this.stack.push({ undo, redo, apply: options.apply || null });
@@ -35,14 +36,24 @@ export const HistoryManager = {
         }
     },
     async undo() {
-        if (this.index < 0) return;
-        const action = this.stack[this.index--];
-        await (action.apply || this.perform.bind(this))(action.undo);
+        if (this.isApplyingHistory || this.index < 0) return;
+        this.isApplyingHistory = true;
+        try {
+            const action = this.stack[this.index--];
+            await (action.apply || this.perform.bind(this))(action.undo);
+        } finally {
+            this.isApplyingHistory = false;
+        }
     },
     async redo() {
-        if (this.index >= this.stack.length - 1) return;
-        const action = this.stack[++this.index];
-        await (action.apply || this.perform.bind(this))(action.redo);
+        if (this.isApplyingHistory || this.index >= this.stack.length - 1) return;
+        this.isApplyingHistory = true;
+        try {
+            const action = this.stack[++this.index];
+            await (action.apply || this.perform.bind(this))(action.redo);
+        } finally {
+            this.isApplyingHistory = false;
+        }
     },
 };
 
@@ -57,10 +68,18 @@ function buildAllocationSnapshot(themeId, memberId, month) {
     };
 }
 
-async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '' } = {}) {
+async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '', previousSnapshot = null } = {}) {
     const nextRate = Math.max(0, Math.min(100, Number.parseInt(allocationRate || '0', 10) || 0));
     const nextMemo = String(memo || '');
-    const undo = buildAllocationSnapshot(themeId, memberId, month);
+    const undo = previousSnapshot
+        ? {
+            theme_id: themeId,
+            member_id: memberId,
+            month,
+            allocation_rate: Math.max(0, Math.min(100, Number.parseInt(previousSnapshot.allocation_rate || '0', 10) || 0)),
+            memo: String(previousSnapshot.memo || ''),
+        }
+        : buildAllocationSnapshot(themeId, memberId, month);
     const redo = {
         theme_id: themeId,
         member_id: memberId,
@@ -116,6 +135,7 @@ let copiedRange = null;
 let ganttKeyboardBound = false;
 let scenarioPreviewState = null;
 let scenarioPreviewContext = null;
+let ganttRefreshRequestId = 0;
 
 export function showScenarioPreview(preview) {
     scenarioPreviewState = normalizeScenarioPreviewState(preview);
@@ -306,6 +326,7 @@ function syncPeriodControls() {
 }
 
 export async function refreshGantt() {
+    const requestId = ++ganttRefreshRequestId;
     ensureInlinePeriodControls();
     const months = getVisibleMonths(startMonth, visibleCount, scale);
     const from = months[0];
@@ -320,13 +341,16 @@ export async function refreshGantt() {
             allocations.warnings(from, toEnd),
             allocations.memberLoads(from, toEnd),
         ]);
+        if (requestId !== ganttRefreshRequestId) return;
         renderSnapshotSummaryCards(months);
         renderTable(months);
         renderDetailPanelV2();
     } catch (error) {
+        if (requestId !== ganttRefreshRequestId) return;
         setSaveState('error', 'ガントの読み込みに失敗しました');
         showToast(`ガントの読み込みに失敗しました: ${formatError(error)}`, 'error');
     } finally {
+        if (requestId !== ganttRefreshRequestId) return;
         setBusyState(false);
     }
 }
@@ -497,12 +521,38 @@ function bindControls() {
     document.getElementById('snapshot-save-btn')?.addEventListener('click', saveSnapshot);
     document.getElementById('snapshot-select')?.addEventListener('change', loadSelectedSnapshot);
     document.getElementById('detail-save')?.addEventListener('click', saveSelectedCellWithHistory);
+    bindHistoryInputs();
     document.getElementById('detail-prev')?.addEventListener('click', () => moveSelection(-1));
     document.getElementById('detail-next')?.addEventListener('click', () => moveSelection(1));
     document.getElementById('detail-next-empty')?.addEventListener('click', () => jumpToMatchingCell((button) => Number.parseInt(button.dataset.rate || '0', 10) === 0));
     document.getElementById('detail-next-warning')?.addEventListener('click', () => jumpToMatchingCell((button) => button.classList.contains('rate-over')));
     document.getElementById('detail-preview-bulk')?.addEventListener('click', previewBulkUpdate);
     bindKeyboardInteractions();
+}
+
+let historyInputsBound = false;
+
+function bindHistoryInputs() {
+    if (historyInputsBound) return;
+    historyInputsBound = true;
+
+    ['detail-rate', 'detail-bulk-rate'].forEach((id) => {
+        document.getElementById(id)?.addEventListener('keydown', (event) => {
+            const key = getShortcutKey(event);
+            const isUndo = key === 'z' && !event.shiftKey;
+            const isRedo = (key === 'z' && event.shiftKey) || key === 'y';
+            if (!(event.ctrlKey || event.metaKey) || (!isUndo && !isRedo)) return;
+
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            if (isRedo) {
+                void HistoryManager.redo();
+            } else {
+                void HistoryManager.undo();
+            }
+        });
+    });
 }
 
 function ensureGanttFilterControls() {
@@ -1036,6 +1086,14 @@ function openEditorForButton(button, options = {}) {
         (direction, changed, newRate) => handleEditorNavigationWithHistory(button, direction, changed, newRate),
         {
             ...options,
+            optimisticSave: false,
+            onHistoryShortcut: ({ isRedo }) => {
+                if (isRedo) {
+                    void HistoryManager.redo();
+                } else {
+                    void HistoryManager.undo();
+                }
+            },
             commitChange: (nextRate) => commitSingleCellChange(
                 themeId,
                 memberId,
@@ -1097,11 +1155,16 @@ function handleEditorNavigationWithHistory(button, direction, changed, newRate) 
         return;
     }
 
+    const previousSnapshot = {
+        allocation_rate: Number.parseInt(button.dataset.rate || '0', 10),
+        memo,
+    };
     const nextRate = Math.max(0, Math.min(100, Number.parseInt(newRate || '0', 10)));
     applyCellValue(button, nextRate, memo);
     moveToNext();
 
     commitSingleCellChange(themeId, memberId, month, nextRate, memo, {
+        previousSnapshot,
         successMessage: `${month} の負荷率を保存しました`,
     }).catch((error) => {
         setSaveState('error', 'セル保存に失敗しました');
@@ -1276,10 +1339,13 @@ function bindKeyboardInteractions() {
     ganttKeyboardBound = true;
 
     document.addEventListener('keydown', (event) => {
+        if (event.defaultPrevented) return;
+
         if (shouldHandleGanttHistoryShortcut(event)) {
             event.preventDefault();
             event.stopPropagation();
-            if ((event.shiftKey && String(event.key).toLowerCase() === 'z') || String(event.key).toLowerCase() === 'y') {
+            const shortcutKey = getShortcutKey(event);
+            if ((event.shiftKey && shortcutKey === 'z') || shortcutKey === 'y') {
                 void HistoryManager.redo();
             } else {
                 void HistoryManager.undo();
@@ -1346,7 +1412,7 @@ function bindKeyboardInteractions() {
 }
 
 function shouldHandleGanttHistoryShortcut(event) {
-    const key = String(event.key || '').toLowerCase();
+    const key = getShortcutKey(event);
     const isUndo = key === 'z' && !event.shiftKey;
     const isRedo = (key === 'z' && event.shiftKey) || key === 'y';
     if (!(event.ctrlKey || event.metaKey) || (!isUndo && !isRedo)) return false;
@@ -1726,8 +1792,21 @@ function applyAllocationRowToState(row) {
 
 function applyHistoryRowsOptimistically(rows) {
     if (!Array.isArray(rows) || rows.length === 0) return;
+    resetTransientGanttUi();
     rows.forEach(applyAllocationRowToState);
     rerenderGanttView();
+}
+
+function resetTransientGanttUi() {
+    closeCellEditor();
+    const activeElement = document.activeElement;
+    if (
+        activeElement instanceof HTMLElement
+        && (activeElement.closest('#gantt-detail-panel, #cell-editor')
+            || activeElement.matches('#detail-rate, #detail-memo, #detail-bulk-rate, #cell-editor-input'))
+    ) {
+        activeElement.blur();
+    }
 }
 
 function closeSharedModal() {
@@ -2362,6 +2441,7 @@ function renderTable(months) {
     decorateThemeSummaryRows();
     bindRows();
     renderMobileThemeList(themes, months);
+    syncSelectionStyles();
 }
 
 function updateThemeSummaryCell(themeId, month) {
