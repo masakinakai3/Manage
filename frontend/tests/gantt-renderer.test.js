@@ -331,6 +331,7 @@ describe('gantt-renderer regressions', () => {
         expect(latestCall[0]).toBe(cells[1]);
         expect(latestCall[7]).toMatchObject({ initialValue: '7', selectOnOpen: false });
         expect(latestCall[7]).toMatchObject({ optimisticSave: false });
+        expect(latestCall[7].onCommitSuccess).toEqual(expect.any(Function));
         expect(latestCall[7].commitChange).toEqual(expect.any(Function));
         expect(latestCall[7].clearChange).toEqual(expect.any(Function));
     });

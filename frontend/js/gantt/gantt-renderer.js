@@ -1087,6 +1087,7 @@ function openEditorForButton(button, options = {}) {
         {
             ...options,
             optimisticSave: false,
+            onCommitSuccess: (nextRate) => applyCellValue(button, nextRate, button.dataset.memo || ''),
             onHistoryShortcut: ({ isRedo }) => {
                 if (isRedo) {
                     void HistoryManager.redo();

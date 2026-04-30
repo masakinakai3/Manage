@@ -117,6 +117,28 @@ describe('gantt-editor regressions', () => {
         expect(commitChange).toHaveBeenCalledWith(40);
     });
 
+    it('applies the saved value after commit success when optimisticSave is disabled', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onSave = vi.fn();
+        const onCommitSuccess = vi.fn();
+        const commitChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, vi.fn(), {
+            commitChange,
+            optimisticSave: false,
+            onCommitSuccess,
+        });
+        input.value = '42';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+
+        expect(onSave).not.toHaveBeenCalled();
+        expect(onCommitSuccess).not.toHaveBeenCalled();
+        await Promise.resolve();
+        expect(onCommitSuccess).toHaveBeenCalledWith(42);
+    });
+
     it('routes Ctrl+Z in the inline editor to the history shortcut handler', async () => {
         const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
         const onHistoryShortcut = vi.fn();
@@ -132,7 +154,7 @@ describe('gantt-editor regressions', () => {
     });
 
     it('flushes unsaved inline edits before closing the editor', async () => {
-        const { openCellEditor, flushCellEditorChanges, isCellEditorOpen } = await import('../js/gantt/gantt-editor.js');
+        const { openCellEditor, flushCellEditorChanges, getCellEditorState, isCellEditorOpen } = await import('../js/gantt/gantt-editor.js');
         const onSave = vi.fn();
         const commitChange = vi.fn(() => Promise.resolve(true));
         const cell = document.getElementById('cell');
@@ -141,11 +163,26 @@ describe('gantt-editor regressions', () => {
         openCellEditor(cell, 1, 2, '2026-04', 20, onSave, vi.fn(), { commitChange });
         input.value = '55';
 
+        expect(getCellEditorState()).toMatchObject({
+            isOpen: true,
+            isSaving: false,
+            hasUnsavedChanges: true,
+            pendingRate: 55,
+            committedRate: 20,
+        });
+
         await flushCellEditorChanges({ close: true });
 
         expect(onSave).toHaveBeenCalledWith(55);
         expect(commitChange).toHaveBeenCalledWith(55);
         expect(isCellEditorOpen()).toBe(false);
+        expect(getCellEditorState()).toMatchObject({
+            isOpen: false,
+            isSaving: false,
+            hasUnsavedChanges: false,
+            pendingRate: null,
+            committedRate: null,
+        });
     });
 
     it('saves changed values on outside click instead of discarding them', async () => {

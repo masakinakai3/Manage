@@ -21,6 +21,19 @@ function clampRate(value) {
     return Math.max(0, Math.min(100, parsed));
 }
 
+function buildSuccessApplier({ optimisticSave, onSave, onCommitSuccess }) {
+    return (rate) => {
+        if (optimisticSave) return;
+        if (onCommitSuccess) {
+            onCommitSuccess(rate);
+            return;
+        }
+        if (onSave) {
+            onSave(rate);
+        }
+    };
+}
+
 export function openCellEditor(cellEl, themeId, memberId, month, currentRate, onSave, onNavigate, options = {}) {
     closeCellEditor();
 
@@ -30,6 +43,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const initialValue = options.initialValue ?? currentRate;
     const selectOnOpen = options.selectOnOpen !== false;
     const optimisticSave = options.optimisticSave !== false;
+    const onCommitSuccess = options.onCommitSuccess || null;
     const onHistoryShortcut = options.onHistoryShortcut || null;
     const commitChange = options.commitChange || ((allocationRate) => allocations.updateSingle({
         theme_id: themeId,
@@ -43,6 +57,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         month,
         allocation_rate: 0,
     }));
+    const applyCommittedValue = buildSuccessApplier({ optimisticSave, onSave, onCommitSuccess });
 
     editor.style.left = `${rect.left}px`;
     editor.style.top = `${rect.bottom + 4}px`;
@@ -77,20 +92,23 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
 
         saving = true;
         activeEditor.closeAfterSave = activeEditor.closeAfterSave || closeAfterSave;
-        setSaveState('saving', '繧ｻ繝ｫ繧剃ｿ晏ｭ倥＠縺ｦ縺・∪縺・..');
+        setSaveState('saving', 'セルを保存しています...');
 
-        if (optimisticSave && onSave) onSave(clampedRate);
+        if (optimisticSave && onSave) {
+            onSave(clampedRate);
+        }
 
         pendingCommitPromise = Promise.resolve(commitChange(clampedRate)).then(() => {
             if (activeEditor) {
                 activeEditor.lastCommittedRate = clampedRate;
             }
-            setSaveState('saved', `${month} 縺ｮ驟榊・繧剃ｿ晏ｭ倥＠縺ｾ縺励◆`);
+            applyCommittedValue(clampedRate);
+            setSaveState('saved', `${month} の配分を保存しました`);
             return true;
         }).catch((err) => {
             console.error('Failed to save:', err);
-            setSaveState('error', '繧ｻ繝ｫ菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆');
-            showToast(`繧ｻ繝ｫ菫晏ｭ倥↓螟ｱ謨励＠縺ｾ縺励◆: ${formatError(err)}`, 'error');
+            setSaveState('error', 'セル保存に失敗しました');
+            showToast(`セル保存に失敗しました: ${formatError(err)}`, 'error');
             throw err;
         }).finally(() => {
             const shouldClose = Boolean(activeEditor?.closeAfterSave);
@@ -133,7 +151,9 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
             e.preventDefault();
             void save();
         }
-        if (e.key === 'Escape') { cancel(); }
+        if (e.key === 'Escape') {
+            cancel();
+        }
         if (onNavigate && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
             e.preventDefault();
             const newRate = readClampedRate();
@@ -156,16 +176,20 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     const clearRate = async () => {
         if (saving) return;
         saving = true;
-        setSaveState('saving', '繧ｻ繝ｫ繧偵け繝ｪ繧｢縺励※縺・∪縺・..');
+        setSaveState('saving', 'セルをクリアしています...');
         try {
             await Promise.resolve(clearChange());
             closeCellEditor();
-            if (onSave) onSave();
-            setSaveState('saved', `${month} 縺ｮ驟榊・繧偵け繝ｪ繧｢縺励∪縺励◆`);
+            if (onCommitSuccess) {
+                onCommitSuccess(0);
+            } else if (onSave) {
+                onSave(0);
+            }
+            setSaveState('saved', `${month} の配分をクリアしました`);
         } catch (err) {
             console.error('Failed to clear:', err);
-            setSaveState('error', '繧ｻ繝ｫ縺ｮ繧ｯ繝ｪ繧｢縺ｫ螟ｱ謨励＠縺ｾ縺励◆');
-            showToast(`繧ｻ繝ｫ縺ｮ繧ｯ繝ｪ繧｢縺ｫ螟ｱ謨励＠縺ｾ縺励◆: ${formatError(err)}`, 'error');
+            setSaveState('error', 'セルのクリアに失敗しました');
+            showToast(`セルのクリアに失敗しました: ${formatError(err)}`, 'error');
         } finally {
             saving = false;
             pendingCommitPromise = null;
@@ -216,6 +240,16 @@ export function flushCellEditorChanges(options = {}) {
     }
 
     return activeEditor.save({ closeAfterSave: close });
+}
+
+export function getCellEditorState() {
+    return {
+        isOpen: Boolean(activeEditor),
+        isSaving: saving,
+        hasUnsavedChanges: Boolean(activeEditor) && clampRate(activeEditor.input?.value) !== activeEditor.lastCommittedRate,
+        pendingRate: activeEditor ? clampRate(activeEditor.input?.value) : null,
+        committedRate: activeEditor ? activeEditor.lastCommittedRate : null,
+    };
 }
 
 export function closeCellEditor() {

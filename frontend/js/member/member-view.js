@@ -533,6 +533,9 @@ function bindTableInteractions(tbody) {
                 moveEditorFocus(cell, direction);
             }, {
                 optimisticSave: false,
+                onCommitSuccess: (newRate = 0) => {
+                    updateThemeCell(cell, memberId, themeId, month, newRate);
+                },
                 commitChange: (nextRate) => commitMemberCellChange(themeId, memberId, month, nextRate),
                 clearChange: () => commitMemberCellChange(themeId, memberId, month, 0),
             });

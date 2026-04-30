@@ -378,6 +378,7 @@ describe('member-view milestones', () => {
 
         expect(openCellEditor).toHaveBeenCalledTimes(1);
         expect(openCellEditor.mock.calls[0][7]).toMatchObject({ optimisticSave: false });
+        expect(openCellEditor.mock.calls[0][7].onCommitSuccess).toEqual(expect.any(Function));
         expect(openCellEditor.mock.calls[0][7].commitChange).toEqual(expect.any(Function));
         expect(openCellEditor.mock.calls[0][7].clearChange).toEqual(expect.any(Function));
     });
