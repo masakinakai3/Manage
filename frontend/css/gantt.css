@@ -110,9 +110,9 @@
     position: sticky;
     left: 0;
     z-index: 6;
-    min-width: 280px;
-    width: 280px;
-    max-width: 280px;
+    min-width: 360px;
+    width: 360px;
+    max-width: 360px;
     text-align: left;
     padding-left: var(--space-5);
 }
@@ -160,9 +160,9 @@
     padding: 0 var(--space-4);
     white-space: nowrap;
     font-weight: 500;
-    min-width: 280px;
-    width: 280px;
-    max-width: 280px;
+    min-width: 360px;
+    width: 360px;
+    max-width: 360px;
 }
 
 /* Theme summary row */
@@ -226,7 +226,7 @@
     align-items: center;
     gap: var(--space-2);
     flex: 0 1 auto;
-    max-width: clamp(148px, 16vw, 210px);
+    max-width: clamp(180px, 22vw, 280px);
     padding: 0;
     border: none;
     background: transparent;
@@ -651,6 +651,7 @@
 .theme-toggle {
     min-width: 0;
     overflow: hidden;
+    flex-shrink: 1;
     padding: 7px 10px 7px 6px;
     border-radius: 12px;
     background:
@@ -672,7 +673,7 @@
 }
 
 .theme-name-text {
-    max-width: clamp(88px, 11vw, 132px);
+    max-width: clamp(120px, 16vw, 200px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

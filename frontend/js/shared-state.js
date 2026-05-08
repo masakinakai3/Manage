@@ -52,14 +52,14 @@ export function getPresetConfig(preset) {
 
     switch (preset) {
         case 'current-quarter':
-            return { startMonth: addMonths(month, -1), scale: 3 };
+            return { startMonth: addMonths(month, -1), scale: 3, visibleCount: 14 };
         case 'current-year':
-            return { startMonth: `${month.slice(0, 4)}-01`, scale: 1 };
+            return { startMonth: `${month.slice(0, 4)}-01`, scale: 1, visibleCount: 12 };
         case 'rolling-12':
-            return { startMonth: addMonths(month, -1), scale: 1 };
+            return { startMonth: addMonths(month, -1), scale: 1, visibleCount: 14 };
         case 'rolling-6':
         default:
-            return { startMonth: addMonths(month, -1), scale: 1 };
+            return { startMonth: addMonths(month, -1), scale: 1, visibleCount: 8 };
     }
 }
 
