@@ -15,6 +15,7 @@ const defaultState = {
     preset: 'rolling-6',
     startMonth: addMonths(currentMonth(), -1),
     scale: 1,
+    visibleCount: 8,
     ganttSearch: '',
     ganttCategory: '',
     ganttOwner: '',

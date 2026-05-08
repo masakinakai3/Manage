@@ -272,6 +272,7 @@ export async function initGantt() {
     const state = loadViewState();
     startMonth = state.startMonth;
     scale = state.scale;
+    visibleCount = state.visibleCount || getPresetConfig(state.preset || 'rolling-6').visibleCount;
     searchQuery = state.ganttSearch || '';
     categoryFilter = state.ganttCategory || '';
     ownerFilter = state.ganttOwner || '';
@@ -283,6 +284,7 @@ export async function initGantt() {
     subscribeViewState((next) => {
         startMonth = next.startMonth;
         scale = next.scale;
+        visibleCount = next.visibleCount || getPresetConfig(next.preset || 'rolling-6').visibleCount;
         searchQuery = next.ganttSearch || '';
         categoryFilter = next.ganttCategory || '';
         ownerFilter = next.ganttOwner || '';
