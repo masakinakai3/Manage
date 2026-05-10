@@ -500,7 +500,7 @@
     <div id="tooltip" class="tooltip" hidden></div>
 
     <div id="cell-editor" class="cell-editor" hidden>
-        <input type="number" id="cell-editor-input" min="0" max="100" step="1">
+        <input type="text" id="cell-editor-input" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
         <span class="cell-editor-unit">%</span>
         <div class="cell-editor-actions">
             <button id="cell-editor-save" class="btn btn-primary btn-sm" type="button">保存</button>

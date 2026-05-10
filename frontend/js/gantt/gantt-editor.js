@@ -75,6 +75,13 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
 
     const readClampedRate = () => clampRate(input.value);
 
+    const sanitizeInput = () => {
+        const digitsOnly = String(input.value || '').replace(/[^\d]/g, '');
+        if (input.value !== digitsOnly) {
+            input.value = digitsOnly;
+        }
+    };
+
     const save = ({ closeAfterSave = false } = {}) => {
         if (!activeEditor) return Promise.resolve(false);
         if (saving) {
@@ -149,6 +156,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         }
         if (e.key === 'Enter') {
             e.preventDefault();
+            sanitizeInput();
             void save();
         }
         if (e.key === 'Escape') {
@@ -156,6 +164,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         }
         if (onNavigate && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
             e.preventDefault();
+            sanitizeInput();
             const newRate = readClampedRate();
             const hasChanged = newRate !== activeEditor.lastCommittedRate;
             onNavigate(e.key, hasChanged, newRate);
@@ -199,10 +208,12 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     newSaveBtn.addEventListener('click', () => { void save(); });
     newCancelBtn.addEventListener('click', cancel);
     newClearBtn.addEventListener('click', clearRate);
+    input.addEventListener('input', sanitizeInput);
     input.addEventListener('keydown', handleKeydown);
 
     activeEditor = {
         cleanup: () => {
+            input.removeEventListener('input', sanitizeInput);
             input.removeEventListener('keydown', handleKeydown);
             if (outsideClickListener) {
                 document.removeEventListener('mousedown', outsideClickListener);

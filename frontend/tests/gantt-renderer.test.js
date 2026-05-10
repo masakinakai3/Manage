@@ -189,7 +189,7 @@ function renderBaseDom() {
             <button id="modal-close" type="button"></button>
         </div>
         <div id="cell-editor" hidden>
-            <input id="cell-editor-input" type="number">
+            <input id="cell-editor-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
             <button id="cell-editor-save" type="button">save</button>
             <button id="cell-editor-cancel" type="button">cancel</button>
             <button id="cell-editor-clear" type="button">clear</button>
@@ -334,6 +334,32 @@ describe('gantt-renderer regressions', () => {
         expect(latestCall[7].onCommitSuccess).toEqual(expect.any(Function));
         expect(latestCall[7].commitChange).toEqual(expect.any(Function));
         expect(latestCall[7].clearChange).toEqual(expect.any(Function));
+    });
+
+    it('keeps the moved-to inline editor usable after saving with keyboard navigation', async () => {
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 30, memo: '' },
+        ];
+
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const cells = Array.from(document.querySelectorAll('.gantt-cell[data-theme]'));
+        cells[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const callsBeforeMove = allocationList.mock.calls.length;
+        const navigate = openCellEditor.mock.calls.at(-1)[6];
+
+        navigate('ArrowRight', true, 55);
+        await Promise.resolve();
+
+        const latestCall = openCellEditor.mock.calls.at(-1);
+        expect(latestCall[0]).toBe(cells[1]);
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 55, memo: '' },
+        ]);
+        expect(allocationList).toHaveBeenCalledTimes(callsBeforeMove);
     });
 
     it('copies and pastes a month range with bulk update', async () => {

@@ -24,7 +24,7 @@ describe('gantt-editor regressions', () => {
         document.body.innerHTML = `
             <button id="cell" type="button">20%</button>
             <div id="cell-editor" hidden>
-                <input id="cell-editor-input" type="number">
+                <input id="cell-editor-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
                 <button id="cell-editor-save" type="button">save</button>
                 <button id="cell-editor-cancel" type="button">cancel</button>
                 <button id="cell-editor-clear" type="button">clear</button>
@@ -99,6 +99,21 @@ describe('gantt-editor regressions', () => {
         expect(onSave).toHaveBeenCalledWith(50);
         expect(commitChange).toHaveBeenCalledWith(50);
         expect(updateSingle).not.toHaveBeenCalled();
+    });
+
+    it('keeps only digits before keyboard navigation saves the edited value', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onNavigate = vi.fn();
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, vi.fn(), onNavigate);
+        input.value = '4a5';
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+        expect(input.value).toBe('45');
+        expect(onNavigate).toHaveBeenCalledWith('ArrowRight', true, 45);
     });
 
     it('does not apply optimistic UI before commit when optimisticSave is disabled', async () => {

@@ -68,7 +68,7 @@ function buildAllocationSnapshot(themeId, memberId, month) {
     };
 }
 
-async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '', previousSnapshot = null } = {}) {
+async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '', previousSnapshot = null, refreshAfterSave = true } = {}) {
     const nextRate = Math.max(0, Math.min(100, Number.parseInt(allocationRate || '0', 10) || 0));
     const nextMemo = String(memo || '');
     const undo = previousSnapshot
@@ -99,7 +99,11 @@ async function commitSingleCellChange(themeId, memberId, month, allocationRate, 
     HistoryManager.push([undo], [redo]);
 
     try {
-        await HistoryManager.perform([redo]);
+        if (refreshAfterSave) {
+            await HistoryManager.perform([redo]);
+        } else {
+            await allocations.bulkUpdate([redo]);
+        }
         if (successMessage) setSaveState('saved', successMessage);
         return true;
     } catch (error) {
@@ -1168,6 +1172,7 @@ function handleEditorNavigationWithHistory(button, direction, changed, newRate) 
 
     commitSingleCellChange(themeId, memberId, month, nextRate, memo, {
         previousSnapshot,
+        refreshAfterSave: false,
         successMessage: `${month} の負荷率を保存しました`,
     }).catch((error) => {
         setSaveState('error', 'セル保存に失敗しました');
