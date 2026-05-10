@@ -322,8 +322,39 @@
 }
 
 .theme-status.status-completed {
-    background: rgba(148, 163, 184, 0.2);
-    color: #94a3b8;
+    background: rgba(56, 189, 248, 0.18);
+    color: #7dd3fc;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+.theme-row-completed .theme-status.status-completed {
+    background: rgba(14, 165, 233, 0.28) !important;
+    color: #e0f2fe !important;
+    border-color: rgba(125, 211, 252, 0.6) !important;
+    box-shadow: inset 0 0 0 1px rgba(224, 242, 254, 0.12);
+}
+
+.theme-row-completed .gantt-milestone-chip {
+    background: rgba(56, 189, 248, 0.2) !important;
+    border-color: rgba(125, 211, 252, 0.5) !important;
+    color: #dbeafe !important;
+}
+
+.theme-row-completed .gantt-milestone-chip.completed {
+    opacity: 0.88;
+    background: rgba(217, 119, 6, 0.42) !important;
+    border-color: rgba(251, 191, 36, 0.78) !important;
+    color: #fffbeb !important;
+}
+
+.theme-row-completed .gantt-star-label {
+    color: #fef3c7 !important;
+    text-shadow: 0 0 6px rgba(245, 158, 11, 0.34);
+}
+
+.theme-row-completed .gantt-star-label.completed {
+    opacity: 0.82;
+    color: #fde68a !important;
 }
 
 .theme-status.status-cancelled {
@@ -417,6 +448,7 @@
 
 .gantt-row-summary td {
     overflow: hidden;
+    isolation: isolate;
 }
 
 .gantt-row-summary .gantt-cell {
@@ -425,6 +457,7 @@
     padding: 0 4px 0;
     box-sizing: border-box;
     overflow: hidden;
+    z-index: 0;
 }
 
 .gantt-summary-value,
@@ -446,6 +479,7 @@
     top: 1px;
     right: 4px;
     left: 4px;
+    z-index: 2;
     display: flex;
     flex-wrap: wrap;
     justify-content: flex-start;
@@ -457,6 +491,8 @@
 }
 
 .gantt-milestone-chip {
+    position: relative;
+    z-index: 3;
     max-width: 100%;
     padding: 0 6px;
     border-radius: 999px;
@@ -1052,4 +1088,12 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
     background: var(--color-bg-elevated);
     border-color: var(--color-border);
     color: var(--color-text-secondary);
+}
+
+.theme-row-completed .gantt-milestone-chip.completed {
+    opacity: 0.92;
+    background: rgba(217, 119, 6, 0.42) !important;
+    border-color: rgba(251, 191, 36, 0.78) !important;
+    color: #fffbeb !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 251, 235, 0.16);
 }
