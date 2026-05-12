@@ -11,6 +11,7 @@ const showToast = vi.fn();
 const showConfirmDialog = vi.fn();
 const showPromptDialog = vi.fn();
 const formatError = vi.fn((error) => error.message);
+const toPng = vi.fn(async () => 'data:image/png;base64,abc');
 const bulkUpdate = vi.fn(async (rows) => {
     rows.forEach((row) => {
         const index = allocationRows.findIndex((item) => item.theme_id === row.theme_id
@@ -128,6 +129,10 @@ vi.mock('../js/api.js', () => ({
     },
 }));
 
+vi.mock('html-to-image', () => ({
+    toPng,
+}));
+
 function renderBaseDom() {
     document.body.innerHTML = `
         <button class="nav-item" data-view="insights" type="button">insights</button>
@@ -140,6 +145,7 @@ function renderBaseDom() {
             <button id="gantt-expand-all" type="button"></button>
             <button id="gantt-collapse-all" type="button"></button>
             <button id="gantt-export-csv" type="button"></button>
+            <button id="gantt-export-image" type="button">画像出力</button>
         </div>
         <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-category-filter"><option value="">all categories</option></select>
@@ -166,7 +172,7 @@ function renderBaseDom() {
         <div id="aggregate-by-status"></div>
         <div id="aggregate-by-department"></div>
         <div id="snapshot-diff-summary"></div>
-        <table>
+        <table id="gantt-table">
             <thead id="gantt-thead"></thead>
             <tbody id="gantt-tbody"></tbody>
         </table>
@@ -231,6 +237,8 @@ describe('gantt-renderer regressions', () => {
         memberLoads.mockClear();
         snapshotList.mockClear();
         themeUpdate.mockClear();
+        toPng.mockClear();
+        toPng.mockResolvedValue('data:image/png;base64,abc');
         openThemeEditListener.mockClear();
         visibleMonths = ['2026-04'];
         allocationRows = [{
@@ -699,6 +707,27 @@ describe('gantt-renderer regressions', () => {
         expect(button).not.toBeNull();
     });
 
+    it('exports the visible gantt table as a PNG image', async () => {
+        const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await initGantt();
+        document.getElementById('gantt-export-image')?.click();
+
+        await vi.waitFor(() => {
+            expect(toPng).toHaveBeenCalled();
+            expect(clickSpy).toHaveBeenCalled();
+        });
+        expect(toPng.mock.calls[0][0]).toBe(document.getElementById('gantt-table'));
+        expect(toPng.mock.calls[0][1]).toMatchObject({
+            backgroundColor: '#ffffff',
+            cacheBust: true,
+        });
+        expect(showToast).toHaveBeenCalledWith('ガントチャート画像を書き出しました。', 'success');
+
+        clickSpy.mockRestore();
+    });
+
     it('mounts toolbar controls into interactive surfaces across gantt refreshes', async () => {
         const { initGantt, refreshGantt } = await import('../js/gantt/gantt-renderer.js');
 
@@ -716,6 +745,7 @@ describe('gantt-renderer regressions', () => {
         expect(inlineControls?.querySelector('.month-nav #gantt-prev')).not.toBeNull();
         expect(document.getElementById('scale-switcher')?.parentElement?.id).toBe('gantt-inline-period-controls');
         expect(document.getElementById('gantt-export-csv')?.parentElement?.id).toBe('gantt-table-actions');
+        expect(document.getElementById('gantt-export-image')?.parentElement?.id).toBe('gantt-table-actions');
     });
 
     it('handles moved scale and preset controls from the inline toolbar', async () => {

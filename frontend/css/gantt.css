@@ -46,7 +46,8 @@
     backdrop-filter: blur(10px);
 }
 
-.gantt-floating-actions #gantt-export-csv {
+.gantt-floating-actions #gantt-export-csv,
+.gantt-floating-actions #gantt-export-image {
     background: var(--color-primary);
     color: white;
     border-color: transparent;
