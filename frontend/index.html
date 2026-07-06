@@ -30,7 +30,10 @@
                     </label>
                     <label class="form-field">
                         <span>パスワード</span>
-                        <input id="login-password" class="dialog-input" type="password" autocomplete="current-password" required>
+                        <div class="password-field">
+                            <input id="login-password" class="dialog-input" type="password" autocomplete="current-password" required>
+                            <button id="login-password-toggle" class="password-toggle" type="button" aria-label="パスワードを表示" aria-pressed="false">表示</button>
+                        </div>
                     </label>
                     <p id="login-message" class="summary-subtext" hidden></p>
                     <button id="login-submit" class="btn btn-primary btn-block" type="submit">ログイン</button>

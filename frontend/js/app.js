@@ -43,6 +43,15 @@ const ROLE_LABELS = {
     user: '一般ユーザー',
 };
 
+const VIEW_LABELS = {
+    gantt: 'ガントチャート',
+    'member-load': 'メンバー負荷',
+    insights: 'インサイト',
+    themes: 'テーマ一覧',
+    members: 'メンバー一覧',
+    users: 'ユーザ管理',
+};
+
 let currentUser = null;
 let currentView = 'gantt';
 let savedViewsCache = [];
@@ -102,6 +111,17 @@ async function showApp() {
 function initAuth() {
     document.getElementById('login-form')?.addEventListener('submit', handleLoginSubmit);
     document.getElementById('logout-btn')?.addEventListener('click', handleLogout);
+
+    const passwordInput = document.getElementById('login-password');
+    const passwordToggle = document.getElementById('login-password-toggle');
+    passwordToggle?.addEventListener('click', () => {
+        const revealed = passwordInput.type === 'text';
+        passwordInput.type = revealed ? 'password' : 'text';
+        passwordToggle.textContent = revealed ? '表示' : '隠す';
+        passwordToggle.setAttribute('aria-pressed', String(!revealed));
+        passwordToggle.setAttribute('aria-label', revealed ? 'パスワードを表示' : 'パスワードを隠す');
+        passwordInput.focus();
+    });
 }
 
 function showLogin(message = '') {
@@ -110,7 +130,15 @@ function showLogin(message = '') {
     const messageElement = document.getElementById('login-message');
     messageElement.hidden = !message;
     messageElement.textContent = message;
-    document.getElementById('login-password').value = '';
+    const passwordInput = document.getElementById('login-password');
+    passwordInput.value = '';
+    passwordInput.type = 'password';
+    const passwordToggle = document.getElementById('login-password-toggle');
+    if (passwordToggle) {
+        passwordToggle.textContent = '表示';
+        passwordToggle.setAttribute('aria-pressed', 'false');
+        passwordToggle.setAttribute('aria-label', 'パスワードを表示');
+    }
     document.getElementById('login-username')?.focus();
 }
 
@@ -664,8 +692,7 @@ async function openThemeModal(theme = null) {
         <button class="btn btn-primary" id="modal-save-btn" type="button">${isEdit ? '更新する' : '追加する'}</button>
     `;
 
-    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.getElementById('modal-overlay').hidden = false;
+    activateModal();
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-cancel-btn').onclick = closeModal;
     document.getElementById('modal-save-btn').onclick = async () => {
@@ -841,8 +868,7 @@ function openUserModal(user = null) {
         <button class="btn btn-primary" id="modal-save-btn" type="button">${isEdit ? '更新する' : '追加する'}</button>
     `;
 
-    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.getElementById('modal-overlay').hidden = false;
+    activateModal();
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-cancel-btn').onclick = closeModal;
     document.getElementById('modal-save-btn').onclick = async () => {
@@ -898,8 +924,7 @@ function openPasswordResetModal(user) {
         <button class="btn btn-primary" id="modal-save-btn" type="button">再設定する</button>
     `;
 
-    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.getElementById('modal-overlay').hidden = false;
+    activateModal();
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-cancel-btn').onclick = closeModal;
     document.getElementById('modal-save-btn').onclick = async () => {
@@ -1030,8 +1055,7 @@ function openMemberModal(member = null) {
         <button class="btn btn-primary" id="modal-save-btn" type="button">${isEdit ? '更新する' : '追加する'}</button>
     `;
 
-    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.getElementById('modal-overlay').hidden = false;
+    activateModal();
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-cancel-btn').onclick = closeModal;
     document.getElementById('modal-save-btn').onclick = async () => {
@@ -1070,8 +1094,71 @@ function openMemberModal(member = null) {
     };
 }
 
+const MODAL_FOCUSABLE_SELECTOR = [
+    'a[href]',
+    'button:not([disabled])',
+    'input:not([disabled]):not([type="hidden"])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+let modalKeydownHandler = null;
+
+function getModalFocusable() {
+    const modal = document.getElementById('modal');
+    if (!modal) return [];
+    return Array.from(modal.querySelectorAll(MODAL_FOCUSABLE_SELECTOR))
+        .filter((element) => element.offsetParent !== null || element === document.activeElement);
+}
+
+/**
+ * Reveal the shared modal, move focus into it, and trap Tab within it.
+ * Focus goes to the first field inside the modal body, falling back to the
+ * first focusable control (e.g. the close/confirm button on info modals).
+ */
+function activateModal() {
+    const overlay = document.getElementById('modal-overlay');
+    if (!overlay) return;
+
+    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    overlay.hidden = false;
+
+    modalKeydownHandler = (event) => {
+        if (event.key !== 'Tab') return;
+        const focusable = getModalFocusable();
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+
+        if (event.shiftKey && (active === first || !focusable.includes(active))) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && active === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    };
+    document.addEventListener('keydown', modalKeydownHandler, true);
+
+    window.setTimeout(() => {
+        const body = document.getElementById('modal-body');
+        const bodyField = body?.querySelector(MODAL_FOCUSABLE_SELECTOR);
+        const focusTarget = bodyField || getModalFocusable()[0];
+        focusTarget?.focus();
+        if (focusTarget instanceof HTMLInputElement || focusTarget instanceof HTMLTextAreaElement) {
+            focusTarget.select?.();
+        }
+    }, 0);
+}
+
 function closeModal() {
     document.getElementById('modal-overlay').hidden = true;
+    if (modalKeydownHandler) {
+        document.removeEventListener('keydown', modalKeydownHandler, true);
+        modalKeydownHandler = null;
+    }
     if (lastModalTrigger && document.contains(lastModalTrigger)) {
         lastModalTrigger.focus();
     }
@@ -1284,28 +1371,28 @@ function initOnboarding() {
 
 async function createSampleData() {
     try {
-        setBusyState(true, 'Creating sample data...');
+        setBusyState(true, 'サンプルデータを作成しています...');
         const existingThemes = await themesApi.list();
         const existingMembers = await membersApi.list(false);
         if (existingThemes.length > 0 || existingMembers.length > 0) {
             const shouldContinue = await showConfirmDialog({
-                title: 'Create sample data',
-                message: 'Existing data was found. Sample records will be appended. Continue?',
-                confirmText: 'Add',
-                cancelText: 'Cancel',
+                title: 'サンプルデータを作成しますか',
+                message: '既存のデータが見つかりました。サンプルデータは既存データに追加されます。続行しますか？',
+                confirmText: '追加する',
+                cancelText: 'キャンセル',
             });
             if (!shouldContinue) return;
         }
 
         const members = await Promise.all([
-            membersApi.create({ display_name: 'Aoi Tanaka', department: 'Platform', capacity: 100 }),
-            membersApi.create({ display_name: 'Haru Sato', department: 'Platform', capacity: 80 }),
-            membersApi.create({ display_name: 'Mio Suzuki', department: 'Product', capacity: 100 }),
+            membersApi.create({ display_name: '田中 葵', department: 'プラットフォーム', capacity: 100 }),
+            membersApi.create({ display_name: '佐藤 陽', department: 'プラットフォーム', capacity: 80 }),
+            membersApi.create({ display_name: '鈴木 澪', department: 'プロダクト', capacity: 100 }),
         ]);
         const themes = await Promise.all([
-            themesApi.create({ name: 'Core Renewal', category: 'Platform', status: 'active', priority: 9, color: '#6366f1', start_month: '2026-04', end_month: '2026-09' }),
-            themesApi.create({ name: 'Mobile Approval', category: 'Product', status: 'active', priority: 7, color: '#14b8a6', start_month: '2026-04', end_month: '2026-07' }),
-            themesApi.create({ name: 'Data Cleanup', category: 'Ops', status: 'planning', priority: 6, color: '#f97316', start_month: '2026-05', end_month: '2026-08' }),
+            themesApi.create({ name: '基盤刷新', category: 'プラットフォーム', status: 'active', priority: 9, color: '#6366f1', start_month: '2026-04', end_month: '2026-09' }),
+            themesApi.create({ name: 'モバイル承認', category: 'プロダクト', status: 'active', priority: 7, color: '#14b8a6', start_month: '2026-04', end_month: '2026-07' }),
+            themesApi.create({ name: 'データ整理', category: '運用', status: 'planning', priority: 6, color: '#f97316', start_month: '2026-05', end_month: '2026-08' }),
         ]);
 
         await Promise.all([
@@ -1315,21 +1402,21 @@ async function createSampleData() {
         ]);
 
         await allocations.bulkUpdate([
-            { theme_id: themes[0].theme_id, member_id: members[0].member_id, month: '2026-04', allocation_rate: 70, memo: 'Architecture' },
-            { theme_id: themes[0].theme_id, member_id: members[0].member_id, month: '2026-05', allocation_rate: 80, memo: 'Implementation' },
-            { theme_id: themes[0].theme_id, member_id: members[1].member_id, month: '2026-04', allocation_rate: 40, memo: 'Support' },
-            { theme_id: themes[1].theme_id, member_id: members[2].member_id, month: '2026-04', allocation_rate: 60, memo: 'Approval flow' },
-            { theme_id: themes[1].theme_id, member_id: members[2].member_id, month: '2026-05', allocation_rate: 50, memo: 'Review' },
-            { theme_id: themes[2].theme_id, member_id: members[1].member_id, month: '2026-05', allocation_rate: 35, memo: 'Audit' },
-            { theme_id: themes[2].theme_id, member_id: members[2].member_id, month: '2026-06', allocation_rate: 25, memo: 'Cleanup' },
+            { theme_id: themes[0].theme_id, member_id: members[0].member_id, month: '2026-04', allocation_rate: 70, memo: '設計' },
+            { theme_id: themes[0].theme_id, member_id: members[0].member_id, month: '2026-05', allocation_rate: 80, memo: '実装' },
+            { theme_id: themes[0].theme_id, member_id: members[1].member_id, month: '2026-04', allocation_rate: 40, memo: 'サポート' },
+            { theme_id: themes[1].theme_id, member_id: members[2].member_id, month: '2026-04', allocation_rate: 60, memo: '承認フロー' },
+            { theme_id: themes[1].theme_id, member_id: members[2].member_id, month: '2026-05', allocation_rate: 50, memo: 'レビュー' },
+            { theme_id: themes[2].theme_id, member_id: members[1].member_id, month: '2026-05', allocation_rate: 35, memo: '棚卸し' },
+            { theme_id: themes[2].theme_id, member_id: members[2].member_id, month: '2026-06', allocation_rate: 25, memo: 'クリーンアップ' },
         ]);
 
         updateOnboardingState({ dismissed: true, sampleLoaded: true });
         document.getElementById('onboarding-panel').hidden = true;
         await Promise.all([refreshGantt(), refreshMemberView(), refreshInsightsView(), loadThemeList(), loadMemberList()]);
-        showToast('Sample data is ready.', 'success');
+        showToast('サンプルデータを作成しました。', 'success');
     } catch (error) {
-        showToast(`Failed to create sample data: ${formatError(error)}`, 'error');
+        showToast(`サンプルデータの作成に失敗しました: ${formatError(error)}`, 'error');
     } finally {
         setBusyState(false);
     }
@@ -1350,11 +1437,18 @@ function initKeyboardShortcuts() {
             focusCurrentSearch();
             return;
         }
-        if (key === 'g') switchView('gantt');
-        if (key === 'l') switchView('member-load');
-        if (key === 'i') switchView('insights');
-        if (key === 't') switchView('themes');
-        if (key === 'u') switchView('members');
+        const viewByKey = {
+            g: 'gantt',
+            l: 'member-load',
+            i: 'insights',
+            t: 'themes',
+            u: 'members',
+        };
+        const targetView = viewByKey[key];
+        if (targetView) {
+            switchView(targetView);
+            showToast(`${VIEW_LABELS[targetView] || targetView}へ移動しました。`, 'info', 1600);
+        }
     });
 }
 
@@ -1374,8 +1468,7 @@ function showShortcutHelp() {
         </div>
     `;
     document.getElementById('modal-footer').innerHTML = '<button class="btn btn-primary" id="modal-save-btn" type="button">閉じる</button>';
-    lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.getElementById('modal-overlay').hidden = false;
+    activateModal();
     document.getElementById('modal-close').onclick = closeModal;
     document.getElementById('modal-save-btn').onclick = closeModal;
 }

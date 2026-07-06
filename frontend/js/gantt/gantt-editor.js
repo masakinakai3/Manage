@@ -59,9 +59,28 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     }));
     const applyCommittedValue = buildSuccessApplier({ optimisticSave, onSave, onCommitSuccess });
 
-    editor.style.left = `${rect.left}px`;
-    editor.style.top = `${rect.bottom + 4}px`;
+    editor.style.left = '0px';
+    editor.style.top = '0px';
     editor.hidden = false;
+
+    // Position the editor near the cell, keeping it inside the viewport so the
+    // input and its action buttons are never clipped at the right/bottom edge.
+    const margin = 8;
+    const editorRect = editor.getBoundingClientRect();
+    const editorWidth = editorRect.width || 240;
+    const editorHeight = editorRect.height || 48;
+    let left = rect.left;
+    let top = rect.bottom + 4;
+    if (left + editorWidth > window.innerWidth - margin) {
+        left = Math.max(margin, window.innerWidth - editorWidth - margin);
+    }
+    if (top + editorHeight > window.innerHeight - margin) {
+        const above = rect.top - editorHeight - 4;
+        top = above >= margin ? above : Math.max(margin, window.innerHeight - editorHeight - margin);
+    }
+    editor.style.left = `${Math.max(margin, left)}px`;
+    editor.style.top = `${Math.max(margin, top)}px`;
+
     input.value = initialValue;
     input.focus();
     if (selectOnOpen) {
