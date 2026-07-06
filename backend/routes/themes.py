@@ -99,7 +99,7 @@ def list_themes():
       200:
         description: List of themes with member counts and date ranges
     """
-    themes = Theme.query.order_by(Theme.theme_id).all()
+    themes = Theme.query.order_by(Theme.sort_order, Theme.theme_id).all()
     result = []
     for t in themes:
         td = t.to_dict()
@@ -172,12 +172,14 @@ def create_theme():
     data = request.get_json()
     if not data or not data.get('name'):
         return jsonify({'error': 'name is required'}), 400
+    max_sort_order = db.session.query(func.max(Theme.sort_order)).scalar()
     theme = Theme(
         name=data['name'],
         category=data.get('category', ''),
         status=data.get('status', 'planning'),
         color=data.get('color', '#6366f1'),
         priority=data.get('priority', 0),
+        sort_order=(max_sort_order or 0) + 1,
         dev_rank=_normalize_dev_rank(data.get('dev_rank')),
         start_month=data.get('start_month'),
         end_month=data.get('end_month'),
@@ -187,6 +189,66 @@ def create_theme():
     db.session.add(theme)
     db.session.commit()
     return jsonify(theme.to_dict()), 201
+
+
+@themes_bp.route('/reorder', methods=['PUT'])
+@login_required
+def reorder_themes():
+    """
+    Reorder themes
+    ---
+    tags:
+      - Themes
+    requestBody:
+      content:
+        application/json:
+          schema:
+            type: object
+            required:
+              - ordered_ids
+            properties:
+              ordered_ids:
+                type: array
+                items:
+                  type: integer
+    responses:
+      200:
+        description: Themes reordered
+      400:
+        description: Invalid input
+    """
+    data = request.get_json() or {}
+    ordered_ids = data.get('ordered_ids')
+    if not isinstance(ordered_ids, list) or not ordered_ids:
+        return jsonify({'error': 'ordered_ids must be a non-empty list'}), 400
+
+    themes_by_id = {theme.theme_id: theme for theme in Theme.query.all()}
+    seen = set()
+    position = 0
+    for raw_id in ordered_ids:
+        try:
+            theme_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        theme = themes_by_id.get(theme_id)
+        if theme is None or theme_id in seen:
+            continue
+        theme.sort_order = position
+        seen.add(theme_id)
+        position += 1
+
+    # Keep any themes not present in the payload after the reordered ones,
+    # preserving their previous relative order.
+    remaining = sorted(
+        (theme for tid, theme in themes_by_id.items() if tid not in seen),
+        key=lambda t: (t.sort_order, t.theme_id),
+    )
+    for theme in remaining:
+        theme.sort_order = position
+        position += 1
+
+    db.session.commit()
+    return jsonify({'message': 'Reordered', 'count': len(seen)})
 
 
 @themes_bp.route('/<int:theme_id>', methods=['PUT'])

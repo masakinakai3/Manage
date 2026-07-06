@@ -58,6 +58,9 @@ export const themes = {
         method: 'PUT', body: JSON.stringify(data),
     }),
     delete: (id) => request(`/themes/${id}`, { method: 'DELETE' }),
+    reorder: (orderedIds) => request('/themes/reorder', {
+        method: 'PUT', body: JSON.stringify({ ordered_ids: orderedIds }),
+    }),
     assignMember: (themeId, memberId) => request(`/themes/${themeId}/members`, {
         method: 'POST', body: JSON.stringify({ member_id: memberId }),
     }),

@@ -670,6 +670,58 @@
     overflow: hidden;
 }
 
+.theme-drag-handle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 28px;
+    cursor: grab;
+    color: rgba(148, 163, 184, 0.85);
+    font-size: 16px;
+    line-height: 1;
+    border-radius: 6px;
+    opacity: 0.45;
+    transition: opacity var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.gantt-row-summary td:first-child:hover .theme-drag-handle,
+.theme-drag-handle:focus-visible {
+    opacity: 1;
+}
+
+.theme-drag-handle:hover {
+    color: var(--color-text);
+    background: rgba(148, 163, 184, 0.16);
+}
+
+.theme-drag-handle:active {
+    cursor: grabbing;
+}
+
+.theme-row-completed .theme-drag-handle {
+    color: rgba(224, 242, 254, 0.6);
+}
+
+.theme-row-completed .theme-drag-handle:hover,
+.theme-row-completed .gantt-row-summary td:first-child:hover .theme-drag-handle {
+    color: #e0f2fe;
+    background: rgba(56, 189, 248, 0.16);
+}
+
+.gantt-row-summary.theme-reorder-dragging {
+    opacity: 0.5;
+}
+
+.gantt-row-summary.theme-reorder-before td {
+    box-shadow: inset 0 2px 0 0 var(--color-primary, #6366f1);
+}
+
+.gantt-row-summary.theme-reorder-after td {
+    box-shadow: inset 0 -2px 0 0 var(--color-primary, #6366f1);
+}
+
 .member-label-cell {
     display: flex;
     align-items: center;

@@ -152,6 +152,7 @@ def create_app(test_config=None):
     with app.app_context():
         db.create_all()
         _migrate_allocations_unique_index()
+        _migrate_theme_sort_order()
         _migrate_theme_milestones()
         _seed_admin(app)
         _reset_admin_password_if_requested(app)
@@ -268,6 +269,28 @@ def _migrate_theme_milestones():
     if inserted:
         db.session.commit()
         print(f"[Migration] Backfilled {inserted} legacy theme milestones.")
+
+
+def _migrate_theme_sort_order():
+    """Ensure the themes.sort_order column exists and is backfilled.
+
+    Older databases were created before drag-and-drop reordering existed. This
+    adds the column when missing and seeds it from theme_id so the initial order
+    matches the previous (id-based) ordering.
+    """
+    from sqlalchemy import text
+
+    existing_columns = {
+        row[1]
+        for row in db.session.execute(text("PRAGMA table_info(themes)")).fetchall()
+    }
+    if 'sort_order' in existing_columns:
+        return
+
+    db.session.execute(text("ALTER TABLE themes ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"))
+    db.session.execute(text("UPDATE themes SET sort_order = theme_id"))
+    db.session.commit()
+    print("[Migration] Added sort_order column to themes table.")
 
 
 def _seed_admin(app):

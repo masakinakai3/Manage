@@ -5,6 +5,7 @@ import { addMonths, currentMonth, formatMonthHeader, getVisibleMonths } from '..
 import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from '../ui.js';
 import { closeCellEditor, isCellEditorOpen, openCellEditor } from './gantt-editor.js';
 import { initGanttDnD } from './gantt-dnd.js';
+import { initGanttThemeReorder } from './gantt-theme-reorder.js';
 import { toPng } from 'html-to-image';
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', stop: 'STOP', completed: 'Completed', cancelled: 'Cancelled' };
@@ -302,6 +303,7 @@ export async function initGantt() {
     });
     hydrateCollapsed();
     initGanttDnD({ performMove: performDragAndDropMove });
+    initGanttThemeReorder({ onDrop: reorderThemesByDrop });
     await refreshGantt();
 }
 
@@ -1048,6 +1050,39 @@ async function previewBulkUpdate() {
     const undo = months.map((month) => { const current = allAllocations.find((item) => item.theme_id === selectedCell.themeId && item.member_id === selectedCell.memberId && item.month === month); return { theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month, allocation_rate: current?.allocation_rate || 0, memo: current?.memo || '' }; });
     HistoryManager.push(undo, redo);
     await HistoryManager.perform(redo);
+}
+
+async function reorderThemesByDrop({ draggedId, targetId, placeBefore }) {
+    if (!Number.isFinite(draggedId) || !Number.isFinite(targetId) || draggedId === targetId) return;
+
+    const previousOrder = allThemes.slice();
+    const fromIndex = previousOrder.findIndex((theme) => theme.theme_id === draggedId);
+    const targetIndex = previousOrder.findIndex((theme) => theme.theme_id === targetId);
+    if (fromIndex < 0 || targetIndex < 0) return;
+
+    const reordered = previousOrder.slice();
+    const [moved] = reordered.splice(fromIndex, 1);
+    let insertIndex = reordered.findIndex((theme) => theme.theme_id === targetId);
+    if (!placeBefore) insertIndex += 1;
+    reordered.splice(insertIndex, 0, moved);
+
+    if (reordered.every((theme, index) => theme.theme_id === previousOrder[index].theme_id)) return;
+
+    // Optimistic update.
+    allThemes = reordered;
+    rerenderGanttView();
+
+    try {
+        setSaveState('saving', 'テーマの並び順を保存しています...');
+        await themesApi.reorder(reordered.map((theme) => theme.theme_id));
+        setSaveState('saved', 'テーマの並び順を保存しました');
+        showToast('テーマの並び順を変更しました。', 'success');
+    } catch (error) {
+        allThemes = previousOrder;
+        rerenderGanttView();
+        setSaveState('error', 'テーマの並び順の保存に失敗しました');
+        showToast(`テーマの並び順の保存に失敗しました: ${formatError(error)}`, 'error');
+    }
 }
 
 async function performDragAndDropMove({ undo, redo }) {
@@ -2483,7 +2518,10 @@ function renderTable(months) {
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
             const completedRowClass = theme.status === 'completed' ? ' theme-row-completed' : '';
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
-            rows.push(`<tr class="gantt-row-summary${completedRowClass}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
+            const dragHandle = groupBy === 'none'
+                ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}">⠿</span>`
+                : '';
+            rows.push(`<tr class="gantt-row-summary${completedRowClass}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member${completedRowClass} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || 'No Department'} / Capacity ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
