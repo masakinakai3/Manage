@@ -33,16 +33,47 @@ export function showToast(message, type = 'info', timeout = 3200) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
+    // Errors linger longer so long messages can be read before auto-dismiss.
+    const effectiveTimeout = type === 'error' ? Math.max(timeout, 6000) : timeout;
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
     toast.dataset.toastId = String(++toastSeed);
-    toast.textContent = message;
-    container.appendChild(toast);
+    toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
 
-    window.setTimeout(() => {
+    const text = document.createElement('span');
+    text.className = 'toast-message';
+    text.textContent = message;
+    toast.appendChild(text);
+
+    let removed = false;
+    let dismissTimer = null;
+    const dismiss = () => {
+        if (removed) return;
+        removed = true;
+        if (dismissTimer) window.clearTimeout(dismissTimer);
         toast.classList.add('toast-exit');
         window.setTimeout(() => toast.remove(), 180);
-    }, timeout);
+    };
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'toast-close';
+    closeBtn.setAttribute('aria-label', '通知を閉じる');
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', dismiss);
+    toast.appendChild(closeBtn);
+
+    // Pause auto-dismiss while the pointer is over the toast.
+    toast.addEventListener('mouseenter', () => {
+        if (dismissTimer) window.clearTimeout(dismissTimer);
+    });
+    toast.addEventListener('mouseleave', () => {
+        dismissTimer = window.setTimeout(dismiss, 1200);
+    });
+
+    container.appendChild(toast);
+    dismissTimer = window.setTimeout(dismiss, effectiveTimeout);
 }
 
 export function setSaveState(state, message) {
@@ -136,6 +167,12 @@ export function showPromptDialog({
         activeDialogResolver = (accepted) => resolve(accepted ? input.value.trim() : null);
         cancelBtn.onclick = () => resolveDialog(false);
         confirmBtn.onclick = () => resolveDialog(true);
+        input.onkeydown = (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                resolveDialog(true);
+            }
+        };
         window.setTimeout(() => {
             input.focus();
             input.select();
@@ -164,6 +201,7 @@ function resolveDialog(result) {
     if (input) {
         input.hidden = true;
         input.value = '';
+        input.onkeydown = null;
     }
 
     restoreFocus();
