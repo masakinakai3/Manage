@@ -231,6 +231,7 @@
                             <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたむ</button>
                             <button id="gantt-export-csv" class="btn btn-primary btn-sm" type="button" aria-label="現在表示中のガントチャートをCSV出力">CSV出力</button>
+                            <button id="gantt-export-image" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをPNG画像で出力">画像出力</button>
                         </div>
                         <div id="gantt-mobile-theme-list" class="gantt-mobile-theme-list" hidden></div>
                         <table class="gantt-table" id="gantt-table">
@@ -500,7 +501,7 @@
     <div id="tooltip" class="tooltip" hidden></div>
 
     <div id="cell-editor" class="cell-editor" hidden>
-        <input type="number" id="cell-editor-input" min="0" max="100" step="1">
+        <input type="text" id="cell-editor-input" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
         <span class="cell-editor-unit">%</span>
         <div class="cell-editor-actions">
             <button id="cell-editor-save" class="btn btn-primary btn-sm" type="button">保存</button>

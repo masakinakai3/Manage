@@ -5,6 +5,7 @@ import { addMonths, currentMonth, formatMonthHeader, getVisibleMonths } from '..
 import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from '../ui.js';
 import { closeCellEditor, isCellEditorOpen, openCellEditor } from './gantt-editor.js';
 import { initGanttDnD } from './gantt-dnd.js';
+import { toPng } from 'html-to-image';
 
 const STATUS_LABELS = { planning: 'Planning', active: 'Active', stop: 'STOP', completed: 'Completed', cancelled: 'Cancelled' };
 const DEV_RANK_LABELS = { '': '-', S: 'S', M: 'M', L: 'L' };
@@ -68,7 +69,7 @@ function buildAllocationSnapshot(themeId, memberId, month) {
     };
 }
 
-async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '', previousSnapshot = null } = {}) {
+async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '', previousSnapshot = null, refreshAfterSave = true } = {}) {
     const nextRate = Math.max(0, Math.min(100, Number.parseInt(allocationRate || '0', 10) || 0));
     const nextMemo = String(memo || '');
     const undo = previousSnapshot
@@ -99,7 +100,11 @@ async function commitSingleCellChange(themeId, memberId, month, allocationRate, 
     HistoryManager.push([undo], [redo]);
 
     try {
-        await HistoryManager.perform([redo]);
+        if (refreshAfterSave) {
+            await HistoryManager.perform([redo]);
+        } else {
+            await allocations.bulkUpdate([redo]);
+        }
         if (successMessage) setSaveState('saved', successMessage);
         return true;
     } catch (error) {
@@ -308,7 +313,7 @@ function ensureInlinePeriodControls() {
     if (!toolbar || !scaleSwitcher || !presetSelect || !monthNav) return;
 
     const tableActions = ensureToolbarSlot('gantt-table-actions', 'gantt-table-actions', { prepend: true });
-    ['gantt-expand-all', 'gantt-collapse-all', 'gantt-export-csv'].forEach((id) => {
+    ['gantt-expand-all', 'gantt-collapse-all', 'gantt-export-csv', 'gantt-export-image'].forEach((id) => {
         const action = document.getElementById(id);
         moveControlsToToolbarSlot(tableActions, [action]);
     });
@@ -520,6 +525,7 @@ function bindControls() {
     document.getElementById('gantt-expand-all')?.addEventListener('click', () => { collapsedThemes.clear(); persistCollapsed(); rerenderGanttView(); });
     document.getElementById('gantt-collapse-all')?.addEventListener('click', () => { allThemes.forEach((theme) => collapsedThemes.add(theme.theme_id)); persistCollapsed(); rerenderGanttView(); });
     document.getElementById('gantt-export-csv')?.addEventListener('click', exportCsv);
+    document.getElementById('gantt-export-image')?.addEventListener('click', exportGanttImage);
     document.getElementById('snapshot-save-btn')?.addEventListener('click', saveSnapshot);
     document.getElementById('snapshot-select')?.addEventListener('change', loadSelectedSnapshot);
     document.getElementById('detail-save')?.addEventListener('click', saveSelectedCellWithHistory);
@@ -1168,6 +1174,7 @@ function handleEditorNavigationWithHistory(button, direction, changed, newRate) 
 
     commitSingleCellChange(themeId, memberId, month, nextRate, memo, {
         previousSnapshot,
+        refreshAfterSave: false,
         successMessage: `${month} の負荷率を保存しました`,
     }).catch((error) => {
         setSaveState('error', 'セル保存に失敗しました');
@@ -1683,6 +1690,47 @@ function exportCsv() {
     link.click();
     URL.revokeObjectURL(url);
     showToast('CSV を書き出しました。', 'success');
+}
+
+async function exportGanttImage() {
+    const table = document.getElementById('gantt-table');
+    const button = document.getElementById('gantt-export-image');
+    if (!table) {
+        showToast('画像にするガントチャートが見つかりません。', 'error');
+        return;
+    }
+
+    const previousLabel = button?.textContent || '';
+    if (button) {
+        button.disabled = true;
+        button.textContent = '画像作成中...';
+    }
+
+    try {
+        const dataUrl = await toPng(table, {
+            backgroundColor: '#ffffff',
+            cacheBust: true,
+            pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+            width: table.scrollWidth,
+            height: table.scrollHeight,
+            style: {
+                width: `${table.scrollWidth}px`,
+                height: `${table.scrollHeight}px`,
+            },
+        });
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = buildGanttExportFilename('png');
+        link.click();
+        showToast('ガントチャート画像を書き出しました。', 'success');
+    } catch (error) {
+        showToast(`ガントチャート画像の書き出しに失敗しました: ${formatError(error)}`, 'error');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = previousLabel;
+        }
+    }
 }
 
 async function showAssignMemberModal(themeId) {
