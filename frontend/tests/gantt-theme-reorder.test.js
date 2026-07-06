@@ -17,6 +17,9 @@ function renderReorderDom() {
                             <span class="theme-drag-handle" draggable="true">⠿</span>
                         </div></td>
                     </tr>
+                    <tr class="gantt-row-member" data-theme-id="2" data-member-id="10">
+                        <td><div class="member-label-cell"><span>Member</span></div></td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -54,6 +57,24 @@ describe('gantt theme reorder', () => {
 
         expect(onDrop).toHaveBeenCalledTimes(1);
         expect(onDrop).toHaveBeenCalledWith({ draggedId: 1, targetId: 2, placeBefore: false });
+    });
+
+    it('accepts a drop on a member row belonging to the target theme', async () => {
+        const onDrop = vi.fn();
+        const { initGanttThemeReorder } = await import('../js/gantt/gantt-theme-reorder.js');
+        const handle1 = document.querySelector('.gantt-row-summary[data-theme-id="1"] .theme-drag-handle');
+        const memberRow = document.querySelector('.gantt-row-member[data-theme-id="2"]');
+        memberRow.getBoundingClientRect = () => ({ top: 140, height: 40, bottom: 180 });
+        const dataTransfer = { setData: vi.fn(), effectAllowed: '', dropEffect: '' };
+
+        initGanttThemeReorder({ onDrop });
+
+        dispatchDrag('dragstart', handle1, 10, dataTransfer);
+        // Drop in the upper half of the member row -> place before theme 2.
+        dispatchDrag('drop', memberRow, 150, dataTransfer);
+
+        expect(onDrop).toHaveBeenCalledTimes(1);
+        expect(onDrop).toHaveBeenCalledWith({ draggedId: 1, targetId: 2, placeBefore: true });
     });
 
     it('does not fire onDrop when dropping onto itself', async () => {

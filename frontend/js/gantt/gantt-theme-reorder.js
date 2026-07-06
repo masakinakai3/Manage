@@ -19,7 +19,12 @@ export function initGanttThemeReorder({ onDrop }) {
     container.dataset.themeReorderBound = 'true';
     let draggedId = null;
 
-    const summaryRow = (target) => target?.closest?.('.gantt-row-summary[data-theme-id]') || null;
+    // Any row belonging to a theme (its summary row or its member rows) is a
+    // valid drop target so users don't need to land the pointer exactly on
+    // the small drag handle icon to trigger a reorder.
+    const themeRowSelector = '.gantt-row-summary[data-theme-id], .gantt-row-member[data-theme-id]';
+    const themeRow = (target) => target?.closest?.(themeRowSelector) || null;
+    const summaryRowFor = (themeId) => container.querySelector(`.gantt-row-summary[data-theme-id="${themeId}"]`);
 
     const clearIndicators = () => {
         container.querySelectorAll('.theme-reorder-before, .theme-reorder-after').forEach((el) => {
@@ -30,7 +35,7 @@ export function initGanttThemeReorder({ onDrop }) {
     container.addEventListener('dragstart', (event) => {
         const handle = event.target.closest?.('.theme-drag-handle');
         if (!handle) return;
-        const row = summaryRow(handle);
+        const row = themeRow(handle);
         if (!row) return;
         draggedId = Number.parseInt(row.dataset.themeId, 10);
         row.classList.add('theme-reorder-dragging');
@@ -43,7 +48,7 @@ export function initGanttThemeReorder({ onDrop }) {
 
     container.addEventListener('dragover', (event) => {
         if (draggedId === null) return;
-        const row = summaryRow(event.target);
+        const row = themeRow(event.target);
         if (!row) return;
         const targetId = Number.parseInt(row.dataset.themeId, 10);
         event.preventDefault();
@@ -52,12 +57,13 @@ export function initGanttThemeReorder({ onDrop }) {
         if (targetId === draggedId) return;
         const rect = row.getBoundingClientRect();
         const placeBefore = event.clientY < rect.top + rect.height / 2;
-        row.classList.add(placeBefore ? 'theme-reorder-before' : 'theme-reorder-after');
+        const indicatorRow = summaryRowFor(targetId) || row;
+        indicatorRow.classList.add(placeBefore ? 'theme-reorder-before' : 'theme-reorder-after');
     });
 
     container.addEventListener('drop', (event) => {
         if (draggedId === null) return;
-        const row = summaryRow(event.target);
+        const row = themeRow(event.target);
         clearIndicators();
         if (row) {
             const targetId = Number.parseInt(row.dataset.themeId, 10);
