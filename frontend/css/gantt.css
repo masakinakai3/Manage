@@ -307,6 +307,23 @@
     padding-right: 18px;
 }
 
+/*
+ * Native option lists inherit the select's tinted background/text, which makes
+ * the popup low-contrast (see the pale purple menu on the planning status).
+ * Force a solid elevated surface with full-strength text so every option and
+ * the checked one are clearly legible in both themes.
+ */
+.theme-status-select option {
+    background: var(--color-bg-elevated);
+    color: var(--color-text);
+    font-weight: 500;
+}
+
+.theme-status-select option:checked {
+    background: var(--color-primary);
+    color: #ffffff;
+}
+
 .theme-status.status-planning {
     background: rgba(99, 102, 241, 0.2);
     color: #a5b4fc;
