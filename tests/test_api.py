@@ -288,15 +288,62 @@ def test_bulk_allocations(auth_client, app):
         assert alloc is not None
         assert alloc.allocation_rate == 60
 
-    # 2. Update existing allocation to 0 (should delete)
+    # 2. Update existing allocation to 0 (should persist as an explicit 0, not delete)
     payload[0]['allocation_rate'] = 0
     response = auth_client.put('/api/allocations/bulk', json=payload)
     assert response.status_code == 200
 
-    # Verify deletion
+    with app.app_context():
+        alloc = Allocation.query.filter_by(theme_id=t_id, member_id=m_id, month='2024-05').first()
+        assert alloc is not None
+        assert alloc.allocation_rate == 0
+
+    # 3. Clearing with a null rate should delete the allocation
+    payload[0]['allocation_rate'] = None
+    response = auth_client.put('/api/allocations/bulk', json=payload)
+    assert response.status_code == 200
+
     with app.app_context():
         alloc = Allocation.query.filter_by(theme_id=t_id, member_id=m_id, month='2024-05').first()
         assert alloc is None
+
+
+def test_single_allocation_zero_persists_and_null_clears(auth_client, app):
+    """Entering 0% must be saved distinctly from clearing the cell."""
+    with app.app_context():
+        t = Theme(name='Single Alloc Theme')
+        m = Member(display_name='Single Alloc Member')
+        db.session.add_all([t, m])
+        db.session.commit()
+        t_id = t.theme_id
+        m_id = m.member_id
+
+    base_payload = {'theme_id': t_id, 'member_id': m_id, 'month': '2024-07'}
+
+    # Saving an explicit 0 persists a real row showing "0%", not nothing.
+    response = auth_client.put('/api/allocations/single', json={**base_payload, 'allocation_rate': 0})
+    assert response.status_code == 200
+    with app.app_context():
+        alloc = Allocation.query.filter_by(theme_id=t_id, member_id=m_id, month='2024-07').first()
+        assert alloc is not None
+        assert alloc.allocation_rate == 0
+
+    # The zero-rate row is now visible through the list endpoint.
+    response = auth_client.get(f'/api/allocations?theme_id={t_id}&member_id={m_id}')
+    assert response.status_code == 200
+    assert any(item['month'] == '2024-07' and item['allocation_rate'] == 0 for item in response.json)
+
+    # Clearing (null) deletes the row entirely.
+    response = auth_client.put('/api/allocations/single', json={**base_payload, 'allocation_rate': None})
+    assert response.status_code == 200
+    assert response.json.get('message') == 'Deleted'
+    with app.app_context():
+        alloc = Allocation.query.filter_by(theme_id=t_id, member_id=m_id, month='2024-07').first()
+        assert alloc is None
+
+    response = auth_client.get(f'/api/allocations?theme_id={t_id}&member_id={m_id}')
+    assert response.status_code == 200
+    assert response.json == []
 
 
 def test_insights_overview(auth_client, app):

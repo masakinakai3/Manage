@@ -21,6 +21,18 @@ function clampRate(value) {
     return Math.max(0, Math.min(100, parsed));
 }
 
+// Blank input means "no allocation" (null); an explicit "0" is a real,
+// distinct value that must be persisted and displayed as "0%".
+function parseRateInput(value) {
+    const trimmed = String(value ?? '').trim();
+    if (trimmed === '') return null;
+    return clampRate(trimmed);
+}
+
+function formatRateInputValue(rate) {
+    return rate === null || rate === undefined ? '' : String(rate);
+}
+
 function buildSuccessApplier({ optimisticSave, onSave, onCommitSuccess }) {
     return (rate) => {
         if (optimisticSave) return;
@@ -55,7 +67,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         theme_id: themeId,
         member_id: memberId,
         month,
-        allocation_rate: 0,
+        allocation_rate: null,
     }));
     const applyCommittedValue = buildSuccessApplier({ optimisticSave, onSave, onCommitSuccess });
 
@@ -81,7 +93,14 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     editor.style.left = `${Math.max(margin, left)}px`;
     editor.style.top = `${Math.max(margin, top)}px`;
 
-    input.value = initialValue;
+    // Mark the edited cell so it shows a clean, continuous blinking ring that
+    // sits above its neighbours (unlike the inset ring of `is-selected`, which
+    // gets partially overpainted by adjacent cells and the month column).
+    if (cellEl) {
+        cellEl.classList.add('is-editing');
+    }
+
+    input.value = formatRateInputValue(initialValue);
     input.focus();
     if (selectOnOpen) {
         input.select();
@@ -92,13 +111,60 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
 
     let outsideClickListener = null;
 
-    const readClampedRate = () => clampRate(input.value);
+    const readInputRate = () => parseRateInput(input.value);
 
     const sanitizeInput = () => {
         const digitsOnly = String(input.value || '').replace(/[^\d]/g, '');
         if (input.value !== digitsOnly) {
             input.value = digitsOnly;
         }
+    };
+
+    // Clearing (blank input, or the Clear button) removes the allocation
+    // entirely, distinct from committing an explicit "0".
+    const clearRate = ({ closeAfterSave = false } = {}) => {
+        if (!activeEditor) return Promise.resolve(false);
+        if (saving) {
+            if (closeAfterSave) {
+                activeEditor.closeAfterSave = true;
+            }
+            return pendingCommitPromise || Promise.resolve(false);
+        }
+
+        saving = true;
+        setSaveState('saving', 'セルをクリアしています...');
+
+        if (optimisticSave && onSave) {
+            onSave(null);
+        }
+
+        pendingCommitPromise = Promise.resolve(clearChange()).then(() => {
+            if (activeEditor) {
+                activeEditor.lastCommittedRate = null;
+            }
+            input.value = '';
+            applyCommittedValue(null);
+            setSaveState('saved', `${month} の配分をクリアしました`);
+            if (closeAfterSave || activeEditor?.closeAfterSave) {
+                closeCellEditor();
+            } else if (document.activeElement !== input) {
+                input.focus();
+                input.select();
+            } else {
+                input.select();
+            }
+            return true;
+        }).catch((err) => {
+            console.error('Failed to clear:', err);
+            setSaveState('error', 'セルのクリアに失敗しました');
+            showToast(`セルのクリアに失敗しました: ${formatError(err)}`, 'error');
+            throw err;
+        }).finally(() => {
+            saving = false;
+            pendingCommitPromise = null;
+        });
+
+        return pendingCommitPromise;
     };
 
     const save = ({ closeAfterSave = false } = {}) => {
@@ -110,12 +176,17 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
             return pendingCommitPromise || Promise.resolve(false);
         }
 
-        const clampedRate = readClampedRate();
-        if (clampedRate === activeEditor.lastCommittedRate) {
+        const parsedRate = readInputRate();
+        if (parsedRate === activeEditor.lastCommittedRate) {
             if (closeAfterSave) closeCellEditor();
             return Promise.resolve(false);
         }
 
+        if (parsedRate === null) {
+            return clearRate({ closeAfterSave });
+        }
+
+        const clampedRate = parsedRate;
         saving = true;
         activeEditor.closeAfterSave = activeEditor.closeAfterSave || closeAfterSave;
         setSaveState('saving', 'セルを保存しています...');
@@ -184,7 +255,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         if (onNavigate && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
             e.preventDefault();
             sanitizeInput();
-            const newRate = readClampedRate();
+            const newRate = readInputRate();
             const hasChanged = newRate !== activeEditor.lastCommittedRate;
             onNavigate(e.key, hasChanged, newRate);
         }
@@ -201,32 +272,9 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
     cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
     clearBtn.parentNode.replaceChild(newClearBtn, clearBtn);
 
-    const clearRate = async () => {
-        if (saving) return;
-        saving = true;
-        setSaveState('saving', 'セルをクリアしています...');
-        try {
-            await Promise.resolve(clearChange());
-            closeCellEditor();
-            if (onCommitSuccess) {
-                onCommitSuccess(0);
-            } else if (onSave) {
-                onSave(0);
-            }
-            setSaveState('saved', `${month} の配分をクリアしました`);
-        } catch (err) {
-            console.error('Failed to clear:', err);
-            setSaveState('error', 'セルのクリアに失敗しました');
-            showToast(`セルのクリアに失敗しました: ${formatError(err)}`, 'error');
-        } finally {
-            saving = false;
-            pendingCommitPromise = null;
-        }
-    };
-
     newSaveBtn.addEventListener('click', () => { void save(); });
     newCancelBtn.addEventListener('click', cancel);
-    newClearBtn.addEventListener('click', clearRate);
+    newClearBtn.addEventListener('click', () => { void clearRate({ closeAfterSave: true }); });
     input.addEventListener('input', sanitizeInput);
     input.addEventListener('keydown', handleKeydown);
 
@@ -243,7 +291,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         input,
         save,
         closeAfterSave: false,
-        lastCommittedRate: clampRate(currentRate),
+        lastCommittedRate: currentRate === null || currentRate === undefined ? null : clampRate(currentRate),
     };
 
     setTimeout(() => {
@@ -263,8 +311,8 @@ export function flushCellEditorChanges(options = {}) {
         return pendingCommitPromise || Promise.resolve(false);
     }
 
-    const clampedRate = clampRate(activeEditor.input?.value);
-    if (clampedRate === activeEditor.lastCommittedRate) {
+    const parsedRate = parseRateInput(activeEditor.input?.value);
+    if (parsedRate === activeEditor.lastCommittedRate) {
         if (close) closeCellEditor();
         return pendingCommitPromise || Promise.resolve(false);
     }
@@ -273,11 +321,12 @@ export function flushCellEditorChanges(options = {}) {
 }
 
 export function getCellEditorState() {
+    const pendingRate = activeEditor ? parseRateInput(activeEditor.input?.value) : null;
     return {
         isOpen: Boolean(activeEditor),
         isSaving: saving,
-        hasUnsavedChanges: Boolean(activeEditor) && clampRate(activeEditor.input?.value) !== activeEditor.lastCommittedRate,
-        pendingRate: activeEditor ? clampRate(activeEditor.input?.value) : null,
+        hasUnsavedChanges: Boolean(activeEditor) && pendingRate !== activeEditor.lastCommittedRate,
+        pendingRate,
         committedRate: activeEditor ? activeEditor.lastCommittedRate : null,
     };
 }
@@ -288,6 +337,9 @@ export function closeCellEditor() {
         editor.hidden = true;
     }
     if (activeEditor) {
+        if (activeEditor.cellEl) {
+            activeEditor.cellEl.classList.remove('is-editing');
+        }
         activeEditor.cleanup();
         activeEditor = null;
     }

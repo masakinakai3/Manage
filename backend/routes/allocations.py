@@ -22,8 +22,9 @@ def _upsert_allocation(theme_id, member_id, month, rate, memo=None):
     This eliminates the TOCTOU race condition where two concurrent requests
     could both see 'no existing record' and both INSERT, creating duplicates.
     """
-    if rate == 0:
-        # Delete allocation when rate is 0
+    if rate is None:
+        # Delete allocation when explicitly cleared. A rate of 0 is a
+        # deliberate value (distinct from "no allocation") and is persisted.
         Allocation.query.filter_by(
             theme_id=theme_id, member_id=member_id, month=month
         ).delete()
@@ -102,7 +103,7 @@ def list_allocations():
     if to_month:
         query = query.filter(Allocation.month <= to_month)
 
-    allocs = query.filter(Allocation.allocation_rate > 0).order_by(
+    allocs = query.order_by(
         Allocation.theme_id, Allocation.member_id, Allocation.month
     ).all()
     return jsonify([a.to_dict() for a in allocs])
@@ -151,13 +152,14 @@ def bulk_update():
         missing = [f for f in ('theme_id', 'member_id', 'month', 'allocation_rate') if f not in item]
         if missing:
             return jsonify({'error': f'Missing fields: {missing}'}), 400
-        if not isinstance(item.get('allocation_rate'), int):
-            return jsonify({'error': 'allocation_rate must be an integer'}), 400
+        rate = item.get('allocation_rate')
+        if rate is not None and not isinstance(rate, int):
+            return jsonify({'error': 'allocation_rate must be an integer or null'}), 400
         result = _upsert_allocation(
             theme_id=item['theme_id'],
             member_id=item['member_id'],
             month=item['month'],
-            rate=item['allocation_rate'],
+            rate=rate,
             memo=item.get('memo'),
         )
         if result:
@@ -202,7 +204,7 @@ def update_single():
     theme_id = data['theme_id']
     member_id = data['member_id']
     month = data['month']
-    rate = data['allocation_rate']
+    rate = data['allocation_rate']  # may be an int (incl. 0) or null to clear
 
     _upsert_allocation(
         theme_id=theme_id,
@@ -213,7 +215,7 @@ def update_single():
     )
     db.session.commit()
 
-    if rate == 0:
+    if rate is None:
         return jsonify({'message': 'Deleted'})
 
     alloc = Allocation.query.filter_by(

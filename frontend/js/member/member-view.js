@@ -21,13 +21,19 @@ let memberSearchQuery = '';
 let selectedMonth = null;
 const MEMBER_MONTH_COLUMN_WIDTH = 88;
 
+// `null` means "no allocation"; an explicit `0` is a real, distinct value.
+function normalizeMemberRate(rate) {
+    if (rate === null || rate === undefined || rate === '') return null;
+    return Math.max(0, Math.min(100, Number.parseInt(rate, 10) || 0));
+}
+
 function buildMemberAllocationSnapshot(themeId, memberId, month) {
     const current = lastAllocations.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
     return {
         theme_id: themeId,
         member_id: memberId,
         month,
-        allocation_rate: current?.allocation_rate || 0,
+        allocation_rate: current ? current.allocation_rate : null,
         memo: current?.memo || '',
     };
 }
@@ -38,7 +44,7 @@ async function applyMemberHistoryChange(data) {
 }
 
 async function commitMemberCellChange(themeId, memberId, month, allocationRate) {
-    const nextRate = Math.max(0, Math.min(100, Number.parseInt(allocationRate || '0', 10) || 0));
+    const nextRate = normalizeMemberRate(allocationRate);
     const undo = buildMemberAllocationSnapshot(themeId, memberId, month);
     const redo = {
         theme_id: themeId,
@@ -537,7 +543,7 @@ function bindTableInteractions(tbody) {
                     updateThemeCell(cell, memberId, themeId, month, newRate);
                 },
                 commitChange: (nextRate) => commitMemberCellChange(themeId, memberId, month, nextRate),
-                clearChange: () => commitMemberCellChange(themeId, memberId, month, 0),
+                clearChange: () => commitMemberCellChange(themeId, memberId, month, null),
             });
         });
     });

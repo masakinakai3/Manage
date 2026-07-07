@@ -59,26 +59,39 @@ export const HistoryManager = {
     },
 };
 
+// `null` means "no allocation" (the cell shows nothing); an explicit `0`
+// is a real, distinct value that is persisted and shown as "0%".
+function normalizeRate(rate) {
+    if (rate === null || rate === undefined || rate === '') return null;
+    return Math.max(0, Math.min(100, Number.parseInt(rate, 10) || 0));
+}
+
+// Reads a rate previously written to a cell's `data-rate` attribute, where an
+// empty string means "no allocation" rather than 0.
+function readCellRate(rawValue) {
+    return rawValue === undefined || rawValue === '' ? null : Number.parseInt(rawValue, 10);
+}
+
 function buildAllocationSnapshot(themeId, memberId, month) {
     const current = allAllocations.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
     return {
         theme_id: themeId,
         member_id: memberId,
         month,
-        allocation_rate: current?.allocation_rate || 0,
+        allocation_rate: current ? current.allocation_rate : null,
         memo: current?.memo || '',
     };
 }
 
 async function commitSingleCellChange(themeId, memberId, month, allocationRate, memo, { optimisticButton = null, successMessage = '', previousSnapshot = null, refreshAfterSave = true } = {}) {
-    const nextRate = Math.max(0, Math.min(100, Number.parseInt(allocationRate || '0', 10) || 0));
+    const nextRate = normalizeRate(allocationRate);
     const nextMemo = String(memo || '');
     const undo = previousSnapshot
         ? {
             theme_id: themeId,
             member_id: memberId,
             month,
-            allocation_rate: Math.max(0, Math.min(100, Number.parseInt(previousSnapshot.allocation_rate || '0', 10) || 0)),
+            allocation_rate: normalizeRate(previousSnapshot.allocation_rate),
             memo: String(previousSnapshot.memo || ''),
         }
         : buildAllocationSnapshot(themeId, memberId, month);
@@ -534,7 +547,7 @@ function bindControls() {
     bindHistoryInputs();
     document.getElementById('detail-prev')?.addEventListener('click', () => moveSelection(-1));
     document.getElementById('detail-next')?.addEventListener('click', () => moveSelection(1));
-    document.getElementById('detail-next-empty')?.addEventListener('click', () => jumpToMatchingCell((button) => Number.parseInt(button.dataset.rate || '0', 10) === 0));
+    document.getElementById('detail-next-empty')?.addEventListener('click', () => jumpToMatchingCell((button) => button.dataset.rate === ''));
     document.getElementById('detail-next-warning')?.addEventListener('click', () => jumpToMatchingCell((button) => button.classList.contains('rate-over')));
     document.getElementById('detail-preview-bulk')?.addEventListener('click', previewBulkUpdate);
     bindKeyboardInteractions();
@@ -824,12 +837,13 @@ function themeActionButton(theme, action) {
 
 function memberCell(theme, member, month, current) {
     const allocation = allAllocations.find((item) => item.theme_id === theme.theme_id && item.member_id === member.member_id && item.month === month);
-    const rate = allocation?.allocation_rate || 0;
+    const hasRate = Boolean(allocation);
+    const rate = hasRate ? allocation.allocation_rate : 0;
     const warning = warnings.find((item) => item.member_id === member.member_id && item.month === month);
     const memo = allocation?.memo || '';
     const previewMarkup = scenarioMemberPreviewChip(theme.theme_id, member.member_id, month);
     const previewCellClass = previewMarkup ? ' scenario-cell-highlight' : '';
-    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}${previewCellClass}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${rate}" data-memo="${escapeHtml(memo)}" title="${memo || 'No memo'}" type="button">${rate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${previewMarkup}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}${previewCellClass}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${hasRate ? rate : ''}" data-memo="${escapeHtml(memo)}" title="${memo || 'No memo'}" type="button">${hasRate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${previewMarkup}${warning ? '<span class="warning-icon">!</span>' : ''}</button></td>`;
 }
 
 function renderDetailPanel() {
@@ -1117,7 +1131,7 @@ function openEditorForButton(button, options = {}) {
     const themeId = Number.parseInt(button.dataset.theme, 10);
     const memberId = Number.parseInt(button.dataset.member, 10);
     const month = button.dataset.month;
-    const currentRate = Number.parseInt(button.dataset.rate || '0', 10);
+    const currentRate = readCellRate(button.dataset.rate);
 
     openCellEditor(
         button,
@@ -1150,7 +1164,7 @@ function openEditorForButton(button, options = {}) {
                 themeId,
                 memberId,
                 month,
-                0,
+                null,
                 button.dataset.memo || '',
                 { successMessage: `${month} 縺ｮ雋闕ｷ繧偵け繝ｪ繧｢縺励∪縺励◆` },
             ),
@@ -1200,10 +1214,10 @@ function handleEditorNavigationWithHistory(button, direction, changed, newRate) 
     }
 
     const previousSnapshot = {
-        allocation_rate: Number.parseInt(button.dataset.rate || '0', 10),
+        allocation_rate: readCellRate(button.dataset.rate),
         memo,
     };
-    const nextRate = Math.max(0, Math.min(100, Number.parseInt(newRate || '0', 10)));
+    const nextRate = normalizeRate(newRate);
     applyCellValue(button, nextRate, memo);
     moveToNext();
 
@@ -1242,7 +1256,7 @@ function handleEditorNavigation(button, direction, changed, newRate) {
         return;
     }
 
-    const nextRate = Math.max(0, Math.min(100, Number.parseInt(newRate || '0', 10)));
+    const nextRate = normalizeRate(newRate);
     applyCellValue(button, nextRate, memo);
     moveToNext();
 
@@ -1265,10 +1279,13 @@ function applyCellValue(button, rate, memo = '') {
     const themeId = Number.parseInt(button.dataset.theme, 10);
     const memberId = Number.parseInt(button.dataset.member, 10);
     const month = button.dataset.month;
-    const safeRate = Math.max(0, Math.min(100, Number.parseInt(rate || '0', 10)));
+    const safeRate = normalizeRate(rate);
+    const hasRate = safeRate !== null;
     const allocationIndex = allAllocations.findIndex((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
 
-    if (allocationIndex >= 0) {
+    if (!hasRate) {
+        if (allocationIndex >= 0) allAllocations.splice(allocationIndex, 1);
+    } else if (allocationIndex >= 0) {
         allAllocations[allocationIndex] = {
             ...allAllocations[allocationIndex],
             allocation_rate: safeRate,
@@ -1284,9 +1301,9 @@ function applyCellValue(button, rate, memo = '') {
         });
     }
 
-    button.dataset.rate = String(safeRate);
-    button.dataset.memo = memo;
-    button.title = memo || 'No memo';
+    button.dataset.rate = hasRate ? String(safeRate) : '';
+    button.dataset.memo = hasRate ? memo : '';
+    button.title = (hasRate ? memo : '') || 'No memo';
     renderMemberCellButton(button, safeRate, memberId, month);
     refreshMemberMonthState(memberId, month);
 
@@ -1299,12 +1316,13 @@ function applyCellValue(button, rate, memo = '') {
 }
 
 function renderMemberCellButton(button, rate, memberId, month) {
-    const safeRate = Math.max(0, Math.min(100, Number.parseInt(rate || '0', 10)));
+    const hasRate = rate !== null && rate !== undefined;
+    const safeRate = hasRate ? Math.max(0, Math.min(100, Number.parseInt(rate, 10) || 0)) : 0;
     const member = allMembers.find((item) => item.member_id === memberId);
     const totalRate = memberMonthTotal(memberId, month);
     const hasWarning = totalRate > (member?.capacity || 100);
     button.className = `gantt-cell ${hasWarning ? 'rate-over' : rateClass(safeRate)}`;
-    button.innerHTML = `${safeRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, Number.parseInt(button.dataset.theme, 10), memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
+    button.innerHTML = `${hasRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, Number.parseInt(button.dataset.theme, 10), memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
     syncSelectionStyles();
 }
 
@@ -1327,7 +1345,7 @@ function refreshMemberMonthState(memberId, month) {
     }
 
     document.querySelectorAll(`.gantt-cell[data-member="${memberId}"][data-month="${month}"]`).forEach((cell) => {
-        renderMemberCellButton(cell, Number.parseInt(cell.dataset.rate || '0', 10), memberId, month);
+        renderMemberCellButton(cell, readCellRate(cell.dataset.rate), memberId, month);
     });
 }
 
@@ -1629,13 +1647,13 @@ async function pasteFromClipboard(fallbackText = '') {
             const memberId = Number.parseInt(button.dataset.member, 10);
             const month = button.dataset.month;
             const currentAllocation = allAllocations.find((item) => item.theme_id === themeId && item.member_id === memberId && item.month === month);
-            const nextRate = Math.max(0, Math.min(100, Number.parseInt(value || '0', 10) || 0));
+            const nextRate = normalizeRate(value);
 
             undo.push({
                 theme_id: themeId,
                 member_id: memberId,
                 month,
-                allocation_rate: currentAllocation?.allocation_rate || 0,
+                allocation_rate: currentAllocation ? currentAllocation.allocation_rate : null,
                 memo: currentAllocation?.memo || '',
             });
             redo.push({
@@ -1691,16 +1709,16 @@ async function clearSelectedRange() {
             theme_id: themeId,
             member_id: memberId,
             month,
-            allocation_rate: currentAllocation?.allocation_rate || 0,
+            allocation_rate: currentAllocation ? currentAllocation.allocation_rate : null,
             memo: currentAllocation?.memo || '',
         });
         redo.push({
             theme_id: themeId,
             member_id: memberId,
             month,
-            allocation_rate: 0,
+            allocation_rate: null,
         });
-        applyCellValue(button, 0, currentAllocation?.memo || '');
+        applyCellValue(button, null, '');
         refreshMemberMonthState(memberId, month);
     });
 
@@ -2400,9 +2418,10 @@ function formatSummaryCellContent(theme, totalRate, month, members) {
 
 function buildMemberExportCell(theme, member, month, current) {
     const allocation = allAllocations.find((item) => item.theme_id === theme.theme_id && item.member_id === member.member_id && item.month === month);
-    const rate = allocation?.allocation_rate || 0;
+    const hasRate = Boolean(allocation);
+    const rate = hasRate ? allocation.allocation_rate : 0;
     const hasWarning = warnings.some((item) => item.member_id === member.member_id && item.month === month);
-    const text = `${rate ? `${rate}%` : ''}${hasWarning ? (rate ? '\n!' : '!') : ''}`;
+    const text = `${hasRate ? `${rate}%` : ''}${hasWarning ? (hasRate ? '\n!' : '!') : ''}`;
 
     return {
         text,

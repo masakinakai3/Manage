@@ -218,4 +218,67 @@ describe('gantt-editor regressions', () => {
         expect(commitChange).toHaveBeenCalledWith(65);
         expect(document.getElementById('cell-editor').hidden).toBe(true);
     });
+
+    it('persists an explicit 0 as a real value instead of clearing it', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onSave = vi.fn();
+        const commitChange = vi.fn(() => Promise.resolve(true));
+        const clearChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, vi.fn(), { commitChange, clearChange });
+        input.value = '0';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await Promise.resolve();
+
+        expect(commitChange).toHaveBeenCalledWith(0);
+        expect(clearChange).not.toHaveBeenCalled();
+        expect(onSave).toHaveBeenCalledWith(0);
+    });
+
+    it('treats a blank input as clearing the cell, not saving 0', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onSave = vi.fn();
+        const commitChange = vi.fn(() => Promise.resolve(true));
+        const clearChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, vi.fn(), { commitChange, clearChange });
+        input.value = '';
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        await Promise.resolve();
+
+        expect(clearChange).toHaveBeenCalled();
+        expect(commitChange).not.toHaveBeenCalled();
+        expect(onSave).toHaveBeenCalledWith(null);
+    });
+
+    it('opens with a blank input when the cell has no existing allocation', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const cell = document.getElementById('cell');
+        const input = document.getElementById('cell-editor-input');
+
+        openCellEditor(cell, 1, 2, '2026-04', null, vi.fn(), vi.fn());
+
+        expect(input.value).toBe('');
+    });
+
+    it('clicking Clear removes the allocation rather than saving 0', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onSave = vi.fn();
+        const clearChange = vi.fn(() => Promise.resolve(true));
+        const cell = document.getElementById('cell');
+        const editor = document.getElementById('cell-editor');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, onSave, vi.fn(), { clearChange });
+        document.getElementById('cell-editor-clear').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(clearChange).toHaveBeenCalled();
+        expect(onSave).toHaveBeenCalledWith(null);
+        expect(editor.hidden).toBe(true);
+    });
 });

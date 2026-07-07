@@ -995,6 +995,38 @@
     border-color: var(--color-primary) !important;
 }
 
+/* Cell currently being edited: a clean, continuous ring that blinks.
+   Uses `outline` (drawn outside the border box, never clipped by the cell's
+   own overflow) plus a raised z-index so neighbouring cells and the month
+   column highlight can't overpaint it into a broken line. */
+@keyframes cell-editing-ring {
+    0%,
+    100% {
+        outline-color: color-mix(in srgb, var(--color-primary) 55%, transparent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, transparent);
+    }
+
+    50% {
+        outline-color: var(--color-primary);
+        box-shadow: 0 0 12px 2px color-mix(in srgb, var(--color-primary) 55%, transparent);
+    }
+}
+
+.gantt-cell.is-editing {
+    position: relative;
+    z-index: 12;
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+    animation: cell-editing-ring 1.1s infinite ease-in-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #cell-editor-input,
+    .gantt-cell.is-editing {
+        animation: none;
+    }
+}
+
 /* Keyboard Focus Styles */
 .gantt-cell:focus {
     outline: 2px solid var(--color-primary);
