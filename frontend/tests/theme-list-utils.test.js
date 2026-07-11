@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { filterAndSortThemes, summarizeThemeStatuses } from '../js/theme-list-utils.js';
+import { filterAndSortThemes, getThemeCategoryTone, summarizeThemeStatuses } from '../js/theme-list-utils.js';
 
 const themes = [
     { name: 'Core Renewal', category: 'Platform', status: 'active', priority: 9, member_count: 2 },
@@ -36,5 +36,12 @@ describe('theme list filtering and summaries', () => {
         expect(completed.map((theme) => theme.name)).toEqual(['Legacy Theme']);
         expect(priorityOrder.map((theme) => theme.name)).toEqual(['Core Renewal', 'Data Cleanup', 'Legacy Theme']);
         expect(summarizeThemeStatuses(themes)).toEqual({ active: 1, planning: 1, completed: 1 });
+    });
+
+    it('assigns a stable category tone including themes without a category', () => {
+        expect(getThemeCategoryTone('Platform')).toBe(getThemeCategoryTone('Platform'));
+        expect(getThemeCategoryTone('')).toBe(getThemeCategoryTone(null));
+        expect(getThemeCategoryTone('Platform')).toBeGreaterThanOrEqual(1);
+        expect(getThemeCategoryTone('Platform')).toBeLessThanOrEqual(6);
     });
 });

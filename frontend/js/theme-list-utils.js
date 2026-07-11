@@ -29,3 +29,12 @@ export function summarizeThemeStatuses(themes) {
         return counts;
     }, {});
 }
+
+export function getThemeCategoryTone(category) {
+    const value = (category || '未設定').trim() || '未設定';
+    let hash = 0;
+    for (const character of value) {
+        hash = ((hash * 31) + character.codePointAt(0)) >>> 0;
+    }
+    return (hash % 6) + 1;
+}

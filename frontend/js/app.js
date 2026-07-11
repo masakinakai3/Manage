@@ -10,7 +10,7 @@ import { initGantt, refreshGantt, clearScenarioPreview, HistoryManager } from '.
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 import { getShortcutKey, shouldIgnoreShortcut } from './shortcut-utils.js';
-import { filterAndSortThemes, summarizeThemeStatuses } from './theme-list-utils.js';
+import { filterAndSortThemes, getThemeCategoryTone, summarizeThemeStatuses } from './theme-list-utils.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
 
@@ -520,8 +520,9 @@ function renderThemeList() {
 
     list.innerHTML = visibleThemes.map((theme) => {
         const isInactive = ['completed', 'done', 'cancelled'].includes(theme.status);
+        const categoryTone = getThemeCategoryTone(theme.category);
         return `
-            <article class="card theme-card${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}">
+            <article class="card theme-card theme-card-category-${categoryTone}${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}">
                 <div class="card-header">
                     <div class="card-title">
                         <span class="card-color-dot" style="background:${theme.color}" aria-hidden="true"></span>
