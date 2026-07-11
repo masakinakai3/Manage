@@ -528,13 +528,8 @@ function renderThemeList() {
                         ${theme.name}
                     </div>
                     <div class="card-actions">
-                        <button class="btn btn-ghost theme-edit-btn" data-edit-theme="${theme.theme_id}" type="button">詳細・編集</button>
-                        <details class="card-action-menu">
-                            <summary aria-label="${theme.name} のその他の操作">•••</summary>
-                            <div class="card-action-menu-popover">
-                                <button data-delete-theme="${theme.theme_id}" type="button">テーマを削除</button>
-                            </div>
-                        </details>
+                        <button class="btn btn-ghost theme-edit-btn" data-edit-theme="${theme.theme_id}" type="button">編集</button>
+                        <button class="btn btn-danger theme-delete-btn" data-delete-theme="${theme.theme_id}" type="button">削除</button>
                     </div>
                 </div>
                 <div class="card-meta">

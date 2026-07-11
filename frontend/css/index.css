@@ -1066,64 +1066,9 @@ body {
 }
 
 .theme-edit-btn,
-.card-action-menu > summary {
+.theme-delete-btn {
     min-width: 44px;
     min-height: 44px;
-}
-
-.card-action-menu {
-    position: relative;
-}
-
-.card-action-menu > summary {
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    color: var(--color-text-secondary);
-    cursor: pointer;
-    font-weight: 800;
-    list-style: none;
-}
-
-.card-action-menu > summary::-webkit-details-marker {
-    display: none;
-}
-
-.card-action-menu > summary:hover,
-.card-action-menu > summary:focus-visible {
-    border-color: var(--color-primary);
-    color: var(--color-text);
-}
-
-.card-action-menu-popover {
-    position: absolute;
-    z-index: 30;
-    top: calc(100% + var(--space-1));
-    right: 0;
-    width: max-content;
-    padding: var(--space-1);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-bg-elevated);
-    box-shadow: var(--shadow-lg);
-}
-
-.card-action-menu-popover button {
-    min-height: 44px;
-    padding: var(--space-2) var(--space-3);
-    border: 0;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--color-danger);
-    cursor: pointer;
-    font: inherit;
-    font-weight: 700;
-}
-
-.card-action-menu-popover button:hover,
-.card-action-menu-popover button:focus-visible {
-    background: var(--color-danger-subtle);
 }
 
 .theme-list-empty {
