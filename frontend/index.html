@@ -379,8 +379,12 @@
                 <section class="insight-layout">
                     <article class="summary-card insight-card-wide">
                         <div class="insight-scenario-card-header">
-                            <div class="summary-label">案件追加シミュレーション</div>
+                            <button id="insight-scenario-toggle" class="insight-scenario-toggle" type="button" aria-expanded="false" aria-controls="insight-scenario-body">
+                                <span class="summary-label">案件追加シミュレーション</span>
+                                <span class="insight-scenario-toggle-icon" aria-hidden="true">▸</span>
+                            </button>
                         </div>
+                        <div id="insight-scenario-body" hidden>
                         <form id="insight-scenario-form" class="insight-scenario-form insight-scenario-form-enhanced">
                             <label class="form-field insight-scenario-field-wide">
                                 <span>提案モード</span>
@@ -420,12 +424,13 @@
                         </form>
                         <p id="insight-scenario-hint" class="summary-subtext">工数と期間から、割当候補・後ろ倒し候補・開始可能月候補を提案します。</p>
                         <div id="insight-scenario-results" class="insight-scenario-results"></div>
+                        </div>
                     </article>
                 </section>
                 <section class="insight-layout">
                     <article class="summary-card insight-card-wide">
                         <div class="summary-label">テーマ負荷の推移</div>
-                        <p class="summary-subtext">100% = メンバー1人の全稼働(1人月)。月合計は全テーマ横断の総負荷です。列をクリックすると内訳を固定表示できます。</p>
+                        <p class="summary-subtext">100% = メンバー1人の全稼働(1人月)。高さは月合計負荷の最大値が基準です。負荷がチーム総容量(稼働メンバーのキャパシティ合計)に近づくと赤の破線で総容量ラインを表示し、超過した月のTotalは赤字になります。列をクリックすると内訳を固定表示できます。</p>
                         <div id="dashboard-project-ribbon"></div>
                     </article>
                 </section>

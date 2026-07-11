@@ -111,7 +111,8 @@ function renderProjectRibbon(targetId, ribbonData) {
     }
 
     activeRibbonData = ribbonData;
-    target.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: false });
+    const baseWidth = Math.max(target.clientWidth - 4, 640);
+    target.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: false, baseWidth });
     bindRibbonScaleControls(target);
     bindRibbonDetailInteractions(target, ribbonData);
     target.querySelector('[data-ribbon-expand]')?.addEventListener('click', () => {
@@ -123,10 +124,11 @@ function renderProjectRibbon(targetId, ribbonData) {
     }
 }
 
-function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
+function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 0 } = {}) {
     const items = trimRibbonItems(ribbonData.items || []);
     const xScale = Math.min(1.4, Math.max(0.45, ribbonXAxisScale || 1));
-    const width = Math.max(fullscreen ? 1120 : 640, items.length * (fullscreen ? 220 : 140) * xScale);
+    const minWidth = fullscreen ? 1120 : Math.max(baseWidth, 640);
+    const width = Math.max(minWidth, items.length * (fullscreen ? 220 : 140) * xScale);
     const height = fullscreen ? 760 : 340;
     const padding = fullscreen
         ? { top: 28, right: 24, bottom: 72, left: 56 }
@@ -136,7 +138,13 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
     const columnWidth = Math.min(fullscreen ? 80 : 68, Math.max(38, innerWidth / Math.max(items.length * 2.6, 1)));
     const plotWidth = Math.max(innerWidth - columnWidth - 12, 0);
     const step = items.length > 1 ? plotWidth / (items.length - 1) : 0;
-    const maxTotalLoad = Math.max(ribbonData.max_total_load || 0, 1);
+    // 高さの基準は月合計負荷の最大値。総容量は負荷がその近辺(1.2倍以内)に達した月がある場合のみ
+    // 目盛りに取り込み、赤破線として描画する。
+    const maxLoad = Math.max(ribbonData.max_total_load || 0, 1);
+    const nearbyCapacities = items
+        .map((item) => Number(item.capacity || 0))
+        .filter((value) => value > 0 && value <= maxLoad * 1.2);
+    const maxTotalLoad = Math.max(maxLoad, ...nearbyCapacities, 1);
 
     const monthSegments = [];
     const totalsByTheme = new Map();
@@ -206,6 +214,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         monthSegments.push({
             month: item.month,
             totalLoad,
+            capacity: Number(item.capacity || 0),
             x,
             segments,
         });
@@ -262,17 +271,32 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             `;
         });
 
-    const capacityY = padding.top + innerHeight - ((innerHeight * 100) / maxTotalLoad);
-    const capacityLine = maxTotalLoad > 100 ? `
-        <line x1="${padding.left}" y1="${capacityY}" x2="${width - padding.right}" y2="${capacityY}" class="project-ribbon__capacity-line"></line>
-        <text x="${width - padding.right}" y="${capacityY - 6}" text-anchor="end" class="project-ribbon__capacity-label">定員 100%</text>
-    ` : '';
+    const capacityPoints = monthSegments.filter((segment) => segment.capacity > 0 && segment.capacity <= maxTotalLoad);
+    const capacityLine = capacityPoints.length ? (() => {
+        const yFor = (value) => padding.top + innerHeight - ((innerHeight * value) / maxTotalLoad);
+        const halfSpan = Math.max(step / 2, columnWidth / 2);
+        const path = capacityPoints.map((segment, index) => {
+            const y = yFor(segment.capacity);
+            const xStart = Math.max(segment.x - halfSpan, padding.left);
+            const xEnd = Math.min(segment.x + halfSpan, width - padding.right);
+            return `${index === 0 ? `M ${xStart} ${y}` : `L ${xStart} ${y}`} L ${xEnd} ${y}`;
+        }).join(' ');
+        const last = capacityPoints[capacityPoints.length - 1];
+        return `
+            <path d="${path}" fill="none" class="project-ribbon__capacity-line"></path>
+            <text x="${width - padding.right}" y="${yFor(last.capacity) - 6}" text-anchor="end" class="project-ribbon__capacity-label">総容量 ${escapeHtml(String(last.capacity))}%</text>
+        `;
+    })() : '';
 
     const monthHotspots = monthSegments.map((item) => {
         const details = [...item.segments]
             .sort((left, right) => right.load - left.load || left.name.localeCompare(right.name, 'ja'))
             .map((segment) => `${segment.name}: ${segment.load}%`);
-        const tooltip = [`${item.month} 合計 ${item.totalLoad}%`, ...(details.length ? details : ['内訳なし']), 'クリックで内訳を固定表示'].join('\n');
+        const tooltip = [
+            `${item.month} 合計 ${item.totalLoad}%${item.capacity > 0 ? ` / 総容量 ${item.capacity}%` : ''}`,
+            ...(details.length ? details : ['内訳なし']),
+            'クリックで内訳を固定表示',
+        ].join('\n');
         return `
             <rect
                 x="${item.x - (columnWidth / 2)}"
@@ -354,12 +378,15 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         `;
     }));
 
-    const monthLabels = monthSegments.map((item) => `
+    const monthLabels = monthSegments.map((item) => {
+        const isOverCapacity = item.capacity > 0 ? item.totalLoad > item.capacity : item.totalLoad > 100;
+        return `
         <g>
             <text x="${item.x}" y="${height - 28}" text-anchor="middle" class="project-ribbon__month-label">${escapeHtml(formatRibbonMonth(item.month))}</text>
-            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label${item.totalLoad > 100 ? ' project-ribbon__total-label--over' : ''}">Total ${escapeHtml(String(item.totalLoad))}%</text>
+            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label${isOverCapacity ? ' project-ribbon__total-label--over' : ''}">Total ${escapeHtml(String(item.totalLoad))}%</text>
         </g>
-    `);
+    `;
+    });
 
     const orderedThemeTotals = Array.from(totalsByTheme.entries())
         .sort((left, right) => right[1] - left[1]);
@@ -460,7 +487,7 @@ function showRibbonDetail(container, ribbonData, month, { toggle = false } = {})
     const projects = [...(item.projects || [])].sort((left, right) => (right.load || 0) - (left.load || 0));
     detail.innerHTML = `
         <div class="project-ribbon__detail-header">
-            <strong>${escapeHtml(formatRibbonMonth(month))} の内訳(合計 ${escapeHtml(String(item.total_load || 0))}%)</strong>
+            <strong>${escapeHtml(formatRibbonMonth(month))} の内訳(合計 ${escapeHtml(String(item.total_load || 0))}%${Number(item.capacity || 0) > 0 ? ` / 総容量 ${escapeHtml(String(item.capacity))}%` : ''})</strong>
             <button class="btn btn-ghost btn-sm" type="button" data-ribbon-detail-close>閉じる</button>
         </div>
         ${projects.length ? projects.map((project) => `
@@ -638,7 +665,20 @@ function initScenarioPlanner() {
     const form = document.getElementById('insight-scenario-form');
     const modeSelect = document.getElementById('insight-scenario-mode');
     const clearButton = document.getElementById('insight-scenario-clear');
+    const toggleButton = document.getElementById('insight-scenario-toggle');
+    const body = document.getElementById('insight-scenario-body');
     if (!form) return;
+
+    if (toggleButton && body && !toggleButton.dataset.bound) {
+        toggleButton.dataset.bound = 'true';
+        toggleButton.addEventListener('click', () => {
+            const expanded = toggleButton.getAttribute('aria-expanded') === 'true';
+            toggleButton.setAttribute('aria-expanded', String(!expanded));
+            body.hidden = expanded;
+            const icon = toggleButton.querySelector('.insight-scenario-toggle-icon');
+            if (icon) icon.textContent = expanded ? '▸' : '▾';
+        });
+    }
 
     if (!form.dataset.bound) {
         form.dataset.bound = 'true';

@@ -500,6 +500,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         for month in dashboard_months
     ]
 
+    capacity_by_month = {row["month"]: row["capacity"] for row in forecast_context["monthly"]}
     project_ribbon = []
     theme_order = [
         theme_id
@@ -543,6 +544,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         project_ribbon.append({
             "month": month,
             "total_load": month_totals[month],
+            "capacity": capacity_by_month.get(month, 0),
             "projects": projects,
         })
 
@@ -556,6 +558,7 @@ def _build_dashboard(themes, members, allocations, from_month=None, to_month=Non
         "project_ribbon": {
             "months": dashboard_months,
             "max_total_load": max(month_totals.values(), default=0),
+            "max_capacity": max(capacity_by_month.values(), default=0),
             "theme_order": theme_order,
             "items": project_ribbon,
         },

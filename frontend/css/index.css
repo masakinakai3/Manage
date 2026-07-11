@@ -2264,7 +2264,29 @@ td.out-period {
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
+}
+
+.insight-scenario-card-header:has(+ #insight-scenario-body:not([hidden])) {
     margin-bottom: var(--space-2);
+}
+
+.insight-scenario-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    background: none;
+    border: none;
+    padding: var(--space-1) 0;
+    cursor: pointer;
+    color: inherit;
+    text-align: left;
+}
+
+.insight-scenario-toggle-icon {
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
 }
 
 .insight-actions {
@@ -2526,8 +2548,8 @@ td.out-period {
 
 .project-ribbon {
     display: grid;
-    gap: var(--space-3);
-    margin-top: var(--space-3);
+    gap: var(--space-2);
+    margin-top: var(--space-2);
 }
 
 .project-ribbon--fullscreen {
@@ -2586,7 +2608,7 @@ td.out-period {
     display: block;
     width: auto;
     min-width: 640px;
-    height: 340px;
+    height: auto;
 }
 
 .project-ribbon__bg {
