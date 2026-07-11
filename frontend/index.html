@@ -436,11 +436,26 @@
             </div>
 
             <div id="view-themes" class="view" hidden>
-                <div class="view-header">
-                    <h2>テーマ一覧</h2>
-                    <div class="view-controls">
-                        <input type="text" id="theme-list-search" class="view-input" placeholder="テーマ名、カテゴリで検索" autocomplete="off">
-                        <select id="theme-list-sort" class="view-select">
+                <div class="view-header theme-list-header">
+                    <div class="view-heading">
+                        <h2>テーマ一覧</h2>
+                        <p id="theme-list-summary" class="view-subtitle" aria-live="polite">テーマを読み込んでいます</p>
+                    </div>
+                    <div class="view-controls theme-list-controls">
+                        <input type="search" id="theme-list-search" class="view-input" placeholder="テーマ名、カテゴリで検索" aria-label="テーマ名またはカテゴリで検索" autocomplete="off">
+                        <select id="theme-list-status-filter" class="view-select" aria-label="ステータスで絞り込み">
+                            <option value="">すべてのステータス</option>
+                            <option value="planning">計画中</option>
+                            <option value="active">進行中</option>
+                            <option value="hold">保留</option>
+                            <option value="stop">停止</option>
+                            <option value="completed">完了</option>
+                            <option value="cancelled">中止</option>
+                        </select>
+                        <select id="theme-list-category-filter" class="view-select" aria-label="カテゴリで絞り込み">
+                            <option value="">すべてのカテゴリ</option>
+                        </select>
+                        <select id="theme-list-sort" class="view-select" aria-label="テーマの並び順">
                             <option value="name-asc">名前順</option>
                             <option value="priority-desc">優先度順</option>
                             <option value="status-asc">ステータス順</option>
@@ -448,6 +463,10 @@
                         </select>
                         <button id="add-theme-btn" class="btn btn-primary" type="button">テーマ追加</button>
                     </div>
+                </div>
+                <div id="theme-list-active-filters" class="theme-list-active-filters" hidden>
+                    <span id="theme-list-filter-label"></span>
+                    <button id="theme-list-clear-filters" class="btn btn-ghost btn-sm" type="button">条件をクリア</button>
                 </div>
                 <div class="card-list" id="theme-list"></div>
             </div>

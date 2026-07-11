@@ -10,6 +10,7 @@ import { initGantt, refreshGantt, clearScenarioPreview, HistoryManager } from '.
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 import { getShortcutKey, shouldIgnoreShortcut } from './shortcut-utils.js';
+import { filterAndSortThemes, summarizeThemeStatuses } from './theme-list-utils.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
 
@@ -57,10 +58,12 @@ let currentView = 'gantt';
 let savedViewsCache = [];
 let lastModalTrigger = null;
 let appInitialized = false;
+let themeListCache = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
     initUi();
     initAuth();
+    initSidebarToggleScrollBehavior();
     setSaveState('idle', '起動中...');
 
     try {
@@ -75,6 +78,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     showLogin();
 });
+
+function initSidebarToggleScrollBehavior() {
+    const toggle = document.getElementById('sidebar-toggle');
+    const updateVisibility = () => {
+        const scrollTop = Math.max(
+            document.body.scrollTop || 0,
+            document.documentElement.scrollTop || 0,
+            window.scrollY || 0,
+        );
+        toggle.classList.toggle('is-content-scrolled', window.innerWidth <= 1024 && scrollTop > 24);
+    };
+    window.addEventListener('scroll', updateVisibility, { passive: true, capture: true });
+    window.addEventListener('resize', updateVisibility, { passive: true });
+    updateVisibility();
+}
 
 async function showApp() {
     document.getElementById('login-screen').hidden = true;
@@ -428,8 +446,17 @@ async function switchView(viewName) {
 
 function initThemeManagement() {
     document.getElementById('add-theme-btn').addEventListener('click', () => openThemeModal());
-    document.getElementById('theme-list-search').addEventListener('input', loadThemeList);
-    document.getElementById('theme-list-sort').addEventListener('change', loadThemeList);
+    document.getElementById('theme-list-search').addEventListener('input', renderThemeList);
+    document.getElementById('theme-list-status-filter').addEventListener('change', renderThemeList);
+    document.getElementById('theme-list-category-filter').addEventListener('change', renderThemeList);
+    document.getElementById('theme-list-sort').addEventListener('change', renderThemeList);
+    document.getElementById('theme-list-clear-filters').addEventListener('click', () => {
+        document.getElementById('theme-list-search').value = '';
+        document.getElementById('theme-list-status-filter').value = '';
+        document.getElementById('theme-list-category-filter').value = '';
+        renderThemeList();
+        document.getElementById('theme-list-search').focus();
+    });
     document.addEventListener('open-theme-edit', async (event) => {
         const themeId = Number.parseInt(event.detail?.themeId, 10);
         if (!themeId) return;
@@ -441,59 +468,93 @@ function initThemeManagement() {
 
 async function loadThemeList() {
     const list = document.getElementById('theme-list');
-    const search = document.getElementById('theme-list-search').value.trim().toLowerCase();
-    const sort = document.getElementById('theme-list-sort').value;
-
     try {
-        let allThemes = await themesApi.list();
+        themeListCache = await themesApi.list();
+        syncThemeCategoryFilter(themeListCache);
+        renderThemeList();
+    } catch (error) {
+        list.innerHTML = `<p class="summary-subtext">${formatError(error, 'テーマ一覧の取得に失敗しました。')}</p>`;
+    }
+}
 
-        allThemes = allThemes.filter((theme) => {
-            if (!search) return true;
-            return [theme.name, theme.category || ''].some((value) => value.toLowerCase().includes(search));
+function syncThemeCategoryFilter(themes) {
+    const select = document.getElementById('theme-list-category-filter');
+    const selected = select.value;
+    const categories = [...new Set(themes.map((theme) => (theme.category || '').trim()).filter(Boolean))]
+        .sort((left, right) => left.localeCompare(right, 'ja'));
+    select.replaceChildren(new Option('すべてのカテゴリ', ''));
+    categories.forEach((category) => select.add(new Option(category, category)));
+    select.value = categories.includes(selected) ? selected : '';
+}
+
+function renderThemeList() {
+    const list = document.getElementById('theme-list');
+    const search = document.getElementById('theme-list-search').value;
+    const status = document.getElementById('theme-list-status-filter').value;
+    const category = document.getElementById('theme-list-category-filter').value;
+    const sort = document.getElementById('theme-list-sort').value;
+    const hasFilters = Boolean(search || status || category);
+
+    const visibleThemes = filterAndSortThemes(themeListCache, {
+        search,
+        status,
+        category,
+        sort,
+        statusLabels: STATUS_LABELS,
+    });
+
+    updateThemeListSummary(visibleThemes.length, hasFilters);
+
+    if (visibleThemes.length === 0) {
+        list.innerHTML = `
+            <div class="theme-list-empty">
+                <strong>条件に一致するテーマがありません</strong>
+                <span>検索語や絞り込み条件を変更してください。</span>
+                ${hasFilters ? '<button class="btn btn-ghost btn-sm" data-clear-theme-filters type="button">条件をクリア</button>' : ''}
+            </div>`;
+        list.querySelector('[data-clear-theme-filters]')?.addEventListener('click', () => {
+            document.getElementById('theme-list-clear-filters').click();
         });
+        return;
+    }
 
-        allThemes.sort((left, right) => {
-            if (sort === 'priority-desc') return (right.priority || 0) - (left.priority || 0);
-            if (sort === 'status-asc') return (STATUS_LABELS[left.status] || left.status).localeCompare(STATUS_LABELS[right.status] || right.status, 'ja');
-            if (sort === 'member-desc') return (right.member_count || 0) - (left.member_count || 0);
-            return left.name.localeCompare(right.name, 'ja');
-        });
-
-        if (allThemes.length === 0) {
-            list.innerHTML = '<p class="summary-subtext">条件に一致するテーマがありません。</p>';
-            return;
-        }
-
-        list.innerHTML = allThemes.map((theme) => `
-            <div class="card">
+    list.innerHTML = visibleThemes.map((theme) => {
+        const isInactive = ['completed', 'done', 'cancelled'].includes(theme.status);
+        return `
+            <article class="card theme-card${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}">
                 <div class="card-header">
                     <div class="card-title">
-                        <span class="card-color-dot" style="background:${theme.color}"></span>
+                        <span class="card-color-dot" style="background:${theme.color}" aria-hidden="true"></span>
                         ${theme.name}
                     </div>
                     <div class="card-actions">
-                        <button class="btn btn-ghost btn-sm" data-edit-theme="${theme.theme_id}" type="button">編集</button>
-                        <button class="btn btn-danger btn-sm" data-delete-theme="${theme.theme_id}" type="button">削除</button>
+                        <button class="btn btn-ghost theme-edit-btn" data-edit-theme="${theme.theme_id}" type="button">詳細・編集</button>
+                        <details class="card-action-menu">
+                            <summary aria-label="${theme.name} のその他の操作">•••</summary>
+                            <div class="card-action-menu-popover">
+                                <button data-delete-theme="${theme.theme_id}" type="button">テーマを削除</button>
+                            </div>
+                        </details>
                     </div>
                 </div>
                 <div class="card-meta">
                     <span class="status-badge status-${theme.status}">${STATUS_LABELS[theme.status] || theme.status}</span>
-                    <span>${theme.category || 'カテゴリ未設定'}</span>
-                    <span>メンバー ${theme.member_count || 0} 名</span>
-                    <span>優先度 ${theme.priority ?? 0}</span>
+                    <span><span class="card-meta-label">カテゴリ</span>${theme.category || '未設定'}</span>
+                    <span><span class="card-meta-label">担当</span>${theme.member_count || 0}名</span>
+                    <span class="theme-priority-value">P${theme.priority ?? 0}</span>
                 </div>
-            </div>
-        `).join('');
+            </article>`;
+    }).join('');
 
-        list.querySelectorAll('[data-edit-theme]').forEach((button) => {
-            button.addEventListener('click', () => {
-                const theme = allThemes.find((item) => item.theme_id === Number.parseInt(button.dataset.editTheme, 10));
-                openThemeModal(theme);
-            });
+    list.querySelectorAll('[data-edit-theme]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const theme = visibleThemes.find((item) => item.theme_id === Number.parseInt(button.dataset.editTheme, 10));
+            openThemeModal(theme);
         });
+    });
 
-        list.querySelectorAll('[data-delete-theme]').forEach((button) => {
-            button.addEventListener('click', async () => {
+    list.querySelectorAll('[data-delete-theme]').forEach((button) => {
+        button.addEventListener('click', async () => {
                 const shouldDelete = await showConfirmDialog({
                     title: 'テーマを削除しますか',
                     message: '関連する割当データも削除されます。この操作は元に戻せません。',
@@ -515,11 +576,21 @@ async function loadThemeList() {
                     setSaveState('error', 'テーマ削除に失敗しました');
                     showToast(`テーマ削除に失敗しました: ${formatError(error)}`, 'error');
                 }
-            });
         });
-    } catch (error) {
-        list.innerHTML = `<p class="summary-subtext">${formatError(error, 'テーマ一覧の取得に失敗しました。')}</p>`;
-    }
+    });
+}
+
+function updateThemeListSummary(visibleCount, hasFilters) {
+    const total = themeListCache.length;
+    const statusCounts = summarizeThemeStatuses(themeListCache);
+    const summary = document.getElementById('theme-list-summary');
+    summary.textContent = `${hasFilters ? `表示${visibleCount}件 / ` : ''}全${total}件 ・ 進行中${statusCounts.active || 0} ・ 計画中${statusCounts.planning || 0} ・ 完了${statusCounts.completed || 0} ・ 中止${statusCounts.cancelled || 0}`;
+
+    const activeFilters = document.getElementById('theme-list-active-filters');
+    activeFilters.hidden = !hasFilters;
+    document.getElementById('theme-list-filter-label').textContent = hasFilters
+        ? `${visibleCount}件を表示中（全${total}件）`
+        : '';
 }
 
 async function openThemeModal(theme = null) {
