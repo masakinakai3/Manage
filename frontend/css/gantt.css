@@ -651,6 +651,12 @@
 .gantt-cell.rate-over-moderate { background:#522b24 !important; color:#ffb38f !important; }
 .gantt-cell.rate-over-severe { background:#562329 !important; color:#ff9da5 !important; }
 .gantt-cell.rate-over-critical { background:#721f2b !important; color:#ffd6da !important; }
+
+.gantt-table tr:not(.theme-row-completed) .gantt-cell:is(.rate-low, .rate-mid, .rate-high, .rate-full, .rate-over) {
+    border-right: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
 .gantt-cell.cell-explicit-zero { color:#aeb9ce; background:#161a22; }
 .gantt-cell.cell-explicit-zero::after { content:'0'; position:absolute; opacity:.22; font-size:.58rem; transform:translateY(9px); }
 
@@ -1318,6 +1324,10 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
 [data-theme="light"] .gantt-cell.rate-over-moderate { background:#ffedd5 !important; color:#9a3412 !important; }
 [data-theme="light"] .gantt-cell.rate-over-severe { background:#fee2e2 !important; color:#b91c1c !important; }
 [data-theme="light"] .gantt-cell.rate-over-critical { background:#fecaca !important; color:#7f1d1d !important; }
+[data-theme="light"] .gantt-table tr:not(.theme-row-completed) .gantt-cell:is(.rate-low, .rate-mid, .rate-high, .rate-full, .rate-over) {
+    border-right-color: rgba(15, 23, 42, 0.16);
+    border-bottom-color: rgba(15, 23, 42, 0.11);
+}
 [data-theme="light"] .gantt-cell.cell-explicit-zero { background:#f1f5f9; color:#64748b; }
 [data-theme="light"] .member-name { color:#334155; }
 [data-theme="light"] .member-department { color:#64748b; }
