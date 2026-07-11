@@ -847,7 +847,8 @@ function memberCell(theme, member, month, current) {
     const previewCellClass = previewMarkup ? ' scenario-cell-highlight' : '';
     const explicitZeroClass = hasRate && rate === 0 ? ' cell-explicit-zero' : '';
     const warningClass = warning ? ' capacity-warning' : '';
-    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${rateClass(rate)}${explicitZeroClass}${warningClass}${previewCellClass}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${hasRate ? rate : ''}" data-memo="${escapeHtml(memo)}" title="${memo || (hasRate ? `配分 ${rate}%` : '未入力')}" type="button">${hasRate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${previewMarkup}${warning ? '<span class="warning-icon" aria-label="稼働上限超過">超過</span>' : ''}</button></td>`;
+    const emptyClass = hasRate ? '' : ' cell-unset';
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${rateClass(rate)}${explicitZeroClass}${emptyClass}${warningClass}${previewCellClass}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${hasRate ? rate : ''}" data-memo="${escapeHtml(memo)}" title="${memo || (hasRate ? `配分 ${rate}%` : '未入力')}" type="button">${hasRate ? `${rate}%` : '<span class="gantt-empty-mark" aria-hidden="true">-</span>'}${diffChip(rate, month, theme.theme_id, member.member_id)}${previewMarkup}${warning ? '<span class="warning-icon" aria-label="稼働上限超過">超過</span>' : ''}</button></td>`;
 }
 
 function renderDetailPanel() {
@@ -1327,8 +1328,8 @@ function renderMemberCellButton(button, rate, memberId, month) {
     const member = allMembers.find((item) => item.member_id === memberId);
     const totalRate = memberMonthTotal(memberId, month);
     const hasWarning = totalRate > (member?.capacity || 100);
-    button.className = `gantt-cell ${rateClass(safeRate)}${safeRate === 0 ? ' cell-explicit-zero' : ''}${hasWarning ? ' capacity-warning' : ''}`;
-    button.innerHTML = `${hasRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, Number.parseInt(button.dataset.theme, 10), memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
+    button.className = `gantt-cell ${rateClass(safeRate)}${hasRate && safeRate === 0 ? ' cell-explicit-zero' : ''}${hasRate ? '' : ' cell-unset'}${hasWarning ? ' capacity-warning' : ''}`;
+    button.innerHTML = `${hasRate ? `${safeRate}%` : '<span class="gantt-empty-mark" aria-hidden="true">-</span>'}${diffChip(safeRate, month, Number.parseInt(button.dataset.theme, 10), memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
     syncSelectionStyles();
 }
 

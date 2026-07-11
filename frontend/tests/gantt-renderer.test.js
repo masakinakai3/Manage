@@ -575,7 +575,8 @@ describe('gantt-renderer regressions', () => {
         const emptyCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-05"]');
         expect(zeroCell?.textContent).toContain('0%');
         expect(zeroCell?.classList.contains('cell-explicit-zero')).toBe(true);
-        expect(emptyCell?.textContent).toBe('');
+        expect(emptyCell?.textContent).toBe('-');
+        expect(emptyCell?.classList.contains('cell-unset')).toBe(true);
         expect(emptyCell?.classList.contains('cell-explicit-zero')).toBe(false);
     });
 

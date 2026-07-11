@@ -660,6 +660,15 @@
 .gantt-cell.cell-explicit-zero { color:#aeb9ce; background:#161a22; }
 .gantt-cell.cell-explicit-zero::after { content:'0'; position:absolute; opacity:.22; font-size:.58rem; transform:translateY(9px); }
 
+.gantt-cell.cell-unset {
+    background: repeating-linear-gradient(135deg, transparent, transparent 6px, color-mix(in srgb, var(--color-border) 45%, transparent) 6px, color-mix(in srgb, var(--color-border) 45%, transparent) 7px);
+}
+
+.gantt-empty-mark {
+    color: var(--color-text-muted);
+    opacity: 0.65;
+}
+
 .gantt-cell .warning-icon {
     position: absolute;
     top: 2px;
