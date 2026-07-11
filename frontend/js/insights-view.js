@@ -406,6 +406,9 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
     const expandControl = fullscreen ? '' : `
         <button class="btn btn-ghost btn-sm" type="button" data-ribbon-expand>全画面で表示</button>
     `;
+    const chartHelp = `
+        <span class="project-ribbon__chart-help">100% = メンバー1人の全稼働(1人月)。高さは月合計負荷の最大値が基準です。負荷がチーム総容量(稼働メンバーのキャパシティ合計)に近づくと赤の破線で総容量ラインを表示し、超過した月のTotalは赤字になります。列をクリックすると内訳を固定表示できます。</span>
+    `;
     const fullscreenControls = fullscreen ? `
         <div class="project-ribbon__toolbar">
             <button class="btn btn-ghost btn-sm project-ribbon__nav" type="button" data-ribbon-nav="prev">前へ</button>
@@ -417,7 +420,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
     return `
         <div class="project-ribbon${fullscreen ? ' project-ribbon--fullscreen' : ''}">
             ${fullscreenControls}
-            <div class="project-ribbon__toolbar project-ribbon__toolbar--scale">${expandControl}${scaleControl}</div>
+            <div class="project-ribbon__toolbar project-ribbon__toolbar--scale">${chartHelp}${expandControl}${scaleControl}</div>
             <div class="project-ribbon__scroll" ${fullscreen ? `data-ribbon-step="${step}" data-ribbon-width="${width}"` : ''}>
                 <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-label="テーマ負荷の推移チャート">
                     <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>

@@ -2587,6 +2587,20 @@ td.out-period {
     justify-content: flex-end;
 }
 
+.project-ribbon__chart-help {
+    flex: 1 1 420px;
+    min-width: 0;
+    margin-right: auto;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.project-ribbon__toolbar--scale > .btn,
+.project-ribbon__toolbar--scale > .project-ribbon__scale-control {
+    flex: 0 0 auto;
+}
+
 .project-ribbon__scale-control {
     display: inline-flex;
     align-items: center;
