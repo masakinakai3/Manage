@@ -313,9 +313,13 @@
             </div>
 
             <div id="view-member-load" class="view" hidden>
-                <div class="view-header">
-                    <h2>メンバー負荷</h2>
-                    <div class="view-controls">
+                <div class="view-header member-load-header">
+                    <div class="member-load-title">
+                        <h2>メンバー負荷</h2>
+                        <p>メンバーごとの負荷、余力、過負荷の原因を月別に確認できます。</p>
+                    </div>
+                    <div class="view-controls member-load-controls" aria-label="メンバー負荷の表示設定">
+                        <div class="member-control-group member-control-period" aria-label="集計期間">
                         <div class="scale-switcher" id="member-scale-switcher">
                             <button class="scale-btn active" data-scale="1" type="button">1M</button>
                             <button class="scale-btn" data-scale="3" type="button">3M</button>
@@ -328,15 +332,34 @@
                             <option value="current-quarter">現在四半期</option>
                             <option value="current-year">今年</option>
                         </select>
-                        <input type="text" id="member-search" class="view-input" placeholder="メンバー名、部署、テーマ名で検索" autocomplete="off">
+                        </div>
+                        <div class="member-control-group member-control-search">
+                            <label class="sr-only" for="member-search">メンバー、部署、テーマを検索</label>
+                            <input type="text" id="member-search" class="view-input" placeholder="メンバー名、部署、テーマ名で検索" autocomplete="off">
+                        </div>
+                        <div class="member-control-group member-control-actions">
                         <div class="month-nav">
                             <button id="member-prev" class="btn btn-icon" type="button">前へ</button>
                             <button id="member-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
                             <button id="member-next" class="btn btn-icon" type="button">次へ</button>
                         </div>
+                            <button class="btn btn-ghost btn-sm" id="member-export-csv" type="button">CSV 出力</button>
+                        </div>
                     </div>
                 </div>
                 <section id="member-load-summary" class="summary-grid"></section>
+                <section class="member-load-guide" aria-label="負荷表示の凡例">
+                    <div class="member-load-legend">
+                        <strong>負荷の見方</strong>
+                        <span><i class="member-legend-swatch load-low"></i>余力大 1〜30%</span>
+                        <span><i class="member-legend-swatch load-mid"></i>余力あり 31〜60%</span>
+                        <span><i class="member-legend-swatch load-full"></i>上限付近 61〜100%</span>
+                        <span><i class="member-legend-swatch load-over"></i>上限超過</span>
+                        <span><i class="member-legend-empty"></i>未割当</span>
+                    </div>
+                    <p>セルを選ぶと内訳を固定表示できます。現在月をもう一度選ぶと強調を解除します。</p>
+                </section>
+                <div id="member-load-detail" class="member-load-detail-panel" hidden aria-live="polite"></div>
                 <div class="member-load-container" id="member-load-container">
                     <table class="member-load-table" id="member-load-table">
                         <thead id="member-load-thead"></thead>

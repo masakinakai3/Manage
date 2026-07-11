@@ -19,6 +19,10 @@ let visibleCount = 14;
 let scale = 1;
 let memberSearchQuery = '';
 let selectedMonth = null;
+let memberDecisionFilter = 'all';
+let lastMemberLoads = {};
+let lastWarnings = [];
+let lastVisibleMonths = [];
 const MEMBER_MONTH_COLUMN_WIDTH = 88;
 
 // `null` means "no allocation"; an explicit `0` is a real, distinct value.
@@ -116,6 +120,9 @@ export async function refreshMemberView() {
         ]);
 
         lastAllocations = allocationsList;
+        lastMemberLoads = memberLoads;
+        lastWarnings = warnings;
+        lastVisibleMonths = months;
         renderSummary(memberLoads, warnings);
         renderTable(months, memberLoads, warnings, allocationsList);
     } catch (error) {
@@ -128,16 +135,6 @@ export async function refreshMemberView() {
 }
 
 function setupControls() {
-    const switcher = document.getElementById('member-scale-switcher');
-    if (switcher && !document.getElementById('member-export-csv')) {
-        const container = document.createElement('div');
-        container.className = 'member-toolbar-actions';
-        container.innerHTML = `
-            <button class="btn btn-ghost btn-sm" id="member-export-csv" type="button">CSV 出力</button>
-        `;
-        switcher.parentNode.insertBefore(container, switcher);
-    }
-
     document.getElementById('member-export-csv')?.addEventListener('click', exportCSV);
 
     document.querySelectorAll('#member-scale-switcher .scale-btn').forEach((button) => {
@@ -201,56 +198,6 @@ function syncScaleButtons() {
 function renderSummary(memberLoads, warnings) {
     const summary = document.getElementById('member-load-summary');
     if (!summary) return;
-
-    {
-        const summaryMembersWithData = allMembers.length;
-        let summaryOverloadedMembers = 0;
-        let summaryAverageLoad = 0;
-
-        allMembers.forEach((member) => {
-            const loads = Object.values(memberLoads[member.member_id] || {});
-            const maxLoad = loads.length ? Math.max(...loads) : 0;
-            const avg = loads.length ? Math.round(loads.reduce((sum, value) => sum + value, 0) / loads.length) : 0;
-            summaryAverageLoad += avg;
-
-            if (maxLoad > member.capacity) summaryOverloadedMembers += 1;
-        });
-
-        const avgLoadDisplay = summaryMembersWithData > 0 ? Math.round(summaryAverageLoad / summaryMembersWithData) : 0;
-
-        summary.innerHTML = `
-            <article class="summary-card member-load-summary-card">
-                <div class="member-load-summary-main">
-                    <div class="summary-label">平均負荷</div>
-                    <div class="summary-value">${avgLoadDisplay}%</div>
-                </div>
-                <div class="summary-subtext member-load-summary-meta">全メンバーの月平均</div>
-            </article>
-            <article class="summary-card member-load-summary-card">
-                <div class="member-load-summary-main">
-                    <div class="summary-label">過負荷メンバー</div>
-                    <div class="summary-value">${summaryOverloadedMembers}</div>
-                </div>
-                <div class="summary-subtext member-load-summary-meta">警告セル ${warnings.length} 件</div>
-            </article>
-        `;
-        return;
-
-        summary.innerHTML = `
-            <article class="summary-card">
-                <div class="summary-label">平均負荷</div>
-                <div class="summary-value">${avgLoadDisplay}%</div>
-                <div class="summary-subtext">全メンバーの月平均</div>
-            </article>
-            <article class="summary-card">
-                <div class="summary-label">過負荷メンバー</div>
-                <div class="summary-value">${summaryOverloadedMembers}</div>
-                <div class="summary-subtext">警告セル ${warnings.length} 件</div>
-            </article>
-        `;
-        return;
-    }
-
     const membersWithData = allMembers.length;
     let overloadedMembers = 0;
     let slackMembers = 0;
@@ -266,35 +213,48 @@ function renderSummary(memberLoads, warnings) {
         if (maxLoad > member.capacity) overloadedMembers += 1;
         if (maxLoad === 0) {
             unassignedMembers += 1;
-        } else if (maxLoad < Math.max(30, Math.round(member.capacity * 0.5))) {
+        } else if (maxLoad < Math.round(member.capacity * 0.5)) {
             slackMembers += 1;
         }
     });
 
     const avgLoadDisplay = membersWithData > 0 ? Math.round(averageLoad / membersWithData) : 0;
 
+    const rangeLabel = lastVisibleMonths.length
+        ? `${shortenMonth(lastVisibleMonths[0])}〜${shortenMonth(lastVisibleMonths[lastVisibleMonths.length - 1])}`
+        : '表示期間';
+
     summary.innerHTML = `
-        <article class="summary-card">
+        <article class="summary-card member-load-summary-card member-summary-static">
             <div class="summary-label">平均負荷</div>
             <div class="summary-value">${avgLoadDisplay}%</div>
-            <div class="summary-subtext">全メンバーの月平均</div>
+            <div class="summary-subtext">${rangeLabel}・全${membersWithData}名の月平均</div>
         </article>
-        <article class="summary-card">
-            <div class="summary-label">過負荷メンバー</div>
+        <button class="summary-card member-load-summary-card member-summary-action${memberDecisionFilter === 'overloaded' ? ' active' : ''}" type="button" data-member-filter="overloaded" aria-pressed="${memberDecisionFilter === 'overloaded'}">
+            <div class="summary-label">過負荷</div>
             <div class="summary-value">${overloadedMembers}</div>
-            <div class="summary-subtext">警告セル ${warnings.length} 件</div>
-        </article>
-        <article class="summary-card">
+            <div class="summary-subtext">警告セル ${warnings.length}件を表示</div>
+        </button>
+        <button class="summary-card member-load-summary-card member-summary-action${memberDecisionFilter === 'slack' ? ' active' : ''}" type="button" data-member-filter="slack" aria-pressed="${memberDecisionFilter === 'slack'}">
             <div class="summary-label">余力あり</div>
             <div class="summary-value">${slackMembers}</div>
-            <div class="summary-subtext">上限の 50% 未満</div>
-        </article>
-        <article class="summary-card">
+            <div class="summary-subtext">期間最大が上限の50%未満</div>
+        </button>
+        <button class="summary-card member-load-summary-card member-summary-action${memberDecisionFilter === 'unassigned' ? ' active' : ''}" type="button" data-member-filter="unassigned" aria-pressed="${memberDecisionFilter === 'unassigned'}">
             <div class="summary-label">未割当</div>
             <div class="summary-value">${unassignedMembers}</div>
             <div class="summary-subtext">全期間で配分なし</div>
-        </article>
+        </button>
     `;
+
+    summary.querySelectorAll('[data-member-filter]').forEach((button) => {
+        button.addEventListener('click', () => {
+            const next = button.dataset.memberFilter;
+            memberDecisionFilter = memberDecisionFilter === next ? 'all' : next;
+            renderSummary(lastMemberLoads, lastWarnings);
+            renderTable(lastVisibleMonths, lastMemberLoads, lastWarnings, lastAllocations);
+        });
+    });
 }
 
 function renderTable(months, memberLoads, warnings, allocationsList) {
@@ -305,7 +265,10 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
     const warningSet = new Set(warnings.map((warning) => `${warning.member_id}-${warning.month}`));
     const memberThemeLoads = buildMemberThemeLoads(allocationsList);
 
-    const filteredMembers = allMembers.filter((member) => matchesMemberSearch(member, memberThemeLoads[member.member_id] || {}));
+    const filteredMembers = allMembers.filter((member) => (
+        matchesMemberSearch(member, memberThemeLoads[member.member_id] || {})
+        && matchesMemberDecisionFilter(member, memberLoads[member.member_id] || {})
+    ));
     syncMemberSearchControls(filteredMembers.length);
 
     let html = '';
@@ -317,8 +280,9 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
 
         html += `<tr class="member-row" data-member-row="${member.member_id}">`;
         html += `<td><div class="member-row-header">`;
-        html += hasThemes ? `<div class="toggle-btn" data-toggle="${member.member_id}">▶</div>` : '<div style="width:20px"></div>';
-        html += `<div>${member.display_name} <span class="member-capacity">(${member.capacity}% / ${member.department || '部署未設定'})</span></div>`;
+        html += hasThemes ? `<button class="toggle-btn" data-toggle="${member.member_id}" type="button" aria-expanded="false" aria-label="${escapeHtml(member.display_name)}のテーマ内訳を展開">▶</button>` : '<span class="toggle-placeholder" aria-hidden="true"></span>';
+        html += `<div class="member-identity"><strong>${escapeHtml(member.display_name)}</strong><span class="member-department${member.department ? '' : ' missing'}">${escapeHtml(member.department || '部署未設定')}</span></div>`;
+        html += `<span class="member-capacity" title="月間稼働上限">上限 ${member.capacity}%</span>`;
         html += `</div></td>`;
 
         months.forEach((month) => {
@@ -328,9 +292,13 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
             const { barHtml, details } = buildStackedBar(month, memberThemes, member.capacity);
             const detailsJson = details.length > 0 ? encodeURIComponent(JSON.stringify(details)) : '';
 
-            html += `<td class="${month === current ? 'month-current' : ''}" data-member-month="${month}" data-member-cell="${member.member_id}-${month}" data-member-id="${member.member_id}" data-month="${month}" data-details="${detailsJson}">`;
+            const excess = Math.max(0, load - member.capacity);
+            const stateLabel = load === 0 ? '未割当' : (isOver ? `上限超過 ${excess}%` : `上限 ${member.capacity}%`);
+            html += `<td class="${month === current ? 'month-current' : ''}${load === 0 ? ' member-cell-empty' : ''}" tabindex="0" role="button" aria-label="${escapeHtml(member.display_name)} ${shortenMonth(month)} ${load}% ${stateLabel}" data-member-month="${month}" data-member-cell="${member.member_id}-${month}" data-member-id="${member.member_id}" data-month="${month}" data-details="${detailsJson}">`;
             if (load > 0) {
-                html += `<div class="member-cell-inner"><span class="load-cell ${className}">${load}%</span>${barHtml}</div>`;
+                html += `<div class="member-cell-inner"><span class="load-cell ${className}">${load}%${isOver ? `<small>超過 +${excess}%</small>` : ''}</span>${barHtml}</div>`;
+            } else {
+                html += '<span class="member-empty-mark" aria-hidden="true">—</span>';
             }
             html += `</td>`;
         });
@@ -344,11 +312,11 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
             const themeLoads = memberThemes[themeId];
 
             html += `<tr class="theme-row hidden" data-parent="${member.member_id}">`;
-            html += `<td><div class="theme-row-content"><span class="card-color-dot" style="background:${themeColor};width:8px;height:8px"></span>${themeName}</div></td>`;
+            html += `<td><div class="theme-row-content"><span class="card-color-dot" style="background:${themeColor};width:8px;height:8px" aria-hidden="true"></span><span class="theme-row-label">${escapeHtml(themeName)}</span><span class="theme-row-kind">テーマ内訳</span></div></td>`;
 
             months.forEach((month) => {
                 const rate = aggregateRate(themeLoads, month, scale);
-                html += `<td class="member-theme-cell ${month === current ? 'month-current' : ''}" data-member-month="${month}" data-member="${member.member_id}" data-theme="${themeId}" data-month="${month}" data-rate="${rate}">`;
+                html += `<td class="member-theme-cell ${month === current ? 'month-current' : ''}" tabindex="0" role="button" aria-label="${escapeHtml(member.display_name)} ${escapeHtml(themeName)} ${shortenMonth(month)} ${rate}%を編集" data-member-month="${month}" data-member="${member.member_id}" data-theme="${themeId}" data-month="${month}" data-rate="${rate}">`;
                 html += renderMemberThemeCellContent(theme, member, month, rate);
                 html += `</td>`;
             });
@@ -380,7 +348,7 @@ function renderHeader(months) {
     </th>`;
     months.forEach((month) => {
         const label = formatMonthHeader(month, scale);
-        html += `<th class="${month === current ? 'month-current' : ''}" data-member-month="${month}" style="width:${MEMBER_MONTH_COLUMN_WIDTH}px;min-width:${MEMBER_MONTH_COLUMN_WIDTH}px;max-width:${MEMBER_MONTH_COLUMN_WIDTH}px;">${label.replace('\n', '<br>')}</th>`;
+        html += `<th class="${month === current ? 'month-current' : ''}" tabindex="0" role="button" aria-label="${shortenMonth(month)}列を強調" data-member-month="${month}" style="width:${MEMBER_MONTH_COLUMN_WIDTH}px;min-width:${MEMBER_MONTH_COLUMN_WIDTH}px;max-width:${MEMBER_MONTH_COLUMN_WIDTH}px;">${label.replace('\n', '<br>')}${month === current ? '<span class="current-month-label">現在</span>' : ''}</th>`;
     });
     html += '</tr>';
     thead.innerHTML = html;
@@ -394,6 +362,7 @@ function bindHeaderActions() {
         document.querySelectorAll('.toggle-btn').forEach((button) => {
             button.classList.add('expanded');
             button.textContent = '▼';
+            button.setAttribute('aria-expanded', 'true');
         });
     });
 
@@ -403,6 +372,7 @@ function bindHeaderActions() {
         document.querySelectorAll('.toggle-btn').forEach((button) => {
             button.classList.remove('expanded');
             button.textContent = '▶';
+            button.setAttribute('aria-expanded', 'false');
         });
     });
 }
@@ -426,6 +396,16 @@ function matchesMemberSearch(member, memberThemes) {
 
     return [member.display_name, member.department || '', themeNames]
         .some((value) => value.toLowerCase().includes(memberSearchQuery));
+}
+
+function matchesMemberDecisionFilter(member, loadsByMonth) {
+    if (memberDecisionFilter === 'all') return true;
+    const loads = Object.values(loadsByMonth || {});
+    const maxLoad = loads.length ? Math.max(...loads) : 0;
+    if (memberDecisionFilter === 'overloaded') return maxLoad > member.capacity;
+    if (memberDecisionFilter === 'unassigned') return maxLoad === 0;
+    if (memberDecisionFilter === 'slack') return maxLoad > 0 && maxLoad < Math.round(member.capacity * 0.5);
+    return true;
 }
 
 function syncMemberSearchControls(filteredCount = allMembers.length) {
@@ -486,6 +466,11 @@ function bindTableInteractions(tbody) {
             const month = element.dataset.memberMonth || null;
             setSelectedMonth(selectedMonth === month ? null : month);
         });
+        element.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            element.click();
+        });
     });
 
     tbody.querySelectorAll('.toggle-btn').forEach((button) => {
@@ -494,22 +479,19 @@ function bindTableInteractions(tbody) {
             const memberId = button.dataset.toggle;
             const expanded = button.classList.toggle('expanded');
             button.textContent = expanded ? '▼' : '▶';
+            button.setAttribute('aria-expanded', String(expanded));
             tbody.querySelectorAll(`tr[data-parent="${memberId}"]`).forEach((row) => row.classList.toggle('hidden'));
         });
     });
 
     tbody.querySelectorAll('td[data-member-cell]').forEach((cell) => {
+        cell.addEventListener('click', () => {
+            const details = parseCellDetails(cell);
+            const member = allMembers.find((item) => item.member_id === Number.parseInt(cell.dataset.memberId, 10));
+            if (member) showDetailPanel(member, cell.dataset.month, details);
+        });
         cell.addEventListener('mouseenter', (event) => {
-            const encoded = cell.dataset.details;
-            if (!encoded) return;
-
-            let details;
-            try {
-                details = JSON.parse(decodeURIComponent(encoded));
-            } catch {
-                return;
-            }
-
+            const details = parseCellDetails(cell);
             if (!details || details.length === 0) return;
             const member = allMembers.find((item) => item.member_id === Number.parseInt(cell.dataset.memberId, 10));
             if (!member) return;
@@ -546,7 +528,22 @@ function bindTableInteractions(tbody) {
                 clearChange: () => commitMemberCellChange(themeId, memberId, month, null),
             });
         });
+        cell.addEventListener('keydown', (event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            cell.click();
+        });
     });
+}
+
+function parseCellDetails(cell) {
+    const encoded = cell.dataset.details;
+    if (!encoded) return [];
+    try {
+        return JSON.parse(decodeURIComponent(encoded));
+    } catch {
+        return [];
+    }
 }
 
 function setSelectedMonth(month) {
@@ -781,6 +778,32 @@ async function exportCSV() {
     } finally {
         setBusyState(false);
     }
+}
+
+function showDetailPanel(member, month, details) {
+    const panel = document.getElementById('member-load-detail');
+    if (!panel) return;
+    const total = details.reduce((sum, detail) => sum + detail.rate, 0);
+    const excess = Math.max(0, total - member.capacity);
+    panel.hidden = false;
+    panel.innerHTML = `
+        <div class="member-detail-heading">
+            <div><strong>${escapeHtml(member.display_name)}・${shortenMonth(month)}</strong><span>${escapeHtml(member.department || '部署未設定')} / 上限 ${member.capacity}%</span></div>
+            <button class="btn btn-ghost btn-sm" type="button" data-close-member-detail aria-label="負荷内訳を閉じる">閉じる</button>
+        </div>
+        <div class="member-detail-breakdown">
+            ${details.length ? details.map((detail) => `<span><i class="card-color-dot" style="background:${detail.color}" aria-hidden="true"></i>${escapeHtml(detail.theme_name)} <strong>${detail.rate}%</strong></span>`).join('') : '<span class="member-detail-empty">この月は割当がありません。</span>'}
+        </div>
+        <div class="member-detail-total${excess > 0 ? ' over' : ''}">
+            <span>合計 <strong>${total}%</strong></span>
+            <span>上限 <strong>${member.capacity}%</strong></span>
+            <span>${excess > 0 ? `上限超過 <strong>+${excess}%</strong>` : `余力 <strong>${Math.max(0, member.capacity - total)}%</strong>`}</span>
+        </div>
+    `;
+    panel.querySelector('[data-close-member-detail]')?.addEventListener('click', () => {
+        panel.hidden = true;
+        panel.innerHTML = '';
+    });
 }
 
 function showDetailPopup(event, member, month, details) {

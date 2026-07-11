@@ -123,11 +123,13 @@ function renderBaseDom() {
             <button class="scale-btn" data-scale="3" type="button">3</button>
         </div>
         <input id="member-search" type="text">
+        <button id="member-export-csv" type="button"></button>
         <button id="member-prev" type="button"></button>
         <button id="member-next" type="button"></button>
         <button id="member-today" type="button"></button>
         <select id="member-period-preset"><option value="rolling-6" selected>rolling-6</option></select>
         <section id="member-load-summary"></section>
+        <div id="member-load-detail" hidden></div>
         <table>
             <thead id="member-load-thead"></thead>
             <tbody id="member-load-tbody"></tbody>
@@ -282,7 +284,7 @@ describe('member-view milestones', () => {
         expect(document.querySelector('td[data-member-cell="10-2026-05"]')?.classList.contains('month-selected')).toBe(false);
     });
 
-    it('renders compact single-line summary cards', async () => {
+    it('renders decision-ready summary cards', async () => {
         const { refreshMemberView } = await import('../js/member/member-view.js');
 
         await refreshMemberView();
@@ -290,14 +292,53 @@ describe('member-view milestones', () => {
         const summary = document.getElementById('member-load-summary');
         const labels = Array.from(summary?.querySelectorAll('.summary-label') || []).map((node) => node.textContent);
 
-        expect(summary?.querySelectorAll('.summary-card')).toHaveLength(2);
-        expect(summary?.querySelectorAll('.member-load-summary-card')).toHaveLength(2);
-        expect(summary?.querySelectorAll('.member-load-summary-main')).toHaveLength(2);
-        expect(labels).toEqual(['平均負荷', '過負荷メンバー']);
-        expect(summary?.textContent).toContain('全メンバーの月平均');
-        expect(summary?.textContent).toContain('警告セル 0 件');
-        expect(summary?.textContent).not.toContain('余力あり');
-        expect(summary?.textContent).not.toContain('未割当');
+        expect(summary?.querySelectorAll('.summary-card')).toHaveLength(4);
+        expect(summary?.querySelectorAll('.member-load-summary-card')).toHaveLength(4);
+        expect(summary?.querySelectorAll('.member-summary-action')).toHaveLength(3);
+        expect(labels).toEqual(['平均負荷', '過負荷', '余力あり', '未割当']);
+        expect(summary?.textContent).toContain('全1名の月平均');
+        expect(summary?.textContent).toContain('警告セル 0件を表示');
+    });
+
+    it('filters the table from summary cards and clears on repeat click', async () => {
+        membersList.mockResolvedValue([
+            { member_id: 10, display_name: 'Alice', department: 'Dev', capacity: 100 },
+            { member_id: 20, display_name: 'Bob', department: 'Ops', capacity: 100 },
+        ]);
+        memberLoads.mockResolvedValue({
+            10: { '2026-04': 120 },
+            20: { '2026-04': 20 },
+        });
+        warnings.mockResolvedValue([{ member_id: 10, month: '2026-04' }]);
+
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        document.querySelector('[data-member-filter="overloaded"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.querySelectorAll('tr.member-row')).toHaveLength(1);
+        expect(document.querySelector('tr.member-row')?.textContent).toContain('Alice');
+        expect(document.querySelector('[data-member-filter="overloaded"]')?.getAttribute('aria-pressed')).toBe('true');
+
+        document.querySelector('[data-member-filter="overloaded"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.querySelectorAll('tr.member-row')).toHaveLength(2);
+    });
+
+    it('uses accessible expand controls and pins member details on click', async () => {
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        const toggle = document.querySelector('.toggle-btn');
+        expect(toggle?.tagName).toBe('BUTTON');
+        expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+        toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+
+        const summaryCell = document.querySelector('td[data-member-cell]');
+        expect(summaryCell?.getAttribute('tabindex')).toBe('0');
+        summaryCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.getElementById('member-load-detail')?.hidden).toBe(false);
+        expect(document.getElementById('member-load-detail')?.textContent).toContain('Alice');
+        expect(document.getElementById('member-load-detail')?.textContent).toContain('上限 100%');
     });
 
     it('places member expand controls beside the member column header', async () => {
