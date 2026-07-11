@@ -839,11 +839,15 @@ function memberCell(theme, member, month, current) {
     const allocation = allAllocations.find((item) => item.theme_id === theme.theme_id && item.member_id === member.member_id && item.month === month);
     const hasRate = Boolean(allocation);
     const rate = hasRate ? allocation.allocation_rate : 0;
-    const warning = warnings.find((item) => item.member_id === member.member_id && item.month === month);
+    const warning = hasRate
+        ? warnings.find((item) => item.member_id === member.member_id && item.month === month)
+        : null;
     const memo = allocation?.memo || '';
     const previewMarkup = scenarioMemberPreviewChip(theme.theme_id, member.member_id, month);
     const previewCellClass = previewMarkup ? ' scenario-cell-highlight' : '';
-    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${warning ? 'rate-over' : rateClass(rate)}${previewCellClass}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${hasRate ? rate : ''}" data-memo="${escapeHtml(memo)}" title="${memo || 'メモなし'}" type="button">${hasRate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${previewMarkup}${warning ? '<span class="warning-icon" aria-label="稼働上限超過">超過</span>' : ''}</button></td>`;
+    const explicitZeroClass = hasRate && rate === 0 ? ' cell-explicit-zero' : '';
+    const warningClass = warning ? ' capacity-warning' : '';
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell ${rateClass(rate)}${explicitZeroClass}${warningClass}${previewCellClass}" data-theme="${theme.theme_id}" data-member="${member.member_id}" data-month="${month}" data-rate="${hasRate ? rate : ''}" data-memo="${escapeHtml(memo)}" title="${memo || (hasRate ? `配分 ${rate}%` : '未入力')}" type="button">${hasRate ? `${rate}%` : ''}${diffChip(rate, month, theme.theme_id, member.member_id)}${previewMarkup}${warning ? '<span class="warning-icon" aria-label="稼働上限超過">超過</span>' : ''}</button></td>`;
 }
 
 function renderDetailPanel() {
@@ -1323,7 +1327,7 @@ function renderMemberCellButton(button, rate, memberId, month) {
     const member = allMembers.find((item) => item.member_id === memberId);
     const totalRate = memberMonthTotal(memberId, month);
     const hasWarning = totalRate > (member?.capacity || 100);
-    button.className = `gantt-cell ${hasWarning ? 'rate-over' : rateClass(safeRate)}`;
+    button.className = `gantt-cell ${rateClass(safeRate)}${safeRate === 0 ? ' cell-explicit-zero' : ''}${hasWarning ? ' capacity-warning' : ''}`;
     button.innerHTML = `${hasRate ? `${safeRate}%` : ''}${diffChip(safeRate, month, Number.parseInt(button.dataset.theme, 10), memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
     syncSelectionStyles();
 }
@@ -2113,7 +2117,16 @@ function getGroupKey(theme) {
     if (groupBy === 'dev-rank') return `Rank ${getDevRankLabel(theme.dev_rank)}`;
     return theme.category || 'Uncategorized';
 }
-function rateClass(rate) { if (rate <= 0) return ''; if (rate <= 30) return 'rate-low'; if (rate <= 60) return 'rate-mid'; if (rate < 100) return 'rate-high'; if (rate === 100) return 'rate-full'; return 'rate-over'; }
+function rateClass(rate) {
+    if (rate <= 0) return '';
+    if (rate <= 30) return 'rate-low';
+    if (rate <= 60) return 'rate-mid';
+    if (rate < 100) return 'rate-high';
+    if (rate === 100) return 'rate-full';
+    if (rate <= 125) return 'rate-over rate-over-moderate';
+    if (rate <= 150) return 'rate-over rate-over-severe';
+    return 'rate-over rate-over-critical';
+}
 function csvEscape(value) { const text = String(value ?? ''); return /[",\r\n]|^\s|\s$/.test(text) ? `"${text.replace(/"/g, '""')}"` : text; }
 function getExportCellText(value) { if (value && typeof value === 'object') return value.text ?? ''; return value ?? ''; }
 export function buildGanttGridCsvContent() {
@@ -2158,10 +2171,12 @@ function buildSummaryTooltip(theme, month, members, totalRate) {
 
 function renderThemeSummaryCellMarkup(theme, month, current, members) {
     const total = sumThemeRate(theme.theme_id, month, members);
+    const hasExplicitAllocation = allAllocations.some((item) => item.theme_id === theme.theme_id && item.month === month);
     const tooltip = escapeHtmlAttr(buildSummaryTooltip(theme, month, members, total));
     const previewChip = scenarioThemePreviewChip(theme.theme_id, month);
     const previewCellClass = previewChip ? ' scenario-cell-highlight' : '';
-    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell gantt-summary-cell ${rateClass(total)}${previewCellClass}" data-theme-id="${theme.theme_id}" data-month="${month}" title="${tooltip}" type="button">${formatSummaryCellContent(theme, total, month, members)}${previewChip}</button>${milestoneChips(theme, month)}</td>`;
+    const explicitZeroClass = hasExplicitAllocation && total === 0 ? ' cell-explicit-zero' : '';
+    return `<td class="${month === current ? 'month-current' : ''}" data-gantt-month="${month}"><button class="gantt-cell gantt-summary-cell ${rateClass(total)}${explicitZeroClass}${previewCellClass}" data-theme-id="${theme.theme_id}" data-month="${month}" title="${tooltip}" type="button">${formatSummaryCellContent(theme, total, month, members, hasExplicitAllocation)}${previewChip}</button>${milestoneChips(theme, month)}</td>`;
 }
 
 function syncFilterInputs() {
@@ -2384,12 +2399,13 @@ function formatMemberExportLabel(member) {
 
 function buildSummaryExportCell(theme, month, members, current) {
     const rate = sumThemeRate(theme.theme_id, month, members);
+    const hasExplicitAllocation = allAllocations.some((item) => item.theme_id === theme.theme_id && item.month === month);
     const isDevComplete = getThemeDevCompleteItems(theme).some((item) => monthBucketIncludes(item.month, month, scale));
     const milestones = getThemeMilestones(theme)
         .filter((item) => monthBucketIncludes(item.month, month, scale))
         .map((item) => item.label || 'Milestone');
     const textParts = [];
-    const rateText = formatRateValue(rate);
+    const rateText = formatRateValue(rate, hasExplicitAllocation);
 
     if (isDevComplete) {
         textParts.push(rateText ? `★${rateText}` : '★');
@@ -2409,12 +2425,12 @@ function buildSummaryExportCell(theme, month, members, current) {
     };
 }
 
-function formatSummaryCellContent(theme, totalRate, month, members) {
+function formatSummaryCellContent(theme, totalRate, month, members, showZero = false) {
     const devCompleteItem = getThemeDevCompleteItems(theme).find((item) => monthBucketIncludes(item.month, month, scale));
     const isDevComplete = Boolean(devCompleteItem);
     const primaryLabel = isDevComplete
-        ? `<span class="gantt-star-label ${devCompleteItem.is_completed ? 'completed' : ''}" title="開発完了月">★${formatRateValue(totalRate) || ''}</span>`
-        : `<span class="gantt-summary-value">${formatRateValue(totalRate)}</span>`;
+        ? `<span class="gantt-star-label ${devCompleteItem.is_completed ? 'completed' : ''}" title="開発完了月">★${formatRateValue(totalRate, showZero) || ''}</span>`
+        : `<span class="gantt-summary-value">${formatRateValue(totalRate, showZero)}</span>`;
     return `${primaryLabel}${diffChip(totalRate, month, theme.theme_id, null, members)}`;
 }
 
@@ -2434,8 +2450,8 @@ function buildMemberExportCell(theme, member, month, current) {
     };
 }
 
-function formatRateValue(rate) {
-    return rate ? `${rate}%` : '';
+function formatRateValue(rate, showZero = false) {
+    return rate || showZero ? `${rate}%` : '';
 }
 
 function monthBucketIncludes(targetMonth, periodStart, step) {
@@ -2457,13 +2473,17 @@ function milestoneChips(theme, month) {
     const matches = getThemeMilestones(theme)
         .filter((item) => monthBucketIncludes(item.month, month, scale));
     if (matches.length === 0) return '';
-    const chips = matches.map((item) => {
+    const visibleMatches = matches.slice(0, 2);
+    const chips = visibleMatches.map((item) => {
         const label = escapeHtml(item.label || 'Milestone');
         const completedClass = item.is_completed ? 'completed' : '';
         const tooltip = escapeHtmlAttr(`${theme.name}\n${item.month}\n${item.label || 'Milestone'}`);
         return `<button class="gantt-milestone-chip ${completedClass}" data-theme-id="${theme.theme_id}" type="button" title="${tooltip}">${label}</button>`;
     }).join('');
-    return `<div class="gantt-milestones">${chips}</div>`;
+    const remainder = matches.length > visibleMatches.length
+        ? `<button class="gantt-milestone-chip gantt-milestone-count" data-theme-id="${theme.theme_id}" type="button" title="${escapeHtmlAttr(matches.slice(2).map((item) => item.label || 'Milestone').join('\n'))}">+${matches.length - visibleMatches.length}</button>`
+        : '';
+    return `<div class="gantt-milestones">${chips}${remainder}</div>`;
 }
 
 function renderMobileThemeList(themes, months) {
@@ -2543,7 +2563,7 @@ function renderTable(months) {
                 ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}">⠿</span>`
                 : '';
             rows.push(`<tr class="gantt-row-summary${completedRowClass}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}">▾</span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member${completedRowClass} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span>${member.display_name}</span><span class="member-capacity">${member.department || '所属なし'}・稼働上限 ${member.capacity}%</span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+            members.forEach((member) => rows.push(`<tr class="gantt-row-member${completedRowClass} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">上限 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
 

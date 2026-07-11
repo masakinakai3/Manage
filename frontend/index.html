@@ -230,12 +230,23 @@
 
                 <div class="gantt-workspace">
                     <div class="gantt-container" id="gantt-container">
-                        <div class="gantt-legend" aria-label="ガントチャートの凡例">
-                            <span><i class="legend-swatch legend-normal"></i>通常</span>
-                            <span><i class="legend-swatch legend-warning"></i>稼働上限超過</span>
-                            <span><i class="legend-swatch legend-completed"></i>完了</span>
-                            <span><strong>★</strong> 開発完了月</span>
-                        </div>
+                        <details class="gantt-legend" aria-label="ガントチャートの凡例" open>
+                            <summary>凡例</summary>
+                            <div class="gantt-legend-items">
+                                <span><i class="legend-swatch legend-low"></i>1～30%</span>
+                                <span><i class="legend-swatch legend-mid"></i>31～60%</span>
+                                <span><i class="legend-swatch legend-high"></i>61～99%</span>
+                                <span><i class="legend-swatch legend-full"></i>100%</span>
+                                <span><i class="legend-swatch legend-over"></i>101～125%</span>
+                                <span><i class="legend-swatch legend-critical"></i>151%以上</span>
+                                <span><i class="legend-zero">0</i>明示的な0%</span>
+                                <span><i class="legend-swatch legend-empty"></i>未入力</span>
+                                <span><i class="legend-swatch legend-completed"></i>完了</span>
+                                <span><i class="legend-outline legend-current"></i>現在月</span>
+                                <span><i class="legend-outline legend-selected"></i>選択セル</span>
+                                <span><strong>★</strong> 開発完了月</span>
+                            </div>
+                        </details>
                         <div class="gantt-floating-actions">
                             <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたむ</button>

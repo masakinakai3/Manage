@@ -562,6 +562,35 @@ describe('gantt-renderer regressions', () => {
         expect(summaryCell?.textContent).toContain('20%');
     });
 
+    it('distinguishes an explicitly saved zero allocation from an empty cell', async () => {
+        visibleMonths = ['2026-04', '2026-05'];
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 0, memo: '' },
+        ];
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const zeroCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-04"]');
+        const emptyCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-05"]');
+        expect(zeroCell?.textContent).toContain('0%');
+        expect(zeroCell?.classList.contains('cell-explicit-zero')).toBe(true);
+        expect(emptyCell?.textContent).toBe('');
+        expect(emptyCell?.classList.contains('cell-explicit-zero')).toBe(false);
+    });
+
+    it('uses a critical visual tier for allocations above 150 percent', async () => {
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 160, memo: '' },
+        ];
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const cell = document.querySelector('.gantt-cell[data-theme][data-month="2026-04"]');
+        expect(cell?.classList.contains('rate-over-critical')).toBe(true);
+    });
+
     it('returns to insights and clears the scenario preview', async () => {
         const { refreshGantt, showScenarioPreview } = await import('../js/gantt/gantt-renderer.js');
 
