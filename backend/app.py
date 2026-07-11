@@ -63,7 +63,12 @@ def create_app(test_config=None):
     # Determine paths
     dist_folder = _resolve_dist_folder()
 
-    app = Flask(__name__, static_folder=dist_folder, static_url_path='', template_folder=dist_folder)
+    # Do not mount Flask's static endpoint at '/'.  Doing so registers a
+    # catch-all static route before the SPA route below and makes the packaged
+    # one-file app return 404 for its start page.  The SPA route serves hashed
+    # assets from dist directly, while this reserved path remains available for
+    # any Flask-managed static files.
+    app = Flask(__name__, static_folder=dist_folder, static_url_path='/static', template_folder=dist_folder)
 
     # Configuration
     base_dir = os.path.abspath(os.path.dirname(__file__))

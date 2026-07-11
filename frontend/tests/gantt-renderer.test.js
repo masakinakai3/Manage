@@ -661,7 +661,7 @@ describe('gantt-renderer regressions', () => {
         expect(dataset.rows).toEqual([
             {
                 type: 'summary',
-                label: 'Theme A / Rank S / Active',
+                label: 'Theme A / Rank S / 進行中',
                 color: '#00aaff',
                 values: [{
                     text: '20%\nReview',
@@ -691,7 +691,7 @@ describe('gantt-renderer regressions', () => {
 
         expect(buildGanttGridCsvContent()).toBe([
             'Theme / Member,2026-04',
-            'Theme A / Rank S / Active,"20%\nReview"',
+            'Theme A / Rank S / 進行中,"20%\nReview"',
             'Alice (Dev / Capacity 100%),20%',
         ].join('\r\n'));
     });

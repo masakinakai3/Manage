@@ -346,16 +346,80 @@
 }
 
 .theme-row-completed .theme-status.status-completed {
-    background: rgba(14, 165, 233, 0.28) !important;
-    color: #e0f2fe !important;
-    border-color: rgba(125, 211, 252, 0.6) !important;
-    box-shadow: inset 0 0 0 1px rgba(224, 242, 254, 0.12);
+    background: var(--color-bg-card) !important;
+    color: var(--color-text-muted) !important;
+    border-color: var(--color-border) !important;
+    box-shadow: none;
 }
 
 .theme-row-completed .gantt-milestone-chip {
-    background: rgba(56, 189, 248, 0.2) !important;
-    border-color: rgba(125, 211, 252, 0.5) !important;
-    color: #dbeafe !important;
+    background: var(--color-bg-card) !important;
+    border-color: var(--color-border) !important;
+    color: var(--color-text-muted) !important;
+}
+
+.theme-row-completed td,
+.theme-row-completed .gantt-cell,
+.theme-row-completed .theme-name-text,
+.theme-row-completed .member-capacity,
+.theme-row-completed .theme-priority-badge,
+.theme-row-completed .gantt-star-label {
+    color: var(--color-text-muted) !important;
+    background-color: var(--color-bg-card) !important;
+    border-color: var(--color-border) !important;
+    text-shadow: none !important;
+    filter: grayscale(1);
+}
+
+.warning-icon {
+    display: inline-flex;
+    margin-left: 4px;
+    padding: 1px 4px;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    font-size: 0.58rem;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: .02em;
+}
+
+.gantt-legend {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    padding: 0 var(--space-2) var(--space-2);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+}
+.gantt-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend-swatch { width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--color-border); }
+.legend-normal { background: rgba(34,197,94,.45); }
+.legend-warning { background: repeating-linear-gradient(135deg, rgba(239,68,68,.85) 0 3px, rgba(239,68,68,.25) 3px 6px); }
+.legend-completed { background: var(--color-bg-card); filter: grayscale(1); }
+
+.theme-dev-complete-row,
+.theme-milestone-row {
+    display: grid;
+    grid-template-columns: 140px minmax(160px, 1fr) auto auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.theme-dev-complete-row { grid-template-columns: 140px minmax(0, 1fr) auto auto; }
+.theme-milestone-check { display:flex; align-items:center; gap:6px; margin:0; white-space:nowrap; font-size:var(--text-sm); }
+.btn-danger-ghost { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 45%, transparent); }
+
+@media (max-width: 720px) {
+    .theme-dev-complete-row,
+    .theme-milestone-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .theme-dev-complete-month,
+    .theme-milestone-month,
+    .theme-milestone-label { width: 100%; min-width: 0; }
+    .theme-milestone-label { grid-column: 1 / -1; grid-row: 2; }
+    .theme-milestone-check { grid-column: 1; grid-row: 3; }
+    .theme-milestone-remove { grid-column: 2; grid-row: 3; }
 }
 
 .theme-row-completed .gantt-milestone-chip.completed {

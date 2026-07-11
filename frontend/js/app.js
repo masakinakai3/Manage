@@ -358,13 +358,20 @@ function initUiConfig() {
     // Sidebar toggle
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebar-toggle');
-    if (localStorage.getItem('sidebar_collapsed') === 'true') {
+    const isNarrowLayout = () => window.matchMedia('(max-width: 1024px)').matches;
+    if (localStorage.getItem('sidebar_collapsed') === 'true' || isNarrowLayout()) {
         sidebar?.classList.add('sidebar-collapsed');
     }
     sidebarToggle?.addEventListener('click', () => {
         sidebar?.classList.toggle('sidebar-collapsed');
         const collapsed = sidebar?.classList.contains('sidebar-collapsed');
         localStorage.setItem('sidebar_collapsed', String(collapsed));
+    });
+    document.querySelectorAll('#sidebar .nav-item').forEach((item) => item.addEventListener('click', () => {
+        if (isNarrowLayout()) sidebar?.classList.add('sidebar-collapsed');
+    }));
+    window.addEventListener('resize', () => {
+        if (isNarrowLayout()) sidebar?.classList.add('sidebar-collapsed');
     });
 
     // Detail panel toggle

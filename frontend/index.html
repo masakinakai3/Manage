@@ -177,11 +177,11 @@
                                 <select id="gantt-status-filter" class="view-select" aria-label="ステータスで絞り込み">
                                     <option value="all">ステータス: すべて</option>
                                     <option value="open">ステータス: 未完了のみ</option>
-                                    <option value="planning">Planning</option>
-                                    <option value="active">Active</option>
-                                    <option value="stop">STOP</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="cancelled">Cancelled</option>
+                                    <option value="planning">計画中</option>
+                                    <option value="active">進行中</option>
+                                    <option value="stop">停止</option>
+                                    <option value="completed">完了</option>
+                                    <option value="cancelled">中止</option>
                                 </select>
                                 <select id="gantt-priority-filter" class="view-select" aria-label="優先度で絞り込み">
                                     <option value="all">優先度: すべて</option>
@@ -230,6 +230,12 @@
 
                 <div class="gantt-workspace">
                     <div class="gantt-container" id="gantt-container">
+                        <div class="gantt-legend" aria-label="ガントチャートの凡例">
+                            <span><i class="legend-swatch legend-normal"></i>通常</span>
+                            <span><i class="legend-swatch legend-warning"></i>稼働上限超過</span>
+                            <span><i class="legend-swatch legend-completed"></i>完了</span>
+                            <span><strong>★</strong> 開発完了月</span>
+                        </div>
                         <div class="gantt-floating-actions">
                             <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたむ</button>
