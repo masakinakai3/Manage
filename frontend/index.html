@@ -372,93 +372,61 @@
                 <div class="view-header">
                     <h2>インサイト</h2>
                     <div class="view-controls">
-                        <p class="summary-subtext">過負荷チェック、提案候補、月次レビュー向けの要約を確認できます。</p>
+                        <p class="summary-subtext">過負荷状況の要約、案件追加シミュレーション、テーマ別負荷の推移を確認できます。</p>
                     </div>
                 </div>
+                <section id="insights-summary" class="insight-layout insight-layout--summary"></section>
                 <section class="insight-layout">
                     <article class="summary-card insight-card-wide">
                         <div class="insight-scenario-card-header">
                             <div class="summary-label">案件追加シミュレーション</div>
-                            <div class="insight-scenario-header-actions" id="insight-scenario-header-actions"></div>
                         </div>
-                        <form id="insight-scenario-form" class="insight-scenario-form">
-                            <label class="form-field">
+                        <form id="insight-scenario-form" class="insight-scenario-form insight-scenario-form-enhanced">
+                            <label class="form-field insight-scenario-field-wide">
                                 <span>提案モード</span>
                                 <select id="insight-scenario-mode" class="view-select">
                                     <option value="start_fixed">開始月を固定して入れる</option>
                                     <option value="keep_schedule">既存スケジュールを変えずに開始可能月を見る</option>
                                 </select>
                             </label>
-                            <label class="form-field">
+                            <label class="form-field insight-scenario-field-wide">
                                 <span>対象プロジェクト</span>
                                 <select id="insight-scenario-theme" class="view-select">
                                     <option value="">新規プロジェクトとして検討</option>
                                 </select>
                             </label>
-                            <label class="form-field">
+                            <label class="form-field insight-scenario-field-medium">
                                 <span>開始月</span>
                                 <input id="insight-scenario-start-month" class="view-input" type="month" required>
                             </label>
-                            <label class="form-field">
+                            <label class="form-field insight-scenario-field-compact">
                                 <span>期間(月)</span>
                                 <input id="insight-scenario-duration" class="view-input" type="number" min="1" max="24" step="1" value="3" required>
                             </label>
-                            <label class="form-field">
+                            <label class="form-field insight-scenario-field-compact">
                                 <span>必要工数(人月)</span>
                                 <input id="insight-scenario-effort" class="view-input" type="number" min="0.1" max="120" step="0.1" value="3.0" required>
                             </label>
-                            <label class="form-field">
+                            <label class="form-field insight-scenario-field-medium">
                                 <span>希望部門</span>
                                 <select id="insight-scenario-department" class="view-select">
                                     <option value="">こだわらない</option>
                                 </select>
                             </label>
-                            <div class="insight-scenario-actions">
+                            <div class="insight-scenario-actions insight-scenario-actions-inline">
                                 <button id="insight-scenario-submit" class="btn btn-primary" type="submit">候補を提案</button>
-                                <p id="insight-scenario-hint" class="summary-subtext">工数と期間から、割当候補・後ろ倒し候補・開始可能月候補を提案します。</p>
+                                <button id="insight-scenario-clear" class="btn btn-secondary" type="button" disabled>クリア</button>
                             </div>
                         </form>
+                        <p id="insight-scenario-hint" class="summary-subtext">工数と期間から、割当候補・後ろ倒し候補・開始可能月候補を提案します。</p>
                         <div id="insight-scenario-results" class="insight-scenario-results"></div>
                     </article>
                 </section>
-                <section class="insight-layout insight-layout--ribbon-only">
-                    <article class="summary-card">
-                        <div class="summary-label">カテゴリ分布</div>
-                        <div id="insights-gap-overview" class="dashboard-pill-list"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">ステータス分布</div>
-                        <div id="insights-department-imbalance" class="dashboard-pill-list"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">部署別平均負荷</div>
-                        <div id="insights-forecast-watch" class="dashboard-pill-list"></div>
-                    </article>
-                </section>
-                <section class="insight-layout insight-layout--dashboard">
-                    <article class="summary-card">
-                        <div class="summary-label">月次推移</div>
-                        <div id="dashboard-monthly-trend"></div>
-                    </article>
+                <section class="insight-layout">
                     <article class="summary-card insight-card-wide">
-                        <div class="summary-label">Project Load Ribbon</div>
+                        <div class="summary-label">テーマ負荷の推移</div>
+                        <p class="summary-subtext">100% = メンバー1人の全稼働(1人月)。月合計は全テーマ横断の総負荷です。列をクリックすると内訳を固定表示できます。</p>
                         <div id="dashboard-project-ribbon"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">部署別負荷</div>
-                        <div id="dashboard-department-load"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">負荷上位テーマ</div>
-                        <div id="dashboard-impact-themes"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">将来逼迫フォーキャスト</div>
-                        <div id="dashboard-forecast-table"></div>
-                    </article>
-                    <article class="summary-card">
-                        <div class="summary-label">リスク分類サマリー</div>
-                        <div id="dashboard-health-groups"></div>
                     </article>
                 </section>
             </div>
@@ -562,10 +530,10 @@
     </div>
 
     <div id="ribbon-fullscreen-overlay" class="ribbon-fullscreen-overlay" hidden>
-        <div class="ribbon-fullscreen-dialog">
+        <div class="ribbon-fullscreen-dialog" role="dialog" aria-modal="true" aria-labelledby="ribbon-fullscreen-title">
             <div class="ribbon-fullscreen-header">
-                <h3>Project Load Ribbon</h3>
-                <button id="ribbon-fullscreen-close" class="modal-close ribbon-fullscreen-close" type="button" aria-label="Close">&times;</button>
+                <h3 id="ribbon-fullscreen-title">テーマ負荷の推移</h3>
+                <button id="ribbon-fullscreen-close" class="modal-close ribbon-fullscreen-close" type="button" aria-label="閉じる">&times;</button>
             </div>
             <div id="ribbon-fullscreen-content" class="ribbon-fullscreen-content"></div>
         </div>

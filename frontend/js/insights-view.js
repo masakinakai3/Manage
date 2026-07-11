@@ -8,15 +8,13 @@ let currentState = loadViewState();
 let ribbonOverlayInitialized = false;
 let activeRibbonData = null;
 let ribbonXAxisScale = Number.parseFloat(localStorage.getItem('project_ribbon_x_scale') || '1');
+let ribbonRedrawFrame = null;
+let ribbonDetailMonth = null;
+let ribbonReturnFocusElement = null;
 let currentOverview = null;
 let currentScenarioResult = null;
+let currentScenarioCandidates = [];
 const SMALL_RIBBON_LOAD_THRESHOLD = 30;
-
-const HEALTH_CATEGORY_LABELS = {
-    resource_operations: '配員運営',
-    future_risk: '将来逼迫',
-    data_quality: 'データ整合性',
-};
 
 export async function initInsightsView() {
     initRibbonFullscreen();
@@ -38,8 +36,7 @@ export async function refreshInsightsView() {
         setBusyState(true, 'インサイトを読み込み中...');
         const overview = await insights.overview(from, toEnd);
         currentOverview = overview;
-        renderFocusPanels(overview.summary || {}, overview.dashboard || {}, overview.health_groups || []);
-        renderDashboard(overview.dashboard || {}, overview.health_groups || []);
+        renderSummary(overview.summary || {});
         renderScenarioPlanner(overview);
         if (currentScenarioResult) {
             renderScenarioResults(currentScenarioResult);
@@ -47,6 +44,7 @@ export async function refreshInsightsView() {
         renderProjectRibbon('dashboard-project-ribbon', overview.dashboard?.project_ribbon || {});
     } catch (error) {
         currentScenarioResult = null;
+        currentScenarioCandidates = [];
         renderError(formatError(error, 'インサイトの読み込みに失敗しました。'));
         updateScenarioClearButton();
     } finally {
@@ -58,170 +56,47 @@ function renderSummary(summary) {
     const target = document.getElementById('insights-summary');
     if (!target) return;
 
+    const overloadedMembers = Number(summary.overloaded_member_count || 0);
+    const warningCells = Number(summary.warning_cell_count || 0);
+    const urgentCount = overloadedMembers + warningCells;
+    const shortage = Number(summary.total_shortage || 0);
+
     target.innerHTML = `
         <article class="summary-card">
-            <div class="summary-label">不足工数</div>
-            <div class="summary-value">${summary.total_shortage || 0}%</div>
-            <div class="summary-subtext">超過セル ${summary.warning_cell_count || 0} 件</div>
+            <div class="summary-label">優先対応件数</div>
+            <div class="summary-value${urgentCount > 0 ? ' summary-value--alert' : ''}">${urgentCount}</div>
+            <div class="summary-subtext">過負荷メンバー ${overloadedMembers} 名 / 警告セル ${warningCells} 件</div>
+        </article>
+        <article class="summary-card">
+            <div class="summary-label">不足見込み</div>
+            <div class="summary-value${shortage > 0 ? ' summary-value--alert' : ''}">${formatPersonMonths(shortage / 100)} 人月</div>
+            <div class="summary-subtext">期間内合計 / 逼迫見込み月 ${Number(summary.upcoming_shortage_months || 0)} か月</div>
         </article>
         <article class="summary-card">
             <div class="summary-label">余剰工数</div>
-            <div class="summary-value">${summary.total_spare || 0}%</div>
-            <div class="summary-subtext">低稼働メンバー ${summary.underutilized_member_count || 0} 名</div>
+            <div class="summary-value">${formatPersonMonths(Number(summary.total_spare || 0) / 100)} 人月</div>
+            <div class="summary-subtext">期間内合計 / 低稼働メンバー ${Number(summary.underutilized_member_count || 0)} 名</div>
         </article>
         <article class="summary-card">
-            <div class="summary-label">逼迫部門</div>
-            <div class="summary-value">${summary.bottleneck_department_count || 0}</div>
-            <div class="summary-subtext">平均負荷 ${summary.average_member_load || 0}%</div>
-        </article>
-        <article class="summary-card">
-            <div class="summary-label">先行警戒月</div>
-            <div class="summary-value">${summary.upcoming_shortage_months || 0}</div>
-            <div class="summary-subtext">過負荷メンバー ${summary.overloaded_member_count || 0} 名</div>
+            <div class="summary-label">稼働中テーマ</div>
+            <div class="summary-value">${Number(summary.active_theme_count || 0)}</div>
+            <div class="summary-subtext">改善候補 ${Number(summary.recommendation_count || 0)} 件</div>
         </article>
     `;
 }
 
-function renderFocusPanels(summary, dashboard, healthGroups) {
-    const forecast = dashboard.forecast || [];
-    const departmentLoad = dashboard.department_load || [];
-
-    renderPillList('insights-gap-overview', [
-        { label: '不足', value: `${summary.total_shortage || 0}%` },
-        { label: '余剰', value: `${summary.total_spare || 0}%` },
-        { label: '改善候補', value: `${summary.recommendation_count || 0} 件` },
-        { label: '稼働中テーマ', value: `${summary.active_theme_count || 0} 件` },
-    ]);
-
-    const imbalancedDepartments = departmentLoad
-        .filter((item) => item.overloaded_member_count > 0 || item.spread >= 40 || item.shortage_total > 0)
-        .sort((left, right) => (right.shortage_total + right.spread) - (left.shortage_total + left.spread))
-        .slice(0, 4)
-        .map((item) => ({
-            label: item.department,
-            value: `不足${item.shortage_total}% / ばらつき${item.spread}%`,
-        }));
-    renderPillList('insights-department-imbalance', imbalancedDepartments);
-
-    const forecastAlerts = forecast
-        .filter((item) => item.shortage > 0 || item.overloaded_member_count > 0)
-        .slice(0, 4)
-        .map((item) => ({
-            label: item.month,
-            value: item.shortage > 0
-                ? `不足${item.shortage}% / 過負荷${item.overloaded_member_count}名`
-                : `過負荷${item.overloaded_member_count}名`,
-        }));
-    if (!forecastAlerts.length && forecast[0]) {
-        forecastAlerts.push({
-            label: forecast[0].month,
-            value: `余剰${forecast[0].spare}%`,
-        });
+function renderError(message) {
+    const html = `<div class="empty-panel">${escapeHtml(message)}</div>`;
+    const summaryTarget = document.getElementById('insights-summary');
+    if (summaryTarget) {
+        summaryTarget.innerHTML = html;
     }
-    renderPillList('insights-forecast-watch', forecastAlerts.length ? forecastAlerts : healthGroups.map((group) => ({
-        label: group.label,
-        value: `${group.count} 件`,
-    })).slice(0, 3));
-}
-
-
-
-
-
-function renderDashboard(dashboard, healthGroups) {
-    renderSimpleTable(
-        'dashboard-monthly-trend',
-        ['月', '需要', '余剰', '不足', '稼働テーマ'],
-        (dashboard.monthly_trend || []).map((item) => [
-            item.month,
-            `${item.total_allocation}%`,
-            `${item.spare || 0}%`,
-            `${item.shortage || 0}%`,
-            String(item.active_theme_count),
-        ]),
-    );
-
-    renderProjectRibbon('dashboard-project-ribbon', dashboard.project_ribbon || {});
-
-    renderSimpleTable(
-        'dashboard-department-load',
-        ['部門', '平均', '最大', '偏在', '不足', '過負荷人数'],
-        (dashboard.department_load || []).map((item) => [
-            item.department,
-            `${item.average_load}%`,
-            `${item.peak_load}%`,
-            `${item.spread}%`,
-            `${item.shortage_total}%`,
-            String(item.overloaded_member_count),
-        ]),
-    );
-
-    renderSimpleTable(
-        'dashboard-impact-themes',
-        ['テーマ', '影響', '超過寄与', '集中度', '終了リスク'],
-        (dashboard.impact_themes || []).map((item) => [
-            item.name,
-            String(item.impact_score),
-            `${item.overload_contribution}%`,
-            `${item.concentration_risk}%`,
-            `${item.deadline_risk}%`,
-        ]),
-    );
-
-    renderSimpleTable(
-        'dashboard-forecast-table',
-        ['月', '需要', '容量', '不足', '余剰', '過負荷人数'],
-        (dashboard.forecast || []).map((item) => [
-            item.month,
-            `${item.demand}%`,
-            `${item.capacity}%`,
-            `${item.shortage}%`,
-            `${item.spare}%`,
-            String(item.overloaded_member_count),
-        ]),
-    );
-
-    renderSimpleTable(
-        'dashboard-health-groups',
-        ['分類', '件数', '高優先度', '代表例'],
-        (healthGroups || []).map((group) => [
-            group.label,
-            String(group.count),
-            String(group.high_count),
-            (group.items || []).slice(0, 1).map((item) => item.entity_name || item.code).join(', ') || '-',
-        ]),
-    );
-}
-
-function buildHealthAction(item) {
-    if (item.entity_type === 'member') {
-        return `<button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load" data-member-search="${escapeHtmlAttr(item.entity_name || '')}">負荷表で確認</button>`;
+    const ribbonTarget = document.getElementById('dashboard-project-ribbon');
+    if (ribbonTarget) {
+        ribbonTarget.innerHTML = html;
     }
-    if (item.entity_type === 'theme' || item.entity_type === 'allocation') {
-        return `<button class="btn btn-ghost btn-sm" type="button" data-open-view="gantt" data-theme-filter="${escapeHtmlAttr(item.entity_name || '')}">ガントで確認</button>`;
-    }
-    if (item.entity_type === 'department') {
-        return `<button class="btn btn-ghost btn-sm" type="button" data-open-view="member-load">メンバー負荷を見る</button>`;
-    }
-    return '';
-}
 
-function bindActionButtons(root) {
-    root.querySelectorAll('[data-open-view]').forEach((button) => {
-        button.addEventListener('click', () => {
-            const nextState = {};
-            if (button.dataset.memberSearch) {
-                nextState.memberSearch = button.dataset.memberSearch.trim().toLowerCase();
-            }
-            if (button.dataset.themeFilter) {
-                nextState.ganttSearch = button.dataset.themeFilter;
-            }
-            updateViewState(nextState);
-            document.querySelector(`.nav-item[data-view="${button.dataset.openView}"]`)?.click();
-        });
-    });
-
-    updateScenarioClearButton();
+    closeRibbonFullscreen();
 }
 
 function renderProjectRibbon(targetId, ribbonData) {
@@ -238,22 +113,18 @@ function renderProjectRibbon(targetId, ribbonData) {
     activeRibbonData = ribbonData;
     target.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: false });
     bindRibbonScaleControls(target);
-
-    const interactiveRibbon = target.querySelector('.project-ribbon--interactive');
-    interactiveRibbon?.addEventListener('click', (event) => {
-        if (event.target?.closest?.('.project-ribbon__toolbar')) return;
+    bindRibbonDetailInteractions(target, ribbonData);
+    target.querySelector('[data-ribbon-expand]')?.addEventListener('click', () => {
         openRibbonFullscreen(ribbonData);
     });
-    interactiveRibbon?.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            openRibbonFullscreen(ribbonData);
-        }
-    });
+
+    if (ribbonDetailMonth) {
+        showRibbonDetail(target, ribbonData, ribbonDetailMonth, { toggle: false });
+    }
 }
 
 function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
-    const items = fullscreen ? trimRibbonItemsForFullscreen(ribbonData.items || []) : (ribbonData.items || []);
+    const items = trimRibbonItems(ribbonData.items || []);
     const xScale = Math.min(1.4, Math.max(0.45, ribbonXAxisScale || 1));
     const width = Math.max(fullscreen ? 1120 : 640, items.length * (fullscreen ? 220 : 140) * xScale);
     const height = fullscreen ? 760 : 340;
@@ -372,10 +243,15 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         });
     }
 
-    const axisValues = [0, 25, 50, 75, 100].filter((value) => value <= maxTotalLoad || value === 0);
-    if (!axisValues.includes(maxTotalLoad)) axisValues.push(maxTotalLoad);
+    const tickStep = maxTotalLoad <= 150 ? 25 : (maxTotalLoad <= 400 ? 50 : 100);
+    const axisValues = [];
+    for (let value = 0; value <= maxTotalLoad; value += tickStep) {
+        axisValues.push(value);
+    }
+    if (axisValues[axisValues.length - 1] !== maxTotalLoad) {
+        axisValues.push(maxTotalLoad);
+    }
     const yAxis = axisValues
-        .sort((left, right) => left - right)
         .map((value) => {
             const y = padding.top + innerHeight - ((innerHeight * value) / maxTotalLoad);
             return `
@@ -386,11 +262,17 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             `;
         });
 
+    const capacityY = padding.top + innerHeight - ((innerHeight * 100) / maxTotalLoad);
+    const capacityLine = maxTotalLoad > 100 ? `
+        <line x1="${padding.left}" y1="${capacityY}" x2="${width - padding.right}" y2="${capacityY}" class="project-ribbon__capacity-line"></line>
+        <text x="${width - padding.right}" y="${capacityY - 6}" text-anchor="end" class="project-ribbon__capacity-label">定員 100%</text>
+    ` : '';
+
     const monthHotspots = monthSegments.map((item) => {
         const details = [...item.segments]
             .sort((left, right) => right.load - left.load || left.name.localeCompare(right.name, 'ja'))
             .map((segment) => `${segment.name}: ${segment.load}%`);
-        const tooltip = [`${item.month} 合計 ${item.totalLoad}%`, ...(details.length ? details : ['内訳なし'])].join('\n');
+        const tooltip = [`${item.month} 合計 ${item.totalLoad}%`, ...(details.length ? details : ['内訳なし']), 'クリックで内訳を固定表示'].join('\n');
         return `
             <rect
                 x="${item.x - (columnWidth / 2)}"
@@ -399,6 +281,8 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                 height="${innerHeight}"
                 fill="transparent"
                 pointer-events="all"
+                class="project-ribbon__hotspot"
+                data-ribbon-month="${escapeHtmlAttr(item.month)}"
             >
                 <title>${escapeHtml(tooltip)}</title>
             </rect>
@@ -409,6 +293,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
         const tooltipLines = [
             `${segment.month} | ${segment.name} | ${segment.load}%`,
             ...formatRibbonMemberBreakdown(segment),
+            'クリックで内訳を固定表示',
         ];
         return `
             <rect
@@ -418,6 +303,8 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                 height="${Math.max(segment.y1 - segment.y0, 0.5)}"
                 fill="transparent"
                 pointer-events="all"
+                class="project-ribbon__hotspot"
+                data-ribbon-month="${escapeHtmlAttr(segment.month)}"
             >
                 <title>${escapeHtml(tooltipLines.join('\n'))}</title>
             </rect>
@@ -432,8 +319,8 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
             ? (fullscreen ? 12 : 8)
             : (fullscreen ? 18 : (columnWidth > 52 ? 14 : 10));
         const fontSize = isSmallLoad
-            ? (fullscreen ? 8.5 : 7.5)
-            : (heightValue < 18 ? 9 : (heightValue < 28 ? 10 : 11.5));
+            ? (fullscreen ? 10 : 9)
+            : (heightValue < 18 ? 10 : (heightValue < 28 ? 11 : 12));
         const shouldRenderLabel = heightValue >= (isSmallLoad ? 10 : 18);
         const tooltipLines = [
             `${segment.month} | ${segment.name} | ${segment.load}%`,
@@ -460,7 +347,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                         text-anchor="middle"
                         class="project-ribbon__block-label"
                         data-small-load="${isSmallLoad ? 'true' : 'false'}"
-                        style="font-size:${fontSize}px"
+                        style="font-size:${fontSize}px;fill:${pickRibbonLabelColor(color)}"
                     >${escapeHtml(truncateLabel(segment.name, labelLimit))}</text>
                 ` : ''}
             </g>
@@ -470,22 +357,27 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
     const monthLabels = monthSegments.map((item) => `
         <g>
             <text x="${item.x}" y="${height - 28}" text-anchor="middle" class="project-ribbon__month-label">${escapeHtml(formatRibbonMonth(item.month))}</text>
-            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label">Total ${escapeHtml(String(item.totalLoad))}%</text>
+            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label${item.totalLoad > 100 ? ' project-ribbon__total-label--over' : ''}">Total ${escapeHtml(String(item.totalLoad))}%</text>
         </g>
     `);
 
-    const topThemes = Array.from(totalsByTheme.entries())
-        .sort((left, right) => right[1] - left[1])
+    const orderedThemeTotals = Array.from(totalsByTheme.entries())
+        .sort((left, right) => right[1] - left[1]);
+    const topThemes = orderedThemeTotals
         .slice(0, 6)
-        .map(([themeId]) => monthSegments.flatMap((item) => item.segments).find((segment) => segment.theme_id === themeId))
+        .map(([themeId]) => themeMetaById.get(themeId))
         .filter(Boolean);
+    const remainingThemeCount = Math.max(orderedThemeTotals.length - topThemes.length, 0);
 
     const scaleControl = `
         <label class="project-ribbon__scale-control">
-            <span>時間軸</span>
-            <input type="range" min="45" max="140" step="5" value="${Math.round(xScale * 100)}" data-ribbon-x-scale>
-            <span>${Math.round(xScale * 100)}%</span>
+            <span>横ズーム</span>
+            <input type="range" min="45" max="140" step="5" value="${Math.round(xScale * 100)}" data-ribbon-x-scale aria-label="リボンの横方向ズーム">
+            <span data-ribbon-x-scale-value>${Math.round(xScale * 100)}%</span>
         </label>
+    `;
+    const expandControl = fullscreen ? '' : `
+        <button class="btn btn-ghost btn-sm" type="button" data-ribbon-expand>全画面で表示</button>
     `;
     const fullscreenControls = fullscreen ? `
         <div class="project-ribbon__toolbar">
@@ -496,14 +388,15 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
     ` : '';
 
     return `
-        <div class="project-ribbon ${fullscreen ? 'project-ribbon--fullscreen' : 'project-ribbon--interactive'}" ${fullscreen ? '' : 'role="button" tabindex="0" aria-label="Open project load ribbon fullscreen"'}>
+        <div class="project-ribbon${fullscreen ? ' project-ribbon--fullscreen' : ''}">
             ${fullscreenControls}
-            <div class="project-ribbon__toolbar project-ribbon__toolbar--scale">${scaleControl}</div>
+            <div class="project-ribbon__toolbar project-ribbon__toolbar--scale">${expandControl}${scaleControl}</div>
             <div class="project-ribbon__scroll" ${fullscreen ? `data-ribbon-step="${step}" data-ribbon-width="${width}"` : ''}>
-                <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-label="Project load ribbon chart">
+                <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-label="テーマ負荷の推移チャート">
                     <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>
                     <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + innerHeight}" class="project-ribbon__axis-line"></line>
                     ${yAxis.join('')}
+                    ${capacityLine}
                     ${ribbons.join('')}
                     ${blocks.join('')}
                     ${monthHotspots.join('')}
@@ -511,16 +404,85 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false } = {}) {
                     ${monthLabels.join('')}
                 </svg>
             </div>
+            <div class="project-ribbon__detail" data-ribbon-detail hidden></div>
             <div class="project-ribbon__legend">
-                ${topThemes.map((project) => `
+                ${topThemes.map((theme) => `
                     <span class="project-ribbon__legend-item">
-                        <span class="project-ribbon__legend-swatch" style="background:${escapeHtml(project.color || '#6366f1')}"></span>
-                        ${escapeHtml(project.name)}
+                        <span class="project-ribbon__legend-swatch" style="background:${escapeHtml(theme.color || '#6366f1')}"></span>
+                        ${escapeHtml(theme.name)}
                     </span>
                 `).join('')}
+                ${remainingThemeCount > 0 ? `<span class="project-ribbon__legend-item">他 ${remainingThemeCount} テーマ</span>` : ''}
             </div>
         </div>
     `;
+}
+
+function pickRibbonLabelColor(color) {
+    let hex = String(color || '').trim().replace('#', '');
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+        hex = hex.split('').map((char) => char + char).join('');
+    }
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+        return 'rgba(255, 255, 255, 0.92)';
+    }
+    const r = Number.parseInt(hex.slice(0, 2), 16);
+    const g = Number.parseInt(hex.slice(2, 4), 16);
+    const b = Number.parseInt(hex.slice(4, 6), 16);
+    const luminance = ((0.299 * r) + (0.587 * g) + (0.114 * b)) / 255;
+    return luminance > 0.6 ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.92)';
+}
+
+function bindRibbonDetailInteractions(container, ribbonData) {
+    container.querySelectorAll('[data-ribbon-month]').forEach((element) => {
+        element.addEventListener('click', () => {
+            const month = element.getAttribute('data-ribbon-month');
+            if (!month) return;
+            showRibbonDetail(container, ribbonData, month, { toggle: true });
+        });
+    });
+}
+
+function showRibbonDetail(container, ribbonData, month, { toggle = false } = {}) {
+    const detail = container.querySelector('[data-ribbon-detail]');
+    if (!detail) return;
+
+    if (toggle && !detail.hidden && detail.dataset.month === month) {
+        hideRibbonDetail(detail);
+        return;
+    }
+
+    const item = (ribbonData.items || []).find((entry) => entry.month === month);
+    if (!item) return;
+
+    ribbonDetailMonth = month;
+    detail.dataset.month = month;
+    const projects = [...(item.projects || [])].sort((left, right) => (right.load || 0) - (left.load || 0));
+    detail.innerHTML = `
+        <div class="project-ribbon__detail-header">
+            <strong>${escapeHtml(formatRibbonMonth(month))} の内訳(合計 ${escapeHtml(String(item.total_load || 0))}%)</strong>
+            <button class="btn btn-ghost btn-sm" type="button" data-ribbon-detail-close>閉じる</button>
+        </div>
+        ${projects.length ? projects.map((project) => `
+            <div class="project-ribbon__detail-row">
+                <span class="project-ribbon__legend-swatch" style="background:${escapeHtml(project.color || '#6366f1')}"></span>
+                <span class="project-ribbon__detail-name">${escapeHtml(project.name)}</span>
+                <span class="project-ribbon__detail-load">${escapeHtml(String(project.load))}%</span>
+                <span class="project-ribbon__detail-members">${(project.member_breakdown || []).map((member) => `${escapeHtml(member.display_name)} ${escapeHtml(String(member.load))}%`).join(' / ') || '担当内訳なし'}</span>
+            </div>
+        `).join('') : '<div class="empty-panel">この月の配分はありません。</div>'}
+    `;
+    detail.hidden = false;
+    detail.querySelector('[data-ribbon-detail-close]')?.addEventListener('click', () => {
+        hideRibbonDetail(detail);
+    });
+}
+
+function hideRibbonDetail(detail) {
+    detail.hidden = true;
+    detail.dataset.month = '';
+    detail.innerHTML = '';
+    ribbonDetailMonth = null;
 }
 
 function normalizeRibbonHeights(projects, stackHeight) {
@@ -546,7 +508,7 @@ function normalizeRibbonHeights(projects, stackHeight) {
     return scaled;
 }
 
-function trimRibbonItemsForFullscreen(items) {
+function trimRibbonItems(items) {
     if (!items.length) return items;
 
     const activeIndexes = items
@@ -591,7 +553,10 @@ function openRibbonFullscreen(ribbonData = activeRibbonData) {
     content.innerHTML = buildProjectRibbonMarkup(ribbonData, { fullscreen: true });
     bindRibbonScaleControls(content);
     bindRibbonFullscreenNavigation(content);
+    bindRibbonDetailInteractions(content, ribbonData);
     overlay.hidden = false;
+    ribbonReturnFocusElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.getElementById('ribbon-fullscreen-close')?.focus();
 }
 
 function closeRibbonFullscreen() {
@@ -601,6 +566,10 @@ function closeRibbonFullscreen() {
 
     overlay.hidden = true;
     content.innerHTML = '';
+    if (ribbonReturnFocusElement) {
+        ribbonReturnFocusElement.focus();
+        ribbonReturnFocusElement = null;
+    }
 }
 
 function buildRibbonPath(source, target, columnWidth) {
@@ -636,108 +605,40 @@ function bindRibbonFullscreenNavigation(container) {
 
 function bindRibbonScaleControls(container) {
     container.querySelectorAll('[data-ribbon-x-scale]').forEach((input) => {
-        input.addEventListener('click', (event) => event.stopPropagation());
         input.addEventListener('input', () => {
             ribbonXAxisScale = Math.min(1.4, Math.max(0.45, Number(input.value) / 100));
             localStorage.setItem('project_ribbon_x_scale', String(ribbonXAxisScale));
+            const valueLabel = input.closest('.project-ribbon__scale-control')?.querySelector('[data-ribbon-x-scale-value]');
+            if (valueLabel) {
+                valueLabel.textContent = `${Math.round(ribbonXAxisScale * 100)}%`;
+            }
             if (!activeRibbonData) return;
 
-            renderProjectRibbon('dashboard-project-ribbon', activeRibbonData);
-
-            const overlay = document.getElementById('ribbon-fullscreen-overlay');
-            const content = document.getElementById('ribbon-fullscreen-content');
-            if (overlay && content && !overlay.hidden) {
-                content.innerHTML = buildProjectRibbonMarkup(activeRibbonData, { fullscreen: true });
-                bindRibbonScaleControls(content);
-                bindRibbonFullscreenNavigation(content);
+            if (ribbonRedrawFrame) {
+                cancelAnimationFrame(ribbonRedrawFrame);
             }
+            ribbonRedrawFrame = requestAnimationFrame(() => {
+                ribbonRedrawFrame = null;
+                renderProjectRibbon('dashboard-project-ribbon', activeRibbonData);
+
+                const overlay = document.getElementById('ribbon-fullscreen-overlay');
+                const content = document.getElementById('ribbon-fullscreen-content');
+                if (overlay && content && !overlay.hidden) {
+                    content.innerHTML = buildProjectRibbonMarkup(activeRibbonData, { fullscreen: true });
+                    bindRibbonScaleControls(content);
+                    bindRibbonFullscreenNavigation(content);
+                    bindRibbonDetailInteractions(content, activeRibbonData);
+                }
+            });
         });
     });
-}
-
-function renderSimpleTable(targetId, headers, rows) {
-    const target = document.getElementById(targetId);
-    if (!target) return;
-
-    if (rows.length === 0) {
-        target.innerHTML = '<div class="empty-panel">表示できるデータがありません。</div>';
-        return;
-    }
-
-    target.innerHTML = `
-        <table class="insight-table">
-            <thead>
-                <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>
-            </thead>
-            <tbody>
-                ${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join('')}</tr>`).join('')}
-            </tbody>
-        </table>
-    `;
-}
-
-function renderPillList(targetId, items) {
-    const target = document.getElementById(targetId);
-    if (!target) return;
-
-    if (!items.length) {
-        target.innerHTML = '<div class="empty-panel">表示できるデータがありません。</div>';
-        return;
-    }
-
-    target.innerHTML = items.map((item) => `
-        <span class="dashboard-pill">${escapeHtml(item.label)}: ${escapeHtml(item.value ?? item.count)}</span>
-    `).join('');
 }
 
 function initScenarioPlanner() {
     const form = document.getElementById('insight-scenario-form');
     const modeSelect = document.getElementById('insight-scenario-mode');
+    const clearButton = document.getElementById('insight-scenario-clear');
     if (!form) return;
-
-    form.classList.add('insight-scenario-form-enhanced');
-    document.getElementById('insight-scenario-hint')?.remove();
-    document.getElementById('insight-scenario-mode')?.closest('.form-field')?.classList.add('insight-scenario-field-wide');
-    document.getElementById('insight-scenario-theme')?.closest('.form-field')?.classList.add('insight-scenario-field-wide');
-    document.getElementById('insight-scenario-start-month')?.closest('.form-field')?.classList.add('insight-scenario-field-medium');
-    document.getElementById('insight-scenario-duration')?.closest('.form-field')?.classList.add('insight-scenario-field-compact');
-    document.getElementById('insight-scenario-effort')?.closest('.form-field')?.classList.add('insight-scenario-field-compact');
-    document.getElementById('insight-scenario-department')?.closest('.form-field')?.classList.add('insight-scenario-field-medium');
-    const actionsContainer = document.querySelector('.insight-scenario-actions');
-    actionsContainer?.classList.add('insight-scenario-actions-inline');
-
-    const submitButton = document.getElementById('insight-scenario-submit');
-    const headerActions = document.getElementById('insight-scenario-header-actions');
-    let actionButtons = document.querySelector('.insight-scenario-action-buttons');
-    if (submitButton) {
-        submitButton.setAttribute('form', 'insight-scenario-form');
-    }
-    if (!actionButtons && submitButton) {
-        actionButtons = document.createElement('div');
-        actionButtons.className = 'insight-scenario-action-buttons';
-    }
-    if (actionButtons && headerActions && actionButtons.parentElement !== headerActions) {
-        headerActions.appendChild(actionButtons);
-    }
-    if (submitButton && actionButtons && submitButton.parentElement !== actionButtons) {
-        actionButtons.appendChild(submitButton);
-    }
-    if (actionsContainer && !actionsContainer.children.length) {
-        actionsContainer.remove();
-    }
-
-    let clearButton = document.getElementById('insight-scenario-clear');
-    if (!clearButton) {
-        if (submitButton && actionButtons) {
-            clearButton = document.createElement('button');
-            clearButton.id = 'insight-scenario-clear';
-            clearButton.className = 'btn btn-secondary';
-            clearButton.type = 'button';
-            clearButton.textContent = '\u30AF\u30EA\u30A2';
-            clearButton.disabled = true;
-            actionButtons.appendChild(clearButton);
-        }
-    }
 
     if (!form.dataset.bound) {
         form.dataset.bound = 'true';
@@ -757,6 +658,7 @@ function initScenarioPlanner() {
         clearButton.addEventListener('click', clearScenarioPlanner);
     }
 
+    updateScenarioHint();
     updateScenarioClearButton();
 }
 
@@ -812,6 +714,7 @@ function updateScenarioClearButton() {
 
 function clearScenarioPlanner() {
     currentScenarioResult = null;
+    currentScenarioCandidates = [];
     clearScenarioPreview();
 
     const target = document.getElementById('insight-scenario-results');
@@ -846,6 +749,7 @@ async function submitScenarioPlanner() {
         updateScenarioClearButton();
     } catch (error) {
         currentScenarioResult = null;
+        currentScenarioCandidates = [];
         renderScenarioMessage(formatError(error, '候補の計算に失敗しました。'));
         updateScenarioClearButton();
     } finally {
@@ -859,11 +763,52 @@ function renderScenarioMessage(message) {
     target.innerHTML = `<div class="empty-panel">${escapeHtml(message)}</div>`;
 }
 
+function buildCandidateSignature(candidate) {
+    return JSON.stringify({
+        start: candidate.start_month || '',
+        coverage: candidate.coverage_ratio || 0,
+        uncovered: candidate.uncovered_person_months || 0,
+        plan: (candidate.monthly_plan || []).map((monthPlan) => ({
+            month: monthPlan.month,
+            assignments: (monthPlan.assignments || []).map((assignment) => [
+                assignment.member_id,
+                assignment.assigned_person_months,
+            ]),
+            shift: monthPlan.shift_supported_person_months || 0,
+        })),
+        shifts: (candidate.shift_suggestions || []).map((suggestion) => [
+            suggestion.theme_id,
+            suggestion.member_id,
+            suggestion.from_month,
+            suggestion.to_month,
+        ]),
+    });
+}
+
+function dedupeScenarioCandidates(candidates) {
+    const bySignature = new Map();
+    const result = [];
+    candidates.forEach((candidate) => {
+        const signature = buildCandidateSignature(candidate);
+        const existing = bySignature.get(signature);
+        if (existing) {
+            if (candidate.title) existing.mergedTitles.push(candidate.title);
+            existing.recommended = existing.recommended || candidate.recommended;
+        } else {
+            const entry = { ...candidate, mergedTitles: [] };
+            bySignature.set(signature, entry);
+            result.push(entry);
+        }
+    });
+    return result;
+}
+
 function renderScenarioResults(result) {
     const target = document.getElementById('insight-scenario-results');
     if (!target) return;
 
-    const candidates = result?.candidates || [];
+    const candidates = dedupeScenarioCandidates(result?.candidates || []);
+    currentScenarioCandidates = candidates;
     if (!candidates.length) {
         updateScenarioClearButton();
         target.innerHTML = '<div class="empty-panel">候補は見つかりませんでした。</div>';
@@ -875,13 +820,16 @@ function renderScenarioResults(result) {
             <div class="insight-scenario-header">
                 <div>
                     <div class="candidate-body">
-                        <span class="dashboard-pill">${escapeHtml(getScenarioCandidateLabel(index))}</span>
+                        <span class="dashboard-pill">案 ${escapeHtml(getScenarioCandidateLabel(index))}</span>
                     </div>
                     <strong>${escapeHtml(candidate.title || `候補 ${index + 1}`)}</strong>
                     <p class="summary-subtext">${escapeHtml(candidate.summary || '')}</p>
+                    ${candidate.mergedTitles.length ? `
+                        <p class="summary-subtext">同一内容の候補を統合: ${escapeHtml(candidate.mergedTitles.join(' / '))}</p>
+                    ` : ''}
                 </div>
                 <div class="insight-scenario-meta">
-                    ${candidate.recommended ? '<span class="dashboard-pill">おすすめ</span>' : ''}
+                    ${candidate.recommended ? '<span class="dashboard-pill dashboard-pill--recommended">おすすめ</span>' : ''}
                     <span class="dashboard-pill">開始 ${escapeHtml(candidate.start_month || '-')}</span>
                     <span class="dashboard-pill">充足率 ${escapeHtml(String(candidate.coverage_ratio || 0))}%</span>
                 </div>
@@ -905,16 +853,21 @@ function renderScenarioResults(result) {
                 </div>
             </div>
             <div class="insight-scenario-months">
-                ${(candidate.monthly_plan || []).map((monthPlan) => `
+                ${(candidate.monthly_plan || []).map((monthPlan) => {
+                    const shiftSupported = Number(monthPlan.shift_supported_person_months || 0);
+                    const uncovered = Number(monthPlan.remaining_uncovered_person_months ?? monthPlan.uncovered_person_months ?? 0);
+                    return `
                     <div class="insight-scenario-month">
                         <strong>${escapeHtml(monthPlan.month)}</strong>
                         <div class="candidate-body">
                             <span class="candidate-chip">必要 ${escapeHtml(formatPersonMonths(monthPlan.required_person_months))} 人月</span>
                             <span class="candidate-chip">割当 ${escapeHtml(formatPersonMonths(monthPlan.assigned_person_months))} 人月</span>
-                            ${typeof monthPlan.shift_supported_person_months === 'number'
-                                ? `<span class="candidate-chip">後ろ倒しで補完 ${escapeHtml(formatPersonMonths(monthPlan.shift_supported_person_months))} 人月</span>`
+                            ${shiftSupported > 0
+                                ? `<span class="candidate-chip">後ろ倒しで補完 ${escapeHtml(formatPersonMonths(shiftSupported))} 人月</span>`
                                 : ''}
-                            <span class="candidate-chip">不足 ${escapeHtml(formatPersonMonths(monthPlan.remaining_uncovered_person_months ?? monthPlan.uncovered_person_months))} 人月</span>
+                            ${uncovered > 0
+                                ? `<span class="candidate-chip candidate-chip--alert">不足 ${escapeHtml(formatPersonMonths(uncovered))} 人月</span>`
+                                : ''}
                         </div>
                         <div class="candidate-body">
                             ${(monthPlan.assignments || []).map((assignment) => `
@@ -922,7 +875,8 @@ function renderScenarioResults(result) {
                             `).join('') || '<span class="summary-subtext">割当候補なし</span>'}
                         </div>
                     </div>
-                `).join('')}
+                `;
+                }).join('')}
             </div>
             ${(candidate.shift_suggestions || []).length ? `
                 <div class="candidate-list">
@@ -995,7 +949,9 @@ function buildScenarioPreviewCandidate(candidate, candidateIndex, scenarioInput,
 
 function openCandidateInGantt(candidate, candidateIndex = 0) {
     const scenarioInput = currentScenarioResult?.input || {};
-    const candidates = currentScenarioResult?.candidates || [];
+    const candidates = currentScenarioCandidates.length
+        ? currentScenarioCandidates
+        : (currentScenarioResult?.candidates || []);
     const themeOptions = currentOverview?.dashboard?.theme_options || [];
     const targetThemeId = Number.parseInt(String(scenarioInput.target_theme_id || ''), 10);
     const targetTheme = themeOptions.find((item) => item.theme_id === targetThemeId);
@@ -1012,87 +968,6 @@ function openCandidateInGantt(candidate, candidateIndex = 0) {
         scale: 1,
     });
     document.querySelector('.nav-item[data-view="gantt"]')?.click();
-}
-
-function simplifyInsightsLayout() {
-    const aggregatePanel = document.querySelector('#view-insights .aggregate-panels');
-    if (aggregatePanel) {
-        aggregatePanel.hidden = true;
-        aggregatePanel.style.display = 'none';
-    }
-
-    [
-        'insights-gap-overview',
-        'insights-department-imbalance',
-        'insights-forecast-watch',
-        'dashboard-monthly-trend',
-        'dashboard-department-load',
-        'dashboard-impact-themes',
-        'dashboard-forecast-table',
-        'dashboard-health-groups',
-    ].forEach((id) => {
-        const target = document.getElementById(id);
-        const card = target?.closest('.summary-card');
-        if (card) {
-            card.hidden = true;
-            card.style.display = 'none';
-        }
-    });
-
-    const labels = document.querySelectorAll('#view-insights .insight-layout .summary-label');
-    if (labels[0]) labels[0].textContent = '優先アラート';
-    if (labels[1]) labels[1].textContent = '対応候補';
-
-    document.querySelectorAll('#view-insights .insight-layout--dashboard .summary-card').forEach((card) => {
-        card.hidden = !card.querySelector('#dashboard-project-ribbon');
-    });
-}
-
-function severityRank(severity) {
-    return { high: 3, medium: 2, low: 1 }[severity] || 0;
-}
-
-renderSummary = function(summary) {
-    const target = document.getElementById('insights-summary');
-    if (!target) return;
-
-    const urgentCount = Number(summary.overloaded_member_count || 0) + Number(summary.warning_cell_count || 0);
-    target.innerHTML = `
-        <article class="summary-card">
-            <div class="summary-label">優先対応件数</div>
-            <div class="summary-value">${urgentCount}</div>
-            <div class="summary-subtext">過負荷メンバー ${summary.overloaded_member_count || 0} 名 / 警告セル ${summary.warning_cell_count || 0} 件</div>
-        </article>
-        <article class="summary-card">
-            <div class="summary-label">不足見込み</div>
-            <div class="summary-value">${summary.total_shortage || 0}%</div>
-            <div class="summary-subtext">逼迫見込み月 ${summary.upcoming_shortage_months || 0} か月</div>
-        </article>
-        <article class="summary-card">
-            <div class="summary-label">稼働中テーマ</div>
-            <div class="summary-value">${summary.active_theme_count || 0}</div>
-            <div class="summary-subtext">提案候補 ${summary.recommendation_count || 0} 件</div>
-        </article>
-    `;
-};
-
-
-function renderError(message) {
-    const target = document.getElementById('dashboard-project-ribbon');
-    if (target) {
-        target.innerHTML = `<div class="empty-panel">${escapeHtml(message)}</div>`;
-    }
-
-    closeRibbonFullscreen();
-}
-
-function labelSeverity(severity) {
-    const labels = {
-        high: '高',
-        medium: '中',
-        low: '低',
-    };
-    return labels[severity] || severity;
 }
 
 function formatRibbonMonth(month) {
