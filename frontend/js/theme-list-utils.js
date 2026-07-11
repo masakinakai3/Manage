@@ -11,6 +11,14 @@ export function filterAndSortThemes(themes, filters) {
     });
 
     return visibleThemes.sort((left, right) => {
+        if (filters.sort === 'category-asc') {
+            const leftCategory = (left.category || '').trim();
+            const rightCategory = (right.category || '').trim();
+            if (!leftCategory && rightCategory) return 1;
+            if (leftCategory && !rightCategory) return -1;
+            const categoryOrder = leftCategory.localeCompare(rightCategory, 'ja');
+            return categoryOrder || left.name.localeCompare(right.name, 'ja');
+        }
         if (filters.sort === 'priority-desc') return (right.priority ?? 0) - (left.priority ?? 0);
         if (filters.sort === 'status-asc') {
             const leftLabel = filters.statusLabels[left.status] || left.status;

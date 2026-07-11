@@ -38,6 +38,20 @@ describe('theme list filtering and summaries', () => {
         expect(summarizeThemeStatuses(themes)).toEqual({ active: 1, planning: 1, completed: 1 });
     });
 
+    it('sorts by category, then theme name, with uncategorized themes last', () => {
+        const categoryOrder = filterAndSortThemes([
+            ...themes,
+            { name: 'API Renewal', category: 'Platform', status: 'active' },
+        ], { ...filters, sort: 'category-asc' });
+
+        expect(categoryOrder.map((theme) => theme.name)).toEqual([
+            'Data Cleanup',
+            'API Renewal',
+            'Core Renewal',
+            'Legacy Theme',
+        ]);
+    });
+
     it('assigns a stable category tone including themes without a category', () => {
         expect(getThemeCategoryTone('Platform')).toBe(getThemeCategoryTone('Platform'));
         expect(getThemeCategoryTone('')).toBe(getThemeCategoryTone(null));
