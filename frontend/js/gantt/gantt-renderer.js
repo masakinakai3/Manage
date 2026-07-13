@@ -152,6 +152,7 @@ let selectionAnchor = null;
 let selectedRange = null;
 let copiedRange = null;
 let ganttKeyboardBound = false;
+let pendingEdgeNavigation = null;
 let scenarioPreviewState = null;
 let scenarioPreviewContext = null;
 let ganttRefreshRequestId = 0;
@@ -367,6 +368,7 @@ export async function refreshGantt() {
         renderSnapshotSummaryCards(months);
         renderTable(months);
         renderDetailPanelV2();
+        restorePendingEdgeNavigation();
     } catch (error) {
         if (requestId !== ganttRefreshRequestId) return;
         setSaveState('error', 'ガントの読み込みに失敗しました');
@@ -1202,9 +1204,13 @@ function handleEditorNavigationWithHistory(button, direction, changed, newRate) 
     const month = button.dataset.month;
     const memo = button.dataset.memo || '';
 
+    const nextButton = findAdjacentCell(button, direction);
+    const crossesHorizontalEdge = !nextButton && ['ArrowLeft', 'ArrowRight'].includes(direction);
     const moveToNext = () => {
-        const nextButton = findAdjacentCell(button, direction);
-        if (!nextButton) return;
+        if (!nextButton) {
+            navigatePastHorizontalEdge(button, direction, { openEditor: true });
+            return;
+        }
 
         selectedCell = {
             themeId: Number.parseInt(nextButton.dataset.theme, 10),
@@ -1226,12 +1232,15 @@ function handleEditorNavigationWithHistory(button, direction, changed, newRate) 
     };
     const nextRate = normalizeRate(newRate);
     applyCellValue(button, nextRate, memo);
-    moveToNext();
 
-    commitSingleCellChange(themeId, memberId, month, nextRate, memo, {
+    const commit = commitSingleCellChange(themeId, memberId, month, nextRate, memo, {
         previousSnapshot,
         refreshAfterSave: false,
         successMessage: `${month} の負荷率を保存しました`,
+    });
+    if (!crossesHorizontalEdge) moveToNext();
+    commit.then(() => {
+        if (crossesHorizontalEdge) moveToNext();
     }).catch((error) => {
         setSaveState('error', 'セル保存に失敗しました');
         showToast(`セル保存に失敗しました: ${formatError(error)}`, 'error');
@@ -1595,8 +1604,54 @@ function moveGridSelection(direction, extendSelection = false) {
     if (direction === 'ArrowDown') nextPosition.rowIndex += 1;
 
     const nextButton = getButtonByPosition(nextPosition.rowIndex, nextPosition.colIndex);
-    if (!nextButton) return;
+    if (!nextButton) {
+        navigatePastHorizontalEdge(currentButton, direction, { extendSelection });
+        return;
+    }
     selectCellButton(nextButton, { extend: extendSelection });
+}
+
+function navigatePastHorizontalEdge(button, direction, options = {}) {
+    if (!button || !['ArrowLeft', 'ArrowRight'].includes(direction)) return false;
+
+    const monthDelta = direction === 'ArrowLeft' ? -scale : scale;
+    const anchorButton = options.extendSelection && selectionAnchor
+        ? getButtonByPosition(selectionAnchor.rowIndex, selectionAnchor.colIndex)
+        : null;
+    pendingEdgeNavigation = {
+        themeId: Number.parseInt(button.dataset.theme, 10),
+        memberId: Number.parseInt(button.dataset.member, 10),
+        month: addMonths(button.dataset.month, monthDelta),
+        openEditor: Boolean(options.openEditor),
+        extendSelection: Boolean(options.extendSelection),
+        anchor: anchorButton ? {
+            themeId: Number.parseInt(anchorButton.dataset.theme, 10),
+            memberId: Number.parseInt(anchorButton.dataset.member, 10),
+            month: anchorButton.dataset.month,
+        } : null,
+    };
+    selectedCell = {
+        themeId: pendingEdgeNavigation.themeId,
+        memberId: pendingEdgeNavigation.memberId,
+        month: pendingEdgeNavigation.month,
+    };
+    updateViewState({ startMonth: addMonths(startMonth, monthDelta) });
+    return true;
+}
+
+function restorePendingEdgeNavigation() {
+    if (!pendingEdgeNavigation) return;
+    const pending = pendingEdgeNavigation;
+    const button = document.querySelector(`.gantt-cell[data-theme="${pending.themeId}"][data-member="${pending.memberId}"][data-month="${pending.month}"]`);
+    if (!button) return;
+
+    pendingEdgeNavigation = null;
+    if (pending.anchor) {
+        const anchorButton = document.querySelector(`.gantt-cell[data-theme="${pending.anchor.themeId}"][data-member="${pending.anchor.memberId}"][data-month="${pending.anchor.month}"]`);
+        selectionAnchor = getCellPositionFromButton(anchorButton);
+    }
+    selectCellButton(button, { extend: pending.extendSelection });
+    if (pending.openEditor) openEditorForButton(button);
 }
 
 function getSelectedRangeButtons() {

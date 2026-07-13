@@ -67,6 +67,7 @@ const memberLoads = vi.fn(async () => ({ 10: { '2026-04': 20 } }));
 const snapshotList = vi.fn(async () => ([]));
 const themeUpdate = vi.fn(async () => ({}));
 const openThemeEditListener = vi.fn();
+const updateViewState = vi.fn();
 
 vi.mock('../js/gantt/gantt-editor.js', () => ({
     closeCellEditor,
@@ -96,11 +97,15 @@ vi.mock('../js/shared-state.js', () => ({
         groupBy: 'none',
     })),
     subscribeViewState: vi.fn(() => () => {}),
-    updateViewState: vi.fn(),
+    updateViewState,
 }));
 
 vi.mock('../js/utils/date-utils.js', () => ({
-    addMonths: vi.fn((month) => month),
+    addMonths: vi.fn((month, delta = 0) => {
+        const [year, monthNumber] = month.split('-').map(Number);
+        const date = new Date(Date.UTC(year, monthNumber - 1 + delta, 1));
+        return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+    }),
     currentMonth: vi.fn(() => '2026-04'),
     formatMonthHeader: vi.fn((month) => month),
     getVisibleMonths: vi.fn(() => visibleMonths),
@@ -237,6 +242,7 @@ describe('gantt-renderer regressions', () => {
         memberLoads.mockClear();
         snapshotList.mockClear();
         themeUpdate.mockClear();
+        updateViewState.mockClear();
         toPng.mockClear();
         toPng.mockResolvedValue('data:image/png;base64,abc');
         openThemeEditListener.mockClear();
@@ -342,6 +348,56 @@ describe('gantt-renderer regressions', () => {
         expect(latestCall[7].onCommitSuccess).toEqual(expect.any(Function));
         expect(latestCall[7].commitChange).toEqual(expect.any(Function));
         expect(latestCall[7].clearChange).toEqual(expect.any(Function));
+    });
+
+    it('shifts the visible period by one month when arrow navigation crosses either horizontal edge', async () => {
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+
+        const { initGantt, refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const leftCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-04"]');
+        leftCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        updateViewState.mockClear();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+
+        expect(updateViewState).toHaveBeenCalledWith({ startMonth: '2026-03' });
+        visibleMonths = ['2026-03', '2026-04', '2026-05'];
+        await refreshGantt();
+        expect(document.activeElement?.dataset.month).toBe('2026-03');
+
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+        await refreshGantt();
+        const rightCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-06"]');
+        rightCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        updateViewState.mockClear();
+
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+
+        expect(updateViewState).toHaveBeenCalledWith({ startMonth: '2026-05' });
+        visibleMonths = ['2026-05', '2026-06', '2026-07'];
+        await refreshGantt();
+        expect(document.activeElement?.dataset.month).toBe('2026-07');
+    });
+
+    it('shifts the visible period when inline-editor navigation crosses a horizontal edge', async () => {
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+
+        const { initGantt, refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const rightCell = document.querySelector('.gantt-cell[data-theme][data-month="2026-06"]');
+        rightCell.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        const navigate = openCellEditor.mock.calls.at(-1)[6];
+        updateViewState.mockClear();
+
+        navigate('ArrowRight', false, null);
+
+        expect(updateViewState).toHaveBeenCalledWith({ startMonth: '2026-05' });
+        visibleMonths = ['2026-05', '2026-06', '2026-07'];
+        await refreshGantt();
+        expect(openCellEditor.mock.calls.at(-1)[0]?.dataset.month).toBe('2026-07');
     });
 
     it('keeps the moved-to inline editor usable after saving with keyboard navigation', async () => {
