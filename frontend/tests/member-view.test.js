@@ -446,4 +446,19 @@ describe('member-view milestones', () => {
         ]);
         expect(refreshGantt).toHaveBeenCalledTimes(1);
     });
+
+    it('keeps the member task rows expanded after saving manpower', async () => {
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        document.querySelector('.toggle-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.querySelector('.member-theme-cell')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        await openCellEditor.mock.calls[0][7].commitChange(35);
+
+        const toggle = document.querySelector('.toggle-btn');
+        expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+        expect(toggle?.classList.contains('expanded')).toBe(true);
+        expect(document.querySelector('.theme-row')?.classList.contains('hidden')).toBe(false);
+    });
 });

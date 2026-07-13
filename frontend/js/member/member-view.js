@@ -23,6 +23,7 @@ let memberDecisionFilter = 'all';
 let lastMemberLoads = {};
 let lastWarnings = [];
 let lastVisibleMonths = [];
+const expandedMemberIds = new Set();
 const MEMBER_MONTH_COLUMN_WIDTH = 88;
 
 // `null` means "no allocation"; an explicit `0` is a real, distinct value.
@@ -277,10 +278,11 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
         const memberThemes = memberThemeLoads[member.member_id] || {};
         const themeIds = Object.keys(memberThemes).map((id) => Number.parseInt(id, 10));
         const hasThemes = themeIds.length > 0;
+        const isExpanded = hasThemes && expandedMemberIds.has(member.member_id);
 
         html += `<tr class="member-row" data-member-row="${member.member_id}">`;
         html += `<td><div class="member-row-header">`;
-        html += hasThemes ? `<button class="toggle-btn" data-toggle="${member.member_id}" type="button" aria-expanded="false" aria-label="${escapeHtml(member.display_name)}のテーマ内訳を展開">▶</button>` : '<span class="toggle-placeholder" aria-hidden="true"></span>';
+        html += hasThemes ? `<button class="toggle-btn${isExpanded ? ' expanded' : ''}" data-toggle="${member.member_id}" type="button" aria-expanded="${isExpanded}" aria-label="${escapeHtml(member.display_name)}のテーマ内訳を展開">${isExpanded ? '▼' : '▶'}</button>` : '<span class="toggle-placeholder" aria-hidden="true"></span>';
         html += `<div class="member-identity"><strong>${escapeHtml(member.display_name)}</strong><span class="member-department${member.department ? '' : ' missing'}">${escapeHtml(member.department || '部署未設定')}</span></div>`;
         html += `<span class="member-capacity" title="月間稼働上限">上限 ${member.capacity}%</span>`;
         html += `</div></td>`;
@@ -311,7 +313,7 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
             const themeColor = theme ? theme.color : '#888888';
             const themeLoads = memberThemes[themeId];
 
-            html += `<tr class="theme-row hidden" data-parent="${member.member_id}">`;
+            html += `<tr class="theme-row${isExpanded ? '' : ' hidden'}" data-parent="${member.member_id}">`;
             html += `<td><div class="theme-row-content"><span class="card-color-dot" style="background:${themeColor};width:8px;height:8px" aria-hidden="true"></span><span class="theme-row-label">${escapeHtml(themeName)}</span><span class="theme-row-kind">テーマ内訳</span></div></td>`;
 
             months.forEach((month) => {
@@ -360,6 +362,7 @@ function bindHeaderActions() {
         event.stopPropagation();
         document.querySelectorAll('.theme-row').forEach((row) => row.classList.remove('hidden'));
         document.querySelectorAll('.toggle-btn').forEach((button) => {
+            expandedMemberIds.add(Number.parseInt(button.dataset.toggle, 10));
             button.classList.add('expanded');
             button.textContent = '▼';
             button.setAttribute('aria-expanded', 'true');
@@ -368,6 +371,7 @@ function bindHeaderActions() {
 
     document.getElementById('member-collapse-all')?.addEventListener('click', (event) => {
         event.stopPropagation();
+        expandedMemberIds.clear();
         document.querySelectorAll('.theme-row').forEach((row) => row.classList.add('hidden'));
         document.querySelectorAll('.toggle-btn').forEach((button) => {
             button.classList.remove('expanded');
@@ -478,6 +482,9 @@ function bindTableInteractions(tbody) {
             event.stopPropagation();
             const memberId = button.dataset.toggle;
             const expanded = button.classList.toggle('expanded');
+            const parsedMemberId = Number.parseInt(memberId, 10);
+            if (expanded) expandedMemberIds.add(parsedMemberId);
+            else expandedMemberIds.delete(parsedMemberId);
             button.textContent = expanded ? '▼' : '▶';
             button.setAttribute('aria-expanded', String(expanded));
             tbody.querySelectorAll(`tr[data-parent="${memberId}"]`).forEach((row) => row.classList.toggle('hidden'));
