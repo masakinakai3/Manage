@@ -492,11 +492,6 @@ function bindTableInteractions(tbody) {
     });
 
     tbody.querySelectorAll('td[data-member-cell]').forEach((cell) => {
-        cell.addEventListener('click', () => {
-            const details = parseCellDetails(cell);
-            const member = allMembers.find((item) => item.member_id === Number.parseInt(cell.dataset.memberId, 10));
-            if (member) showDetailPanel(member, cell.dataset.month, details);
-        });
         cell.addEventListener('mouseenter', (event) => {
             const details = parseCellDetails(cell);
             if (!details || details.length === 0) return;
@@ -785,32 +780,6 @@ async function exportCSV() {
     } finally {
         setBusyState(false);
     }
-}
-
-function showDetailPanel(member, month, details) {
-    const panel = document.getElementById('member-load-detail');
-    if (!panel) return;
-    const total = details.reduce((sum, detail) => sum + detail.rate, 0);
-    const excess = Math.max(0, total - member.capacity);
-    panel.hidden = false;
-    panel.innerHTML = `
-        <div class="member-detail-heading">
-            <div><strong>${escapeHtml(member.display_name)}・${shortenMonth(month)}</strong><span>${escapeHtml(member.department || '部署未設定')} / 上限 ${member.capacity}%</span></div>
-            <button class="btn btn-ghost btn-sm" type="button" data-close-member-detail aria-label="負荷内訳を閉じる">閉じる</button>
-        </div>
-        <div class="member-detail-breakdown">
-            ${details.length ? details.map((detail) => `<span><i class="card-color-dot" style="background:${detail.color}" aria-hidden="true"></i>${escapeHtml(detail.theme_name)} <strong>${detail.rate}%</strong></span>`).join('') : '<span class="member-detail-empty">この月は割当がありません。</span>'}
-        </div>
-        <div class="member-detail-total${excess > 0 ? ' over' : ''}">
-            <span>合計 <strong>${total}%</strong></span>
-            <span>上限 <strong>${member.capacity}%</strong></span>
-            <span>${excess > 0 ? `上限超過 <strong>+${excess}%</strong>` : `余力 <strong>${Math.max(0, member.capacity - total)}%</strong>`}</span>
-        </div>
-    `;
-    panel.querySelector('[data-close-member-detail]')?.addEventListener('click', () => {
-        panel.hidden = true;
-        panel.innerHTML = '';
-    });
 }
 
 function showDetailPopup(event, member, month, details) {

@@ -129,7 +129,6 @@ function renderBaseDom() {
         <button id="member-today" type="button"></button>
         <select id="member-period-preset"><option value="rolling-6" selected>rolling-6</option></select>
         <section id="member-load-summary"></section>
-        <div id="member-load-detail" hidden></div>
         <table>
             <thead id="member-load-thead"></thead>
             <tbody id="member-load-tbody"></tbody>
@@ -323,7 +322,7 @@ describe('member-view milestones', () => {
         expect(document.querySelectorAll('tr.member-row')).toHaveLength(2);
     });
 
-    it('uses accessible expand controls and pins member details on click', async () => {
+    it('uses accessible expand controls without rendering a click detail panel', async () => {
         const { refreshMemberView } = await import('../js/member/member-view.js');
         await refreshMemberView();
 
@@ -336,9 +335,7 @@ describe('member-view milestones', () => {
         const summaryCell = document.querySelector('td[data-member-cell]');
         expect(summaryCell?.getAttribute('tabindex')).toBe('0');
         summaryCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        expect(document.getElementById('member-load-detail')?.hidden).toBe(false);
-        expect(document.getElementById('member-load-detail')?.textContent).toContain('Alice');
-        expect(document.getElementById('member-load-detail')?.textContent).toContain('上限 100%');
+        expect(document.querySelector('.member-load-detail-panel')).toBeNull();
     });
 
     it('places member expand controls beside the member column header', async () => {
