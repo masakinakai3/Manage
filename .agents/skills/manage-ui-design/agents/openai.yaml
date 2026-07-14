@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage UI Design"
+  short_description: "Implement and verify Manage web UI changes"
+  default_prompt: "Use $manage-ui-design to implement and visually verify a focused Manage UI change."

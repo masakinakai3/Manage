@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage UI Review"
+  short_description: "Audit the rendered Manage UI without code changes"
+  default_prompt: "Use $manage-ui-review to audit the rendered Manage UI without changing code."

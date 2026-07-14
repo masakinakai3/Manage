@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Build and Test"
+  short_description: "Choose and verify Manage build and test workflows"
+  default_prompt: "Use $manage-build-and-test to choose and run the correct Manage validation and packaging commands."

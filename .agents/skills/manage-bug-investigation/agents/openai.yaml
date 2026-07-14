@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Bug Investigation"
+  short_description: "Diagnose Manage bugs tests and performance issues"
+  default_prompt: "Use $manage-bug-investigation to reproduce and diagnose a Manage bug before deciding on a fix."

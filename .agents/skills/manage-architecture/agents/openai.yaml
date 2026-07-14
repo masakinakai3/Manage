@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Architecture"
+  short_description: "Trace Manage architecture and change boundaries"
+  default_prompt: "Use $manage-architecture to trace the Manage architecture and identify the correct change boundaries."

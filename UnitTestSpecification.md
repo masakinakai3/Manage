@@ -3,329 +3,128 @@
   Released under the MIT license
   https://opensource.org/licenses/mit-license.php
 -->
-# 単体テスト仕様書
+# テスト仕様書
 
 ## 1. 目的
 
-本書は、現行リポジトリに含まれる自動テストの対象範囲、実行方法、確認観点を整理したものです。  
-テストコードの実装内容に合わせて記載します。
+現行リポジトリの自動test層、守る契約、実行方法、未自動化範囲を定義する。個々のcase名を網羅するのではなく、test fileの責務と重要な回帰条件を維持する。
 
-## 2. テスト方針
+## 2. テスト層
 
-本プロジェクトでは次の 2 系統のテストを採用しています。
+| 層 | Framework | 場所 | 目的 |
+|---|---|---|---|
+| Backend unit/API | pytest + Flask Test Client + in-memory SQLite | `tests/` | model制約、認証、権限、API、集計、Import |
+| Frontend unit/DOM | Vitest + jsdom | `frontend/tests/` | utility、API client、render、interaction、keyboard、export dataset |
+| Static checks | repository-local Node scripts | `tools/lint-frontend.mjs`, `tools/format-frontend.mjs` | tab・trailing whitespace・改行 |
+| Bundle | Vite | `frontend/` | module解決とproduction bundle |
 
-- バックエンド: `pytest`
-- フロントエンド: `Vitest`
+自動E2E、visual regression、coverage gate、performance benchmark、PyInstaller実行testは存在しない。
 
-狙いは以下のとおりです。
+## 3. 実行方法
 
-- モデル制約や API の基本動作を壊さない
-- ガント画面とメンバー負荷画面の回帰を検知する
-- 配賦編集、コピー / ペースト、マイルストーン表示などの主要操作を守る
-
-## 3. テスト環境
-
-### 3.1 バックエンド
-
-- Python 3.10+
-- pytest
-- Flask Test Client
-- SQLite インメモリ DB
-
-`tests/conftest.py` では `create_app()` をテスト設定で起動し、各テストごとに DB を作成 / 廃棄します。
-
-### 3.2 フロントエンド
-
-- Node.js
-- Vitest
-- jsdom
-
-各テストでは DOM をモックし、API 呼び出しや UI モジュールをモックして描画とイベント処理を検証します。
-
-## 4. 実行方法
-
-### 4.1 バックエンド
+リポジトリルート:
 
 ```powershell
-python -m pytest
+.\.venv\Scripts\python.exe -m pytest tests\test_api.py -q
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-### 4.2 フロントエンド
+`frontend/`:
 
 ```powershell
-cd frontend
+npm test -- --run gantt-renderer
+npm test -- --run member-view
 npm test
-```
-
-### 4.3 補助チェック
-
-```powershell
-cd frontend
 npm run lint
 npm run format:check
+npm run build
 ```
 
-### 4.4 Windows での一括実行
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\run_checks.ps1
-```
-
-## 5. バックエンドテスト仕様
-
-### 5.1 `tests/test_models.py`
-
-#### M-01 パスワードハッシュ検証
-
-- 対象: `User.set_password`, `User.check_password`
-- 目的: パスワード検証が正しく動作することを確認する
-- 期待結果:
-  - 正しいパスワードで `True`
-  - 誤ったパスワードで `False`
-
-#### M-02 メンバー作成
-
-- 対象: `Member`
-- 目的: メンバー作成時の基本属性とデフォルト値を確認する
-- 期待結果:
-  - `display_name`, `department`, `capacity` が保存される
-  - `is_active` のデフォルトが `True`
-
-#### M-03 テーマ作成
-
-- 対象: `Theme`
-- 目的: テーマ作成時の基本属性とデフォルト値を確認する
-- 期待結果:
-  - `name`, `status` が保存される
-  - `color` のデフォルトが `#6366f1`
-
-#### M-04 配賦一意制約
-
-- 対象: `Allocation`
-- 目的: `(theme_id, member_id, month)` の一意制約を確認する
-- 期待結果:
-  - 同一キーの重複挿入で `IntegrityError` が発生する
-
-### 5.2 `tests/test_priority.py`
-
-#### M-05 優先度保存
-
-- 対象: `Theme.priority`
-- 目的: 優先度が保存されることとデフォルト値を確認する
-- 期待結果:
-  - 明示設定した値が保存される
-  - 未指定時のデフォルトが `0`
-
-### 5.3 `tests/test_api.py`
-
-#### A-01 ログイン成功 / 失敗
-
-- 対象: `POST /api/auth/login`
-- 目的: 認証の基本挙動を確認する
-- 期待結果:
-  - 正しい資格情報で `200`
-  - 誤った資格情報で `401`
-
-#### A-02 テーマ一覧取得
-
-- 対象: `GET /api/themes`
-- 目的: 登録テーマが API から取得できることを確認する
-- 期待結果:
-  - `200`
-  - 登録済みテーマ名がレスポンスに含まれる
-
-#### A-03 テーマ作成とマイルストーン保存
-
-- 対象: `POST /api/themes`
-- 目的: テーマ作成時にマイルストーン情報が保存されることを確認する
-- 期待結果:
-  - `201`
-  - 代表マイルストーン列が先頭要素で更新される
-  - `milestones` 配列が保存される
-
-#### A-04 テーママイルストーン更新
-
-- 対象: `PUT /api/themes/{id}`
-- 目的: テーマ更新でマイルストーン配列が置き換わることを確認する
-- 期待結果:
-  - `200`
-  - レスポンスの `milestones` が更新後内容になる
-  - DB 上の `ThemeMilestone` が更新後内容になる
-
-#### A-05 配賦一括更新
-
-- 対象: `PUT /api/allocations/bulk`
-- 目的: 新規登録と 0 指定削除を確認する
-- 期待結果:
-  - 追加時に `updated: 1`（削除操作は件数に含まれない）
-  - DB にレコードが作成される
-  - `allocation_rate: 0` 更新でレコードが削除される
-
-#### A-06 インサイト概況取得
-
-- 対象: `GET /api/insights/overview`
-- 目的: インサイト集計が返ることを確認する
-- 期待結果:
-  - `summary`, `health_checks`, `recommendations`, `dashboard` を含む
-  - `project_ribbon` が返る
-  - 想定の健全性チェックコードが含まれる
-
-#### A-07 保存ビュー CRUD
-
-- 対象: `POST /api/saved-views`, `GET /api/saved-views`, `DELETE /api/saved-views/{id}`
-- 目的: 保存ビューの登録、取得、削除を確認する
-- 期待結果:
-  - `201` で作成できる
-  - 一覧に作成済み ID が含まれる
-  - DB に JSON 状態が保存される
-  - 削除後に DB から消える
-
-#### A-08 開発ランク空更新
-
-- 対象: `PUT /api/themes/{id}`
-- 目的: `dev_rank` を空文字列に更新できることを確認する
-- 期待結果:
-  - `200`
-  - レスポンスの `dev_rank` が `""` になる
-
-#### A-09 JSON インポートでの dev_rank・dev_complete_months 保持
-
-- 対象: `POST /api/import/json`
-- 目的: JSON バックアップ復元時に `dev_rank` と `dev_complete_months` が保持されることを確認する
-- 期待結果:
-  - `200`
-  - 復元後のテーマに `dev_rank` が保存される
-  - 復元後のテーマに `dev_complete_months`（完了状態付き）が保存される
-
-#### A-10 Project Ribbon テーマ負荷集計
-
-- 対象: `GET /api/insights/overview`
-- 目的: Project Load Ribbon が同一テーマの複数メンバー配賦を正しく集計することを確認する
-- 期待結果:
-  - Ribbon の `total_load` が全メンバー合算値になる
-  - `projects` 配列内のテーマ `load` も合算値になる
-
-## 6. フロントエンドテスト仕様
-
-### 6.1 `frontend/tests/date-utils.test.js`
-
-#### F-01 `shortenMonth`
-
-- 目的: `YYYY-MM` を短縮表記へ変換できること
-
-#### F-02 `monthRange`
-
-- 目的: 月範囲を年跨ぎ含めて正しく列挙できること
-
-#### F-03 `addMonths`
-
-- 目的: 月加算 / 減算が正しいこと
-
-#### F-04 `formatMonth`
-
-- 目的: スケールごとに月表示が変わること
-
-#### F-05 `aggregateRate`
-
-- 目的: 期間集計時に非ゼロ月の平均値が返ること
-
-### 6.2 `frontend/tests/gantt-renderer.test.js`
-
-#### G-01 単一クリック編集
-
-- 目的: セルクリックでインラインエディタが開くこと
-
-#### G-02 キーボード移動と直接入力
-
-- 目的: 矢印移動と数字キー起点の編集開始を確認する
-
-#### G-03 コピー / ペースト
-
-- 目的: 範囲コピーと貼り付けで `bulkUpdate` が正しい payload を送ること
-
-#### G-04 テーマサマリ行描画
-
-- 目的: テーマサマリの配賦率表示が正しいこと
-
-#### G-05 Excel 出力データセット
-
-- 目的: ガント形状の XLSX 出力用データセットが生成できること
-
-#### G-06 マイルストーン表示
-
-- 目的: 該当月にマイルストーンチップが表示されること
-
-#### G-07 フィルタ UI 同期
-
-- 目的: 複数フィルタが状態と同期すること
-
-#### G-08 優先度バッジ
-
-- 目的: `P0` バッジが表示されること
-
-#### G-09 ガント画面からのマイルストーン編集
-
-- 目的: モーダル編集後に `themes.update` が期待 payload で呼ばれること
-
-### 6.3 `frontend/tests/gantt-editor.test.js`
-
-#### E-01 Enter 保存
-
-- 目的: Enter 押下で保存しつつ編集フローを継続できること
-
-#### E-02 矢印キー遷移
-
-- 目的: 矢印キーで値を保持したまま次セル遷移できること
-
-### 6.4 `frontend/tests/gantt-dnd.test.js`
-
-#### D-01 同一テーマ内の DnD
-
-- 目的: Undo / Redo 用 payload が正しく構築されること
-
-#### D-02 異テーマへのドロップ無効化
-
-- 目的: 別テーマセルへのドロップが無視されること
-
-### 6.5 `frontend/tests/member-view.test.js`
-
-#### MV-01 マイルストーン表示
-
-- 目的: メンバー負荷画面のテーマ行にマイルストーンが表示されること
-
-#### MV-02 開発完了月表示
-
-- 目的: 開発完了マーカーが該当月に表示されること
-
-#### MV-03 集約期間での表示
-
-- 目的: 3 か月などの集約表示でもマイルストーンと開発完了月が正しく属すること
-
-## 7. CI 実行仕様
-
-GitHub Actions の `windows-latest` 上で次を実行します。
-
-1. Python 3.11 と Node.js 20 をセットアップ
-2. バックエンド依存をインストール
-3. フロントエンド依存を `npm ci`
-4. `python -m pytest`
-5. `npm test`
-6. `npm run lint`
-7. `npm run format:check`
-
-## 8. 現時点のテスト範囲外
-
-現行自動テストでは次は限定的、または未カバーです。
-
-- EXE ビルド結果そのものの自動検証
-- 実ブラウザでの E2E シナリオ
-- JSON インポート / エクスポート API の詳細検証（A-09 で部分カバー済み）
-- スナップショット API の詳細検証
-- 権限制御の網羅的ケース
-
-今後 E2E を導入する場合は、主要ユーザーフローを次の順で追加するのが望ましいです。
-
-- ログインからガント表示まで
-- テーマ作成から配賦編集まで
-- 保存ビュー / スナップショット利用
-- JSON バックアップ復元
+`npm run format:check` は差分候補を表示しても終了コード0になる。`Frontend formatting looks good.` を合格条件とする。
+
+`tools/run_checks.ps1` はPythonをPATHから実行し、frontend buildを含まない。仮想環境を有効化した補助経路として扱う。
+
+## 4. Backendテスト責務
+
+| ファイル | 保護する主な動作 |
+|---|---|
+| `tests/conftest.py` | test app、in-memory DB、admin/user client、test isolation |
+| `tests/test_models.py` | password hash、Member/Theme default、Allocation unique constraint |
+| `tests/test_priority.py` | Theme priorityの明示値とdefault |
+| `tests/test_api.py` | login、protected/admin-only API、user管理、Theme・milestone、Allocation、Insights、SavedView、Import |
+
+重要なAPI回帰:
+
+- 未認証のprotected APIは401、一般ユーザーのadmin-only APIは403。
+- 管理者はuser CRUDを行え、自分自身は削除できない。
+- Themeの `dev_rank` 空値、複数の `dev_complete_months`、milestone配列を保持する。
+- JSON Importは `dev_rank` と完了状態つき `dev_complete_months` を保持する。
+- bulk/single Allocationは0を実レコードとして保持し、`null` で削除する。
+- Insightsはsummary、health checks、recommendations、dashboard、project ribbonを返す。
+- Project Ribbonは同一Themeの複数Member配賦を合算する。
+- scenario suggestionは開始固定とschedule維持の両経路を守る。
+- SavedViewは作成、一覧、削除を保持する。
+
+## 5. Frontendテスト責務
+
+| ファイル | 保護する主な動作 |
+|---|---|
+| `frontend/tests/api.test.js` | GET no-storeとwrite requestのcache挙動 |
+| `frontend/tests/date-utils.test.js` | 月範囲、加減算、scale見出し、配賦集約 |
+| `frontend/tests/shortcut-utils.test.js` | Undo/Redo、入力中shortcut、memo field |
+| `frontend/tests/theme-list-utils.test.js` | filter/sort、legacy status、category tone |
+| `frontend/tests/gantt-editor.test.js` | edit、保存、0と空欄、keyboard、optimistic state |
+| `frontend/tests/gantt-dnd.test.js` | 同一Theme内移動と異Theme拒否 |
+| `frontend/tests/gantt-theme-reorder.test.js` | Theme行のdrop位置と自己drop拒否 |
+| `frontend/tests/gantt-renderer.test.js` | history、selection、期間移動、export、milestone、filter、完了表示、nested row |
+| `frontend/tests/member-view.test.js` | 集約、milestone、月highlight、summary filter、expand、edit/history |
+| `frontend/tests/insights-view.test.js` | Project Ribbonのlabel・accessible detail |
+
+重要なUI回帰:
+
+- 未設定配賦と明示0を区別する。
+- Gantt編集、copy/paste、Undo/Redo、端を越える月移動を維持する。
+- 月highlightは単一で、再clickにより解除できる。
+- 完了状態はsummaryとnested rowの表示全体へ反映する。
+- CSV/XLSX datasetはvisible period、filter、label、row shapeを守る。
+- Member Loadのexpand controlはaccessibleで、不要なclick detail panelを生成しない。
+
+## 6. 変更別の必須test
+
+| 変更 | 必須 |
+|---|---|
+| Model/DB constraint | 関連model test、関連API test、full pytest |
+| Auth/permission/API | `tests/test_api.py` の関連case、full pytest |
+| Gantt | renderer + 関連editor/DnD、frontend build |
+| Member Load | member-view、frontend build |
+| Insights | insights-view、必要ならAPI insights test、frontend build |
+| Shared state/API client | 対応unit testと利用画面test |
+| CSV | 生成経路のVitest、endpoint変更時pytest、BOM/escaping実データ確認 |
+| HTML/CSS | 関連DOM test、lint、format出力、build、実browser |
+
+## 7. CI
+
+`.github/workflows/ci.yml` はWindows上でPython 3.11とNode.js 20を使用し、次を実行する。
+
+1. `pip install -r backend/requirements.txt pytest`
+2. `npm ci`
+3. `python -m pytest`
+4. `npm test`
+5. `npm run lint`
+6. `npm run format:check`
+
+CIは `npm run build`、browser/E2E、PyInstallerを実行しない。ローカル完了条件をCI合格だけへ縮小しない。
+
+## 8. Test追加方針
+
+- bug修正は可能なら修正前に失敗する最小caseを作る。
+- public behaviorをassertし、内部実装だけを固定しない。
+- APIはsuccessだけでなくvalidation、auth、empty、zero/nullを含める。
+- UIはsummaryだけでなくnested row、keyboard、focus、long/empty stateを含める。
+- mockを増やしすぎてdata flowを消さない。browserでしか確認できない項目はmanual verificationとして報告する。
+
+## 9. 完了報告
+
+- 実行したcommand、件数、結果を示す。
+- 未実施のbrowser、EXE、performance、環境差を示す。
+- testを実行していない文書変更では、path・link・command照合だけを実施済みとして報告する。

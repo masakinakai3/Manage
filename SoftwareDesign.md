@@ -367,7 +367,7 @@ flowchart TD
 ```mermaid
 flowchart TD
     A["モデル変更"] --> B["API 変更"]
-    B --> C["frontend/api.js 変更"]
+    B --> C["frontend/js/api.js 変更"]
     C --> D["画面ロジック変更"]
     D --> E["export/import 更新"]
     E --> F["テスト更新"]

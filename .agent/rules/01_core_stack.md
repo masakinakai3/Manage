@@ -1,17 +1,11 @@
-# Core Architecture & Coding Standard
+# Compatibility: Core Guidance
 
-## 技術スタック
-- **バックエンド**: Python, Flask, SQLite, SQLAlchemy
-- **フロントエンド**: Vanilla JavaScript, Vite, HTML, CSS (ReactやTailwindCSS等は不使用)
-- **パッケージマネージャー**: pip (バックエンド), npm (フロントエンド)
-- **ビルド・配布**: PyInstaller (EXE化)
+このディレクトリは旧エージェント向けの互換入口です。正規の共通指示は `AGENTS.md`、タスク別手順は `.agents/skills/` にあります。新しい指示をこのファイルへ追加しないでください。
 
-## コーディング規約
-- **ドキュメントとの整合性**: 常に `SoftwareDesign.md` および `Requirement.md` の仕様に従い、変更があった場合はドキュメントも併せて更新すること。
-- **SOLID・KISS原則**: 常にシンプルで可読性の高いコードを維持すること。過剰なエンジニアリングを避ける。
-- **DRY原則**: 共通ロジックは再利用可能な関数として抽出する。
-- エラーハンドリングを徹底し、必要に応じて適切なログを出力する。
+- 構造・変更影響: `.agents/skills/manage-architecture/SKILL.md`
+- 実装: `.agents/skills/manage-code-change/SKILL.md`
+- ビルド・テスト: `.agents/skills/manage-build-and-test/SKILL.md`
+- UI実装: `.agents/skills/manage-ui-design/SKILL.md`
+- CSV: `.agents/skills/manage-csv-export/SKILL.md`
 
-## 制約事項
-- 新しいnpmパッケージやpipモジュールをインストールする際は、必ず事前にユーザーへ許可を求めること。
-- 既存のディレクトリ構造（backend, frontend）を厳密に遵守すること。
+最低限、Flask + SQLite、Vite + Vanilla JavaScript、PyInstaller onefileという現行構成を維持し、React等の別frontend stackを前提にしないでください。

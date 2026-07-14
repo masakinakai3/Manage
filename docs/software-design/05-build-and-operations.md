@@ -56,13 +56,16 @@
 
 ### 5.1 コマンド
 
-| 種別 | コマンド |
-|---|---|
-| backend test | `.\.venv\Scripts\python.exe -m pytest` |
-| frontend test | `npm test` |
-| lint | `npm run lint` |
-| format check | `npm run format:check` |
-| 一括確認 | `tools/run_checks.ps1` |
+| 種別 | 作業ディレクトリ | コマンド |
+|---|---|---|
+| backend test | repository root | `.\.venv\Scripts\python.exe -m pytest -q` |
+| frontend test | `frontend/` | `npm test` |
+| lint | `frontend/` | `npm run lint` |
+| format check | `frontend/` | `npm run format:check` |
+| frontend build | `frontend/` | `npm run build` |
+| 一括確認 | repository root | `powershell -ExecutionPolicy Bypass -File tools\run_checks.ps1` |
+
+`tools/run_checks.ps1` のPythonはPATH依存で、frontend buildを含みません。仮想環境を有効化していない場合は `.venv` のPythonを明示してください。また `npm run format:check` は修正候補があっても終了コード0になるため、出力が `Frontend formatting looks good.` であることを確認します。
 
 ### 5.2 ドキュメント更新の原則
 

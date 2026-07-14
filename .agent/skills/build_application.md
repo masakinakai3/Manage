@@ -1,24 +1,12 @@
 ---
-description: アプリケーションのビルドとEXE作成
+description: 旧エージェント向けのManageビルド互換入口
 ---
 
-# アプリケーションのビルドとEXE作成
+# Build Application Compatibility
 
-このプロジェクトでは、フロントエンドのリソースを静的ファイルとしてビルドし、バックエンドと共にPyInstallerを用いて一つの実行ファイル（EXE）にまとめます。以下の手順でビルドを行ってください。
+正規手順は `.agents/skills/manage-build-and-test/SKILL.md` に統合されています。
 
-## 手順
+- 反復確認: `.\.venv\Scripts\python.exe build_exe.py --profile dev`
+- 配布用onefile: `.\.venv\Scripts\python.exe build_exe.py`
 
-1. **フロントエンドのビルド**:
-`frontend` ディレクトリ配下で npm のビルドコマンドを実行し、Vite による静的アセットを生成します。
-
-```bash
-npm run build --prefix frontend
-```
-2. **実行ファイルの作成**:
-プロジェクトのルートディレクトリでビルドスクリプトを実行します。これにより、バックエンドプログラムとビルド済みフロントエンドアセットが同梱された `manage_app.exe` が作成されます。
-
-```bash
-python build_exe.py
-```
-3. **成果物の確認**:
-`dist` ディレクトリに `manage_app.exe` が生成されていることを確認してください。
+配布完了はログだけでなく `dist/manage_app.exe` の実在、サイズ、更新時刻を確認してください。新しい説明をこのファイルへ追加しないでください。

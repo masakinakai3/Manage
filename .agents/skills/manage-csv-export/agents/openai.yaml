@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage CSV Export"
+  short_description: "Change and verify Manage CSV export behavior"
+  default_prompt: "Use $manage-csv-export to change or review Manage CSV export behavior and compatibility."

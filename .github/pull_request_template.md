@@ -1,25 +1,34 @@
-## Summary
+## 概要
 
-- What user problem does this PR solve?
-- What changed at a high level?
+- 解決するユーザー問題:
+- 主な変更と、意図的に変更しない範囲:
 
-## Verification
+## 検証
 
-- [ ] Backend tests
-- [ ] Frontend tests
-- [ ] Frontend build
-- [ ] Manual smoke check
+- [ ] 対象pytest
+- [ ] backend全pytest
+- [ ] 対象Vitest
+- [ ] frontend全Vitest
+- [ ] frontend lint
+- [ ] frontend format出力が `Frontend formatting looks good.`
+- [ ] frontend build
+- [ ] desktop / 狭幅の実画面確認（UI変更時）
+- [ ] `dist/manage_app.exe` と起動確認（配布変更時）
+- [ ] 実行しなかった項目と理由を下記へ記載
 
-## Review Focus
+## レビュー重点
 
-- [ ] Allocation editing and save behavior
-- [ ] Data integrity and cross-view consistency
-- [ ] Export/import behavior
-- [ ] Responsive and keyboard interaction changes
-- [ ] Documentation updates
+- [ ] 配賦の0 / null、編集、Undo / Redo
+- [ ] SQLite移行、API、Import / Export、権限の互換性
+- [ ] Gantt / Member Load / Insightsの状態同期
+- [ ] responsive、keyboard、focus、light / dark
+- [ ] 文書とtestの更新
+- [ ] 生成物、local DB、secret、無関係な差分が含まれない
 
-## Risks / Notes
+## リスク / 未確認事項
 
-- Known limitations:
-- Follow-up items:
-- Any skipped checks and why:
+- Migration / data / API:
+- UI / accessibility / performance:
+- Packaging:
+- 未実施検証と理由:
+- Follow-up:

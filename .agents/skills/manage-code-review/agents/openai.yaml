@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Code Review"
+  short_description: "Review Manage changes without editing files"
+  default_prompt: "Use $manage-code-review to review a Manage change without modifying the repository."

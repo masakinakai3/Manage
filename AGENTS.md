@@ -1,60 +1,145 @@
-# Manage Codex Guidance
+# Manage Agent Guidance
 
-## Product Context
+## リポジトリの目的
 
-- This repository is a Windows/PowerShell local resource-management web app with a Flask backend and Vite frontend.
-- The preferred packaged deliverable is `dist/manage_app.exe`; keep the one-file EXE path working when packaging behavior changes.
-- The UI is Japanese-first. New user-facing labels, empty states, errors, and help text should be readable Japanese unless the surrounding surface is intentionally English.
+Manage は、テーマ、メンバー、月次配賦、負荷、インサイト、保存ビュー、スナップショット、データ入出力を扱うWindows向けローカルWebアプリです。UIは日本語を基本とし、配布物は単一ファイルの `dist/manage_app.exe` です。
 
-## Frontend Quality Bar
+## 技術スタック
 
-- For UI/design work, preserve the existing app structure and design language before inventing a parallel system.
-- Treat rendered screenshots and browser-visible behavior as the source of truth. If code interpretation and the screen disagree, fix what the user can actually see.
-- Avoid layout shift for local UI-only actions such as expand/collapse, filter changes, selection, and saved-view switching. Prefer rerender-only paths over data refetch when possible.
-- Keep related controls adjacent and visually stable. Small header/button movement is a real regression.
-- For Gantt and member-load parity, check nested project/theme rows, not only top-level summaries.
-- Completed rows should read as completed across the whole row: labels, numbers, chips, warning colors, and rate colors all need neutral treatment.
-- Month highlighting should default to a single active highlight that can be cleared by clicking the same month again.
-- Keep Insights focused on high-signal decision support. Do not reintroduce dense summary panels into Gantt unless explicitly requested.
+- Backend: Python 3.10+、Flask、Flask-Login、Flask-SQLAlchemy、SQLite
+- Frontend: Vite、Vanilla JavaScript、HTML、CSS
+- Test: pytest、Vitest + jsdom
+- Package: PyInstaller。`release` はonefile、`dev` はonedir
+- CI: Windows、Python 3.11、Node.js 20
 
-## Repo Entry Points
+## 作業開始時
 
-- Frontend shell: `frontend/index.html`
-- App/navigation/auth wiring: `frontend/js/app.js`
-- API client: `frontend/js/api.js`
-- Shared view state: `frontend/js/shared-state.js`
-- Gantt rendering and export UI: `frontend/js/gantt/gantt-renderer.js`
-- Member load view: `frontend/js/member/member-view.js`
-- Insights view: `frontend/js/insights-view.js`
-- Backend app/auth/session setup: `backend/app.py`
-- Export endpoints: `backend/routes/export.py`
-- Insights API: `backend/routes/insights.py`
+1. `git status --short` で既存差分と生成物を確認し、ユーザーの変更を戻さない。
+2. 依頼が「調査のみ」「レビューのみ」「実装」「リリース」のどれかを確定する。調査・レビューだけならファイルを変更しない。
+3. `Requirement.md`、`SoftwareDesign.md`、関連する `docs/software-design/`、実装、既存テストを照合する。文書とコードが違う場合は実装・設定・テストを根拠に差異を報告する。
+4. 類似実装と呼び出し元を `rg` で探し、受け入れ条件を満たす最小範囲だけ変更する。
+5. 下表から必要なSkillを読む。複数Skillを使う場合は、アーキテクチャ確認、タスク固有手順、ビルド・テストの順に使う。
 
-## CSV Export Guidance
+## アーキテクチャの要点
 
-- Use the `manage-csv-export` skill for CSV export requests, including Gantt CSV, member-load CSV, `/api/export/csv`, filename/content fixes, and Excel compatibility issues.
-- CSV output should match the live UI state the user is looking at: visible period/scale, active filters/search, row ordering, labels, rates, memos, milestones, and relevant theme/member metadata.
-- Keep Japanese column labels readable. Preserve explicit values such as `P0`, `-`, no-rank, stopped/completed status labels, and memo text instead of normalizing them away.
-- Prefer a shared, well-tested escaping path over ad hoc string joins when changing CSV shape. Quote cells containing commas, quotes, CR/LF, or leading/trailing whitespace, and preserve CRLF row endings where the existing flow uses them.
-- Keep Excel-on-Windows compatibility: `/api/export/csv` currently prepends a UTF-8 BOM and returns `text/csv; charset=utf-8`; do not remove that behavior unless the request explicitly changes the export contract.
-- If CSV behavior diverges between browser-generated downloads and `/api/export/csv`, document which path owns the behavior and add focused tests for that path.
-- Treat CSV changes as user-visible workflow changes: update `docs/APIContract.md`, `docs/software-design/04-data-and-api.md`, or nearby docs when request/response shape, columns, labels, permissions, or filename behavior changes.
-- For third-party CSV parsing/writing libraries or current framework-specific APIs, use the `context7` MCP server first. For OpenAI-related export automation questions, use `openaiDeveloperDocs` first.
+```text
+frontend/index.html
+  -> frontend/js/app.js
+     -> frontend/js/api.js -> /api/*
+     -> gantt / member / insights 各画面
+Flask backend/app.py
+  -> backend/routes/*.py
+     -> backend/models.py / backend/services/allocation_service.py
+        -> SQLite
+build_exe.py -> frontend/dist + manage_app.spec -> dist/manage_app.exe
+```
 
-## Verification
+主要な入口:
 
-- Frontend package commands run from `frontend/`.
-- For focused frontend changes, prefer the narrow Vitest target first, for example `npm test -- --run gantt-renderer` or `npm test -- --run member-view`.
-- Before considering broad frontend work complete, run `npm run build`.
-- For backend/API changes, run the relevant pytest target from the repo root, usually `.\.venv\Scripts\python.exe -m pytest tests/test_api.py -q`.
-- For visual work, use the in-app browser or Playwright when available and verify desktop plus a narrower/mobile width.
+- アプリ初期化・認証・SPA配信: `backend/app.py`
+- モデルと互換性制約: `backend/models.py`
+- API: `backend/routes/`
+- 負荷集計: `backend/services/allocation_service.py`
+- 画面骨格: `frontend/index.html`
+- ナビゲーションとCRUD結線: `frontend/js/app.js`
+- APIクライアント: `frontend/js/api.js`
+- 共有表示状態: `frontend/js/shared-state.js`
+- Gantt: `frontend/js/gantt/gantt-renderer.js`
+- Member Load: `frontend/js/member/member-view.js`
+- Insights: `frontend/js/insights-view.js` と `backend/routes/insights.py`
 
-## Working Rules
+詳細は `.agents/skills/manage-architecture/SKILL.md` を読む。
 
-- Do not revert user changes. Inspect current files and patch surgically, especially in long frontend files.
-- Keep changes end-to-end when a feature crosses data model, API, import/export, frontend rendering, docs, and tests.
-- Prefer durable repo-resident guidance, tests, and docs over chat-only advice.
-- If a request is about Web UI design quality, use the `manage-ui-design` skill.
-- If a request is about CSV export behavior or CSV output quality, use the `manage-csv-export` skill.
-- For OpenAI, Codex, ChatGPT, Apps SDK, or OpenAI API questions, use the `openaiDeveloperDocs` MCP server before general web search.
-- For current third-party library/framework usage, prefer the `context7` MCP server when available before relying on stale memory.
+## 基本コマンド
+
+リポジトリルートから実行する。初回セットアップ:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+.\.venv\Scripts\python.exe -m pip install pytest
+Push-Location frontend
+npm ci
+Pop-Location
+```
+
+開発サーバーは別々のターミナルで起動する。
+
+```powershell
+# terminal 1
+Set-Location backend
+..\.venv\Scripts\python.exe app.py
+
+# terminal 2
+Set-Location frontend
+npm run dev
+```
+
+代表検証:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+Push-Location frontend
+npm test
+npm run lint
+npm run format:check
+npm run build
+Pop-Location
+git diff --check
+```
+
+注意:
+
+- `tools/run_checks.ps1` のPythonはPATH依存である。仮想環境を有効化していない場合は、上記の `.venv` 明示コマンドを使う。
+- `npm run format:check` は修正候補があっても終了コード0になる。出力が `Frontend formatting looks good.` であることを確認し、`Formatting changes suggested:` を合格扱いしない。
+- 実行していないテストや目視確認を、実施済み・合格と報告しない。
+
+検証の選び方とEXE作成は `.agents/skills/manage-build-and-test/SKILL.md` を読む。
+
+## 絶対に守る制約
+
+- ユーザーの既存差分、ローカルDB、認証情報、監査出力を削除・上書きしない。
+- レビューのみの依頼で実装しない。原因調査のみの依頼で修正しない。
+- 要求外の大規模リファクタリング、無関係な整形、依存更新、ビルド設定変更を行わない。
+- テスト削除、警告無効化、例外の握りつぶし、基準の緩和で合格させない。
+- 新規依存は既存機能で代替できないことを確認する。依頼範囲を広げる依存追加・更新は事前にユーザーへ確認する。
+- UI変更では既存のID、`data-*`、テストセレクタ、キーボード操作を契約として扱う。
+- 新しいユーザー向け文言は、周辺が意図的に英語でない限り自然な日本語にする。
+- API・モデル変更では呼び出し元、Import/Export、文書、既存SQLiteの移行を確認する。
+- `Allocation` の同一キーは `(theme_id, member_id, month)` で一意。`allocation_rate: 0` は明示値として保持し、削除は `null` で表す現行契約を崩さない。
+- `theme_milestones` がマイルストーン実体で、`themes.milestone_month` / `milestone_label` は旧互換。片側だけを更新しない。
+- `/api/export/*` と `/api/import/json`、ユーザー管理は現行では管理者専用。権限変更はAPI契約変更として扱う。
+- EXE関連変更では `dist/manage_app.exe` のonefile経路を維持する。
+
+## 自動生成物・ローカル状態
+
+次を直接編集またはコミットしない。
+
+- `frontend/node_modules/`, `frontend/dist/`, `dist/`, `build/`
+- `.build_exe_state.json`, `.pytest_cache/`, `.playwright-cli/`
+- `backend/database.db`, `backend/instance/`, `backend/secret_key.txt`, `backend/initial_admin_password.txt`, `dist/initial_admin_password.txt`
+- `.codex/audit/`, `output/`, `tools/*.log`
+- `.codex/environments/environment.toml`（自動生成指定。生成元から更新する）
+
+`backend/app.py` 内の起動時軽量マイグレーションと `backend/migrations/` は互換性に関わる。既存DBを捨てて解決しない。
+
+## タスク別Skill
+
+| 依頼 | 使用するSkill |
+|---|---|
+| 構造、データフロー、変更先、影響範囲の確認 | `manage-architecture` |
+| 機能追加、修正、リファクタリング、文書のみの変更 | `manage-code-change` |
+| 不具合、テスト失敗、性能低下の原因調査 | `manage-bug-investigation` |
+| コードや差分のレビューのみ | `manage-code-review` |
+| テスト選択、セットアップ、ビルド、EXE、リリース確認 | `manage-build-and-test` |
+| Web UIの実装・視覚修正 | `manage-ui-design` |
+| 実画面のUI/UX監査のみ | `manage-ui-review` |
+| CSVの内容、列、名前、Excel互換、`/api/export/csv` | `manage-csv-export` |
+
+## 最低限の完了報告
+
+- 変更ファイルと変更理由
+- 実行したコマンドと結果
+- 実行できなかった検証と理由
+- 目視確認した画面・幅・状態、または未確認であること
+- 互換性、移行、性能、セキュリティ、残存リスク

@@ -1,15 +1,11 @@
-# Terminal & Browser Verification Rules
+# Compatibility: Verification
 
-実装完了後、ユーザーに報告する前に必ず以下の自己検証（Self-Verification）プロセスを実行すること。
+検証の正規手順は `.agents/skills/manage-build-and-test/SKILL.md` を使用してください。UIは実装時 `manage-ui-design`、レビューのみなら `manage-ui-review` も使用します。
 
-## ターミナルでの検証
-- バックエンドの修正完了後、必ず `python -m pytest tests/` を実行し、既存テストがパスすることを確認する。新規追加した機能については適宜テストを追加する。
-- フロントエンドの修正完了後は、`npm run test --prefix frontend` (Vitest) などの静的解析・テストを実行する。
-- エラーが出た場合は、自律的にエラーログを読み込み、コードを修正すること。
+重要な互換注意:
 
-## ブラウザでの検証（UIタスクの場合）
-- UIコンポーネントやフロントエンドの修正を行った場合は、ターミナルを開き、以下のコマンドで開発サーバーを立ち上げる。
-  - バックエンド: `python app.py` (CWD: `backend/`, ポート5001)
-  - フロントエンド: `npm run dev` (CWD: `frontend/`, ポート5173)
-- 統合ブラウザを開き（`http://localhost:5173`）、実装した画面のレンダリングや挙動が正常か確認する。
-- ブラウザのコンソールにエラーが出ていないか確認し、あれば自己修正を試みる。
+- pytestはリポジトリルートから `.\.venv\Scripts\python.exe -m pytest` を優先する。
+- frontend commandは `frontend/` で実行する。
+- `npm run format:check` は修正候補があっても終了コード0になるため、`Frontend formatting looks good.` という出力を確認する。
+- backendとViteは別ターミナルで起動する。同じ逐次スクリプトでbackend起動後にViteを置かない。
+- 実行していないtest、browser確認、EXE起動を合格と報告しない。

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Manage Code Change"
+  short_description: "Implement focused and verified Manage changes"
+  default_prompt: "Use $manage-code-change to implement a focused Manage change with matching tests and documentation."

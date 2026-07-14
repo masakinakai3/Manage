@@ -1,29 +1,19 @@
 ---
-description: ローカル開発サーバーの起動
+description: 旧エージェント向けのManage開発サーバー互換入口
 ---
 
-# ローカル開発サーバーの起動
+# Development Server Compatibility
 
-機能追加やUIの動作確認を行う際は、バックエンドとフロントエンドの両方の開発サーバーを独立して立ち上げる必要があります。
+正規手順は `.agents/skills/manage-build-and-test/SKILL.md` に統合されています。次を別ターミナルで実行してください。
 
-## 手順
-
-以下のコマンドをそれぞれ別々のターミナルで実行してください。
-
-1. **バックエンドサーバーの起動** (ポート 5001)
-
-```bash
-# ターミナル1
-cd backend
-python app.py
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe app.py
 ```
 
-2. **フロントエンドサーバーの起動** (ポート 5173 等、Vite依存)
-
-```bash
-# ターミナル2
-cd frontend
+```powershell
+Set-Location frontend
 npm run dev
 ```
 
-完了したら、ブラウザで `http://localhost:5173` にアクセスし、アプリケーションの動作を確認してください。バックエンドからのAPI応答やCORSの設定確認を含めてテストできます。
+backendは `http://127.0.0.1:5001`、Viteは `http://localhost:5173` です。

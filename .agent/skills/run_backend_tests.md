@@ -1,20 +1,14 @@
 ---
-description: バックエンドのテスト実行
+description: 旧エージェント向けのManage backend test互換入口
 ---
 
-# バックエンドのテスト実行
+# Backend Test Compatibility
 
-このプロジェクトでは、`pytest` フレームワークを用いてバックエンドのテストを実行します。バックエンドに修正を加えた際や、新しいAPIを実装した際には必ずテストを実行してください。
+正規手順は `.agents/skills/manage-build-and-test/SKILL.md` に統合されています。
 
-## 実行手順
-
-プロジェクトのルートディレクトリで以下のコマンドを実行します。
-
-```bash
-python -m pytest tests/
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_api.py -q
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-### Tips
-- 詳細なログ出力が必要な場合は、`-v` オプションを付けてください (`python -m pytest tests/ -v`)
-- 特定のテストファイルのみ実行したい場合はパスを指定します（例: `python -m pytest tests/test_api.py`）
-- `ModuleNotFoundError` 等が発生する場合は、仮想環境が有効になっているか、または必要なパッケージが `pip install -r backend/requirements.txt` でインストールされているか確認してください。
+対象testを先に実行し、変更範囲に応じてfull suiteへ広げてください。

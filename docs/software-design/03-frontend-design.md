@@ -86,7 +86,7 @@ sequenceDiagram
 | 初期化 | `initGantt()` |
 | 再描画 | `refreshGantt()` |
 | 制御群バインド | `bindControls()` |
-| 編集保存 | `saveSelectedCell()` |
+| 編集保存 | `saveSelectedCellWithHistory()` |
 | DnD 移動 | `performDragAndDropMove()` |
 | CSV 出力 | `exportCsv()` |
 | XLSX 用データ組み立て | `getGanttExportDataset()`, `getGanttGridExportDataset()` |
