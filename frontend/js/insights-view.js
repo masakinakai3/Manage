@@ -62,27 +62,37 @@ function renderSummary(summary) {
     const shortage = Number(summary.total_shortage || 0);
 
     target.innerHTML = `
-        <article class="summary-card">
+        <button class="summary-card insight-summary-action" type="button" data-target-view="member-load">
             <div class="summary-label">優先対応件数</div>
             <div class="summary-value${urgentCount > 0 ? ' summary-value--alert' : ''}">${urgentCount}</div>
             <div class="summary-subtext">過負荷メンバー ${overloadedMembers} 名 / 警告セル ${warningCells} 件</div>
-        </article>
-        <article class="summary-card">
+            <span class="insight-summary-link">メンバー負荷で確認 →</span>
+        </button>
+        <button class="summary-card insight-summary-action" type="button" data-target-view="member-load">
             <div class="summary-label">不足見込み</div>
             <div class="summary-value${shortage > 0 ? ' summary-value--alert' : ''}">${formatPersonMonths(shortage / 100)} 人月</div>
             <div class="summary-subtext">期間内合計 / 逼迫見込み月 ${Number(summary.upcoming_shortage_months || 0)} か月</div>
-        </article>
-        <article class="summary-card">
+            <span class="insight-summary-link">不足月を確認 →</span>
+        </button>
+        <button class="summary-card insight-summary-action" type="button" data-target-view="member-load">
             <div class="summary-label">余剰工数</div>
             <div class="summary-value">${formatPersonMonths(Number(summary.total_spare || 0) / 100)} 人月</div>
             <div class="summary-subtext">期間内合計 / 低稼働メンバー ${Number(summary.underutilized_member_count || 0)} 名</div>
-        </article>
-        <article class="summary-card">
+            <span class="insight-summary-link">再配分候補を確認 →</span>
+        </button>
+        <button class="summary-card insight-summary-action" type="button" data-target-view="gantt">
             <div class="summary-label">稼働中テーマ</div>
             <div class="summary-value">${Number(summary.active_theme_count || 0)}</div>
             <div class="summary-subtext">改善候補 ${Number(summary.recommendation_count || 0)} 件</div>
-        </article>
+            <span class="insight-summary-link">計画を修正 →</span>
+        </button>
     `;
+
+    target.querySelectorAll('[data-target-view]').forEach((button) => {
+        button.addEventListener('click', () => {
+            document.dispatchEvent(new CustomEvent('manage:navigate', { detail: { view: button.dataset.targetView } }));
+        });
+    });
 }
 
 function renderError(message) {
@@ -241,7 +251,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
                 <path
                     d="${buildRibbonPath(segment, nextSegment, columnWidth)}"
                     fill="${escapeHtml(color)}"
-                    fill-opacity="0.42"
+                    fill-opacity="0.28"
                     stroke="${escapeHtml(color)}"
                     stroke-opacity="0.6"
                     stroke-width="1"
@@ -342,10 +352,8 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         const labelLimit = isSmallLoad
             ? (fullscreen ? 12 : 8)
             : (fullscreen ? 18 : (columnWidth > 52 ? 14 : 10));
-        const fontSize = isSmallLoad
-            ? (fullscreen ? 10 : 9)
-            : (heightValue < 18 ? 10 : (heightValue < 28 ? 11 : 12));
-        const shouldRenderLabel = heightValue >= (isSmallLoad ? 10 : 18);
+        const fontSize = 12;
+        const shouldRenderLabel = heightValue >= 24;
         const tooltipLines = [
             `${segment.month} | ${segment.name} | ${segment.load}%`,
             ...formatRibbonMemberBreakdown(segment),
@@ -360,7 +368,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
                     rx="${Math.min(8, heightValue / 2)}"
                     ry="${Math.min(8, heightValue / 2)}"
                     fill="${escapeHtml(color)}"
-                    fill-opacity="0.85"
+                    fill-opacity="0.78"
                 >
                     <title>${escapeHtml(tooltipLines.join('\n'))}</title>
                 </rect>
@@ -383,7 +391,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         return `
         <g>
             <text x="${item.x}" y="${height - 28}" text-anchor="middle" class="project-ribbon__month-label">${escapeHtml(formatRibbonMonth(item.month))}</text>
-            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label${isOverCapacity ? ' project-ribbon__total-label--over' : ''}">Total ${escapeHtml(String(item.totalLoad))}%</text>
+            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label${isOverCapacity ? ' project-ribbon__total-label--over' : ''}">合計 ${escapeHtml(String(item.totalLoad))}%</text>
         </g>
     `;
     });
@@ -407,7 +415,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         <button class="btn btn-ghost btn-sm" type="button" data-ribbon-expand>全画面で表示</button>
     `;
     const chartHelp = `
-        <span class="project-ribbon__chart-help">100% = メンバー1人の全稼働(1人月)。高さは月合計負荷の最大値が基準です。負荷がチーム総容量(稼働メンバーのキャパシティ合計)に近づくと赤の破線で総容量ラインを表示し、超過した月のTotalは赤字になります。列をクリックすると内訳を固定表示できます。</span>
+        <span class="project-ribbon__chart-help">100%＝1人月。赤破線はチーム総容量です。月を選ぶと内訳を確認できます。</span>
     `;
     const fullscreenControls = fullscreen ? `
         <div class="project-ribbon__toolbar">
@@ -679,7 +687,7 @@ function initScenarioPlanner() {
             toggleButton.setAttribute('aria-expanded', String(!expanded));
             body.hidden = expanded;
             const icon = toggleButton.querySelector('.insight-scenario-toggle-icon');
-            if (icon) icon.textContent = expanded ? '▸' : '▾';
+            icon?.classList.toggle('is-expanded', expanded);
         });
     }
 

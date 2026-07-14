@@ -484,6 +484,15 @@
     flex: 0 0 auto;
 }
 
+.toggle-btn::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-right: 1.8px solid currentColor;
+    border-bottom: 1.8px solid currentColor;
+    transform: rotate(-45deg);
+}
+
 .toggle-btn:focus-visible,
 .member-load-table [role="button"]:focus-visible {
     outline: 2px solid var(--color-primary);
@@ -534,7 +543,7 @@
 .theme-row-kind {
     margin-left: auto;
     color: var(--color-text-muted);
-    font-size: 10px;
+    font-size: 12px;
     white-space: nowrap;
 }
 
@@ -573,7 +582,7 @@
     border-radius: 999px;
     background: rgba(245, 158, 11, 0.14);
     color: #b45309;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     line-height: 1.4;
     white-space: nowrap;
@@ -709,7 +718,7 @@ td[data-member-cell]:hover .stacked-bar-segment {
     border-radius: 999px;
     background: rgba(99, 102, 241, 0.12);
     color: var(--color-primary-hover);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 600;
     line-height: 1.4;
     white-space: nowrap;

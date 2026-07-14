@@ -30,7 +30,7 @@ const STATUS_LABELS = {
     hold: '保留',
 };
 
-STATUS_LABELS.stop = 'STOP';
+STATUS_LABELS.stop = '停止';
 
 const DEV_RANK_LABELS = {
     '': '-',
@@ -226,6 +226,11 @@ function initNavigation() {
         });
     });
 
+    document.addEventListener('manage:navigate', (event) => {
+        const targetView = event.detail?.view;
+        if (targetView && VIEW_LABELS[targetView]) switchView(targetView);
+    });
+
     document.addEventListener('keydown', (event) => {
         if (event.defaultPrevented || shouldIgnoreShortcut(event)) return;
         const shortcutKey = getShortcutKey(event);
@@ -365,7 +370,9 @@ function initUiConfig() {
             ganttControlsToggle.textContent = collapsed ? 'コントロールを開く' : 'コントロールを閉じる';
         }
     };
-    const ganttControlsCollapsed = localStorage.getItem('gantt_controls_collapsed') === 'true';
+    const storedGanttControlsState = localStorage.getItem('gantt_controls_collapsed');
+    const ganttControlsCollapsed = window.matchMedia('(max-width: 1024px)').matches
+        || storedGanttControlsState === 'true';
     applyGanttControlsCollapsed(ganttControlsCollapsed);
     ganttControlsToggle?.addEventListener('click', () => {
         const collapsed = !ganttControls?.classList.contains('is-collapsed');
@@ -377,6 +384,7 @@ function initUiConfig() {
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebar-toggle');
     const isNarrowLayout = () => window.matchMedia('(max-width: 1024px)').matches;
+    let wasNarrowLayout = isNarrowLayout();
     if (localStorage.getItem('sidebar_collapsed') === 'true' || isNarrowLayout()) {
         sidebar?.classList.add('sidebar-collapsed');
     }
@@ -389,7 +397,16 @@ function initUiConfig() {
         if (isNarrowLayout()) sidebar?.classList.add('sidebar-collapsed');
     }));
     window.addEventListener('resize', () => {
-        if (isNarrowLayout()) sidebar?.classList.add('sidebar-collapsed');
+        const narrowLayout = isNarrowLayout();
+        if (narrowLayout) sidebar?.classList.add('sidebar-collapsed');
+        if (narrowLayout && !wasNarrowLayout) applyGanttControlsCollapsed(true);
+        wasNarrowLayout = narrowLayout;
+    });
+    window.matchMedia('(max-width: 1024px)').addEventListener('change', (event) => {
+        if (event.matches) {
+            sidebar?.classList.add('sidebar-collapsed');
+            applyGanttControlsCollapsed(true);
+        }
     });
 
     // Detail panel toggle
@@ -402,10 +419,14 @@ function initUiConfig() {
         detailPanel?.classList.toggle('detail-collapsed');
         const collapsed = detailPanel?.classList.contains('detail-collapsed');
         localStorage.setItem('detail_collapsed', String(collapsed));
-        detailToggle.textContent = collapsed ? '▶' : '✕';
+        detailToggle.innerHTML = collapsed
+            ? '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>'
+            : '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
+        detailToggle.setAttribute('aria-label', collapsed ? '詳細パネルを開く' : '詳細パネルを閉じる');
     });
     if (detailPanel?.classList.contains('detail-collapsed') && detailToggle) {
-        detailToggle.textContent = '▶';
+        detailToggle.innerHTML = '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>';
+        detailToggle.setAttribute('aria-label', '詳細パネルを開く');
     }
 }
 
@@ -450,6 +471,13 @@ function initThemeManagement() {
     document.getElementById('theme-list-status-filter').addEventListener('change', renderThemeList);
     document.getElementById('theme-list-category-filter').addEventListener('change', renderThemeList);
     document.getElementById('theme-list-sort').addEventListener('change', renderThemeList);
+    const filterToggle = document.getElementById('theme-list-filter-toggle');
+    const filterOptions = document.getElementById('theme-list-filter-options');
+    filterToggle?.addEventListener('click', () => {
+        const expanded = filterToggle.getAttribute('aria-expanded') === 'true';
+        filterToggle.setAttribute('aria-expanded', String(!expanded));
+        filterOptions?.classList.toggle('is-open', !expanded);
+    });
     document.getElementById('theme-list-clear-filters').addEventListener('click', () => {
         document.getElementById('theme-list-search').value = '';
         document.getElementById('theme-list-status-filter').value = '';
@@ -522,7 +550,7 @@ function renderThemeList() {
         const isInactive = ['completed', 'done', 'cancelled'].includes(theme.status);
         const categoryTone = getThemeCategoryTone(theme.category);
         return `
-            <article class="card theme-card theme-card-category-${categoryTone}${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}">
+            <article class="card theme-card theme-card-category-${categoryTone}${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}" style="--theme-accent:${theme.color || '#6366f1'}">
                 <div class="card-header">
                     <div class="card-title">
                         <span class="card-color-dot" style="background:${theme.color}" aria-hidden="true"></span>
@@ -530,7 +558,7 @@ function renderThemeList() {
                     </div>
                     <div class="card-actions">
                         <button class="btn btn-ghost theme-edit-btn" data-edit-theme="${theme.theme_id}" type="button">編集</button>
-                        <button class="btn btn-danger theme-delete-btn" data-delete-theme="${theme.theme_id}" type="button">削除</button>
+                        <button class="btn btn-ghost btn-delete theme-delete-btn" data-delete-theme="${theme.theme_id}" type="button">削除</button>
                     </div>
                 </div>
                 <div class="card-meta">
@@ -608,11 +636,11 @@ async function openThemeModal(theme = null) {
     });
 
     const selectedColor = theme?.color || THEME_COLORS[0];
-    const colorOptions = THEME_COLORS.map((color) => {
+    const colorOptions = THEME_COLORS.map((color, index) => {
         const usedBy = usedColorsMap[color] || [];
         const title = usedBy.length > 0 ? `使用中: ${usedBy.join(', ')}` : '未使用';
-        const border = color === selectedColor ? 'var(--color-text)' : 'transparent';
-        return `<span class="card-color-dot ${usedBy.length ? 'is-used' : ''}" style="background:${color};width:24px;height:24px;cursor:pointer;border:2px solid ${border};margin:2px" data-color="${color}" title="${title}"></span>`;
+        const selected = color === selectedColor;
+        return `<button class="color-choice ${usedBy.length ? 'is-used' : ''}${selected ? ' is-selected' : ''}" type="button" data-color="${color}" aria-label="カラー ${index + 1}、${title}" aria-pressed="${selected}" title="${title}"><span class="color-choice-swatch" style="background:${color}"></span><span class="color-choice-state">${usedBy.length ? '使用中' : '未使用'}</span></button>`;
     }).join('');
     const compareMilestoneMonth = (left, right) => {
         const leftMonth = left?.month || '9999-99';
@@ -648,23 +676,24 @@ async function openThemeModal(theme = null) {
         .sort((left, right) => compareMonthValues(left.month, right.month));
 
     const renderMilestoneRow = (item = { month: '', label: '', is_completed: false }) => `
-        <div class="theme-milestone-row" style="display:grid;grid-template-columns:140px 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px;">
+        <div class="theme-milestone-row theme-editor-row">
             <input class="theme-milestone-month" type="month" value="${item.month || ''}">
             <input class="theme-milestone-label" type="text" value="${item.label || ''}" placeholder="例: リリース">
-            <label style="display:flex;align-items:center;gap:4px;font-size:var(--text-sm);margin:0;"><input class="theme-milestone-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
+            <label class="theme-editor-check"><input class="theme-milestone-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
             <button class="btn btn-ghost btn-sm theme-milestone-remove" type="button">削除</button>
         </div>
     `;
     const renderDevCompleteRow = (item = { month: '', is_completed: false }) => `
-        <div class="theme-dev-complete-row" style="display:grid;grid-template-columns:140px auto auto;gap:8px;align-items:center;margin-bottom:8px;">
+        <div class="theme-dev-complete-row theme-editor-row theme-editor-row--compact">
             <input class="theme-dev-complete-month" type="month" value="${item.month || ''}">
-            <label style="display:flex;align-items:center;gap:4px;font-size:var(--text-sm);margin:0;"><input class="theme-dev-complete-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
+            <label class="theme-editor-check"><input class="theme-dev-complete-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
             <button class="btn btn-ghost btn-sm theme-dev-complete-remove" type="button">削除</button>
         </div>
     `;
 
     document.getElementById('modal-body').innerHTML = `
-        <div class="form-field">
+        <div class="theme-form-grid">
+        <div class="form-field theme-form-wide">
             <label for="modal-theme-name">テーマ名</label>
             <input id="modal-theme-name" type="text" value="${theme?.name || ''}" required>
         </div>
@@ -692,33 +721,36 @@ async function openThemeModal(theme = null) {
             <label for="modal-theme-priority">優先度</label>
             <input id="modal-theme-priority" type="number" value="${theme?.priority ?? 0}" min="0" max="9">
         </div>
-        <div class="form-field">
+        <div class="form-field theme-form-wide">
             <label>開発完了月</label>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <div id="theme-dev-complete-editor" style="flex:1;">${(initialDevCompleteItems.length ? initialDevCompleteItems : [{ month: '', is_completed: false }]).map((item) => renderDevCompleteRow(item)).join('')}</div>
+            <div class="theme-editor-group">
+                <div id="theme-dev-complete-editor">${(initialDevCompleteItems.length ? initialDevCompleteItems : [{ month: '', is_completed: false }]).map((item) => renderDevCompleteRow(item)).join('')}</div>
                 <button class="btn btn-ghost btn-sm" id="theme-dev-complete-add" type="button">追加</button>
-                <span class="summary-subtext" style="white-space:nowrap;">★ 総計欄に表示されます</span>
+                <span class="summary-subtext">★ 総計欄に表示されます</span>
             </div>
         </div>
-        <div class="form-field">
+        <div class="form-field theme-form-wide">
             <label>マイルストーン</label>
             <div id="theme-milestones-editor">${initialMilestones.map((item) => renderMilestoneRow(item)).join('')}</div>
             <button class="btn btn-ghost btn-sm" id="theme-milestone-add" type="button">追加</button>
         </div>
-        <div class="form-field">
+        <div class="form-field theme-form-wide">
             <label>カラー</label>
             <div id="modal-color-picker">${colorOptions}</div>
             <input id="modal-theme-color" type="hidden" value="${selectedColor}">
         </div>
+        </div>
     `;
 
-    document.querySelectorAll('#modal-color-picker .card-color-dot').forEach((dot) => {
-        dot.addEventListener('click', () => {
-            document.querySelectorAll('#modal-color-picker .card-color-dot').forEach((item) => {
-                item.style.borderColor = 'transparent';
+    document.querySelectorAll('#modal-color-picker .color-choice').forEach((choice) => {
+        choice.addEventListener('click', () => {
+            document.querySelectorAll('#modal-color-picker .color-choice').forEach((item) => {
+                item.classList.remove('is-selected');
+                item.setAttribute('aria-pressed', 'false');
             });
-            dot.style.borderColor = 'var(--color-text)';
-            document.getElementById('modal-theme-color').value = dot.dataset.color;
+            choice.classList.add('is-selected');
+            choice.setAttribute('aria-pressed', 'true');
+            document.getElementById('modal-theme-color').value = choice.dataset.color;
         });
     });
 
@@ -859,21 +891,23 @@ async function loadUserList() {
         }
 
         list.innerHTML = users.map((user) => `
-            <div class="card">
+            <article class="card management-row">
                 <div class="card-header">
-                    <div class="card-title">${user.username}</div>
+                    <div class="management-row-main">
+                        <div class="card-title">${user.username}</div>
+                        <div class="card-meta">
+                            <span class="status-badge ${user.role === 'admin' ? 'status-active' : 'status-done'}">${ROLE_LABELS[user.role] || user.role}</span>
+                            <span>ID ${user.id}</span>
+                            ${user.id === currentUser?.id ? '<span>現在ログイン中</span>' : ''}
+                        </div>
+                    </div>
                     <div class="card-actions">
                         <button class="btn btn-ghost btn-sm" data-edit-user="${user.id}" type="button">編集</button>
                         <button class="btn btn-ghost btn-sm" data-reset-user-password="${user.id}" type="button">PW再設定</button>
-                        ${user.id === currentUser?.id ? '' : `<button class="btn btn-danger btn-sm" data-delete-user="${user.id}" type="button">削除</button>`}
+                        ${user.id === currentUser?.id ? '' : `<button class="btn btn-ghost btn-delete btn-sm" data-delete-user="${user.id}" type="button">削除</button>`}
                     </div>
                 </div>
-                <div class="card-meta">
-                    <span class="status-badge ${user.role === 'admin' ? 'status-active' : 'status-done'}">${ROLE_LABELS[user.role] || user.role}</span>
-                    <span>ID ${user.id}</span>
-                    ${user.id === currentUser?.id ? '<span>現在ログイン中</span>' : ''}
-                </div>
-            </div>
+            </article>
         `).join('');
 
         list.querySelectorAll('[data-edit-user]').forEach((button) => {
@@ -1043,20 +1077,22 @@ async function loadMemberList() {
         }
 
         list.innerHTML = allMembers.map((member) => `
-            <div class="card" style="opacity:${member.is_active ? 1 : 0.55}">
+            <article class="card management-row${member.is_active ? '' : ' management-row--inactive'}">
                 <div class="card-header">
-                    <div class="card-title">${member.display_name}</div>
+                    <div class="management-row-main">
+                        <div class="card-title">${member.display_name}</div>
+                        <div class="card-meta">
+                            <span class="${member.department ? '' : 'data-warning'}">${member.department || '部署未設定'}</span>
+                            <span>稼働上限 ${member.capacity}%</span>
+                            <span class="status-badge ${member.is_active ? 'status-active' : 'status-done'}">${member.is_active ? '有効' : '無効'}</span>
+                        </div>
+                    </div>
                     <div class="card-actions">
                         <button class="btn btn-ghost btn-sm" data-edit-member="${member.member_id}" type="button">編集</button>
-                        <button class="btn btn-danger btn-sm" data-delete-member="${member.member_id}" type="button">削除</button>
+                        <button class="btn btn-ghost btn-delete btn-sm" data-delete-member="${member.member_id}" type="button">削除</button>
                     </div>
                 </div>
-                <div class="card-meta">
-                    <span>${member.department || '部署未設定'}</span>
-                    <span>稼働上限 ${member.capacity}%</span>
-                    <span class="status-badge ${member.is_active ? 'status-active' : 'status-done'}">${member.is_active ? '有効' : '無効'}</span>
-                </div>
-            </div>
+            </article>
         `).join('');
 
         list.querySelectorAll('[data-edit-member]').forEach((button) => {

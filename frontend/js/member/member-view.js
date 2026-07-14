@@ -282,7 +282,7 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
 
         html += `<tr class="member-row" data-member-row="${member.member_id}">`;
         html += `<td><div class="member-row-header">`;
-        html += hasThemes ? `<button class="toggle-btn${isExpanded ? ' expanded' : ''}" data-toggle="${member.member_id}" type="button" aria-expanded="${isExpanded}" aria-label="${escapeHtml(member.display_name)}のテーマ内訳を展開">${isExpanded ? '▼' : '▶'}</button>` : '<span class="toggle-placeholder" aria-hidden="true"></span>';
+        html += hasThemes ? `<button class="toggle-btn${isExpanded ? ' expanded' : ''}" data-toggle="${member.member_id}" type="button" aria-expanded="${isExpanded}" aria-label="${escapeHtml(member.display_name)}のテーマ内訳を展開"></button>` : '<span class="toggle-placeholder" aria-hidden="true"></span>';
         html += `<div class="member-identity"><strong>${escapeHtml(member.display_name)}</strong><span class="member-department${member.department ? '' : ' missing'}">${escapeHtml(member.department || '部署未設定')}</span></div>`;
         html += `<span class="member-capacity" title="月間稼働上限">上限 ${member.capacity}%</span>`;
         html += `</div></td>`;
@@ -364,7 +364,6 @@ function bindHeaderActions() {
         document.querySelectorAll('.toggle-btn').forEach((button) => {
             expandedMemberIds.add(Number.parseInt(button.dataset.toggle, 10));
             button.classList.add('expanded');
-            button.textContent = '▼';
             button.setAttribute('aria-expanded', 'true');
         });
     });
@@ -375,7 +374,6 @@ function bindHeaderActions() {
         document.querySelectorAll('.theme-row').forEach((row) => row.classList.add('hidden'));
         document.querySelectorAll('.toggle-btn').forEach((button) => {
             button.classList.remove('expanded');
-            button.textContent = '▶';
             button.setAttribute('aria-expanded', 'false');
         });
     });
@@ -485,7 +483,6 @@ function bindTableInteractions(tbody) {
             const parsedMemberId = Number.parseInt(memberId, 10);
             if (expanded) expandedMemberIds.add(parsedMemberId);
             else expandedMemberIds.delete(parsedMemberId);
-            button.textContent = expanded ? '▼' : '▶';
             button.setAttribute('aria-expanded', String(expanded));
             tbody.querySelectorAll(`tr[data-parent="${memberId}"]`).forEach((row) => row.classList.toggle('hidden'));
         });

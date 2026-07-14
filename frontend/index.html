@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="テーマ計画、メンバー配分、分析ダッシュボードをまとめて扱えるリソース管理ツール">
-    <title>Resource Manager</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Manage</title>
     <link rel="stylesheet" href="/css/index.css">
     <link rel="stylesheet" href="/css/gantt.css">
     <link rel="stylesheet" href="/css/member-view.css">
@@ -17,10 +14,15 @@
         <div class="login-container">
             <div class="login-card">
                 <div class="login-header">
-                    <div class="login-logo">RM</div>
+                    <div class="login-logo" aria-hidden="true">
+                        <svg class="brand-mark" viewBox="0 0 40 40" width="40" height="40">
+                            <rect width="40" height="40" rx="11" fill="currentColor"></rect>
+                            <path d="M11 12h18v4H11zm0 7h14v4H11zm0 7h10v4H11z" fill="white"></path>
+                        </svg>
+                    </div>
                     <div>
-                        <h1>Resource Manager</h1>
-                        <p class="login-subtitle">社内利用向けのサインインが必要です</p>
+                        <h1>Manage</h1>
+                        <p class="login-subtitle">計画とリソースを、ひとつの流れに。</p>
                     </div>
                 </div>
                 <form id="login-form" class="login-form">
@@ -56,7 +58,7 @@
                         </defs>
                     </svg>
                 </div>
-                <span class="sidebar-title">Resource Manager</span>
+                <span class="sidebar-title">Manage</span>
             </div>
 
             <ul class="nav-list" aria-label="主要ナビゲーション">
@@ -82,19 +84,26 @@
                         <strong id="current-user-name">-</strong>
                         <span id="current-user-role">-</span>
                     </div>
-                    <button id="theme-toggle-btn" class="btn btn-ghost btn-sm" type="button">表示テーマ切替</button>
-                    <button id="shortcut-help-btn" class="btn btn-ghost btn-sm" type="button">ショートカット一覧</button>
-                    <button id="export-json-btn" class="btn btn-ghost btn-sm" type="button">JSON エクスポート</button>
-                    <label id="import-json-label" class="btn btn-ghost btn-sm" for="import-json-input">JSON インポート</label>
-                    <input type="file" id="import-json-input" accept=".json" hidden>
-                    <button id="logout-btn" class="btn btn-ghost btn-sm" type="button">ログアウト</button>
-                    <p id="backup-hint" class="sidebar-hint">インポート前に現在のデータをエクスポートしておくと安心です。</p>
+                    <details class="sidebar-tools">
+                        <summary>設定とデータ</summary>
+                        <div class="sidebar-tools-body">
+                            <button id="theme-toggle-btn" class="btn btn-ghost btn-sm" type="button">表示テーマ切替</button>
+                            <button id="shortcut-help-btn" class="btn btn-ghost btn-sm" type="button">ショートカット一覧</button>
+                            <button id="export-json-btn" class="btn btn-ghost btn-sm" type="button">JSON エクスポート</button>
+                            <label id="import-json-label" class="btn btn-ghost btn-sm" for="import-json-input">JSON インポート</label>
+                            <input type="file" id="import-json-input" accept=".json" hidden>
+                            <p id="backup-hint" class="sidebar-hint">インポート前に現在のデータをエクスポートしておくと安心です。</p>
+                        </div>
+                    </details>
+                    <button id="logout-btn" class="btn btn-ghost btn-sm sidebar-logout" type="button">ログアウト</button>
                 </div>
 
             </div>
         </nav>
 
-        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="サイドバー切替">☰</button>
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="サイドバー切替" aria-label="サイドバーを切り替える">
+            <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
 
         <main id="main-content">
             <div id="view-gantt" class="view active">
@@ -238,6 +247,7 @@
                                 <span><i class="legend-swatch legend-high"></i>61～99%</span>
                                 <span><i class="legend-swatch legend-full"></i>100%</span>
                                 <span><i class="legend-swatch legend-over"></i>101～125%</span>
+                                <span><i class="legend-swatch legend-severe"></i>126～150%</span>
                                 <span><i class="legend-swatch legend-critical"></i>151%以上</span>
                                 <span><i class="legend-zero">0</i>明示的な0%</span>
                                 <span><i class="legend-swatch legend-empty"></i>未入力</span>
@@ -263,7 +273,9 @@
                     <aside id="gantt-detail-panel" class="detail-panel">
                         <div class="detail-panel-header">
                             <h3>セル詳細</h3>
-                            <button id="detail-panel-toggle" class="btn btn-ghost btn-sm" type="button" title="詳細パネル切替">✕</button>
+                            <button id="detail-panel-toggle" class="btn btn-ghost btn-sm icon-only" type="button" title="詳細パネル切替" aria-label="詳細パネルを閉じる">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>
+                            </button>
                         </div>
                         <p id="detail-empty" class="summary-subtext">セルを選択すると、個別編集や一括更新プレビューをここで操作できます。</p>
                         <div id="detail-form" hidden>
@@ -369,9 +381,12 @@
 
             <div id="view-insights" class="view" hidden>
                 <div class="view-header">
-                    <h2>インサイト</h2>
+                    <div class="view-heading">
+                        <h2>インサイト</h2>
+                        <p class="view-subtitle">問題を見つけ、対象を確認し、計画の修正へ進みます。</p>
+                    </div>
                     <div class="view-controls">
-                        <p class="summary-subtext">過負荷状況の要約、案件追加シミュレーション、テーマ別負荷の推移を確認できます。</p>
+                        <p class="summary-subtext">サマリーを選ぶと、対応する画面へ移動できます。</p>
                     </div>
                 </div>
                 <section id="insights-summary" class="insight-layout insight-layout--summary"></section>
@@ -380,7 +395,7 @@
                         <div class="insight-scenario-card-header">
                             <button id="insight-scenario-toggle" class="insight-scenario-toggle" type="button" aria-expanded="false" aria-controls="insight-scenario-body">
                                 <span class="summary-label">案件追加シミュレーション</span>
-                                <span class="insight-scenario-toggle-icon" aria-hidden="true">▸</span>
+                                <span class="insight-scenario-toggle-icon" aria-hidden="true"></span>
                             </button>
                         </div>
                         <div id="insight-scenario-body" hidden>
@@ -442,6 +457,8 @@
                     </div>
                     <div class="view-controls theme-list-controls">
                         <input type="search" id="theme-list-search" class="view-input" placeholder="テーマ名、カテゴリで検索" aria-label="テーマ名またはカテゴリで検索" autocomplete="off">
+                        <button id="theme-list-filter-toggle" class="btn btn-ghost theme-list-filter-toggle" type="button" aria-expanded="false" aria-controls="theme-list-filter-options">条件</button>
+                        <div id="theme-list-filter-options" class="theme-list-filter-options">
                         <select id="theme-list-status-filter" class="view-select" aria-label="ステータスで絞り込み">
                             <option value="">すべてのステータス</option>
                             <option value="planning">計画中</option>
@@ -461,6 +478,7 @@
                             <option value="status-asc">ステータス順</option>
                             <option value="member-desc">メンバー数順</option>
                         </select>
+                        </div>
                         <button id="add-theme-btn" class="btn btn-primary" type="button">テーマ追加</button>
                     </div>
                 </div>
@@ -499,7 +517,19 @@
                         <button id="add-user-btn" class="btn btn-primary" type="button">ユーザ追加</button>
                     </div>
                 </div>
-                <div class="card-list" id="user-list"></div>
+                <div class="management-layout">
+                    <div class="card-list management-list" id="user-list"></div>
+                    <aside class="management-guide" aria-label="ユーザ管理の案内">
+                        <span class="management-guide-kicker">SECURITY</span>
+                        <h3>権限は必要最小限に</h3>
+                        <p>管理者はユーザ追加、削除、権限変更を行えます。通常利用には一般ユーザーを選択してください。</p>
+                        <ul>
+                            <li>パスワード再設定後は対象者へ安全な経路で共有</li>
+                            <li>利用しないアカウントは速やかに削除</li>
+                            <li>自分自身のアカウントは削除できません</li>
+                        </ul>
+                    </aside>
+                </div>
             </div>
         </main>
     </div>
@@ -508,7 +538,7 @@
         <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
             <div class="modal-header">
                 <h3 id="modal-title"></h3>
-                <button class="modal-close" id="modal-close" type="button" aria-label="閉じる">&times;</button>
+                <button class="modal-close" id="modal-close" type="button" aria-label="閉じる"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
             </div>
             <div class="modal-body" id="modal-body"></div>
             <div class="modal-footer" id="modal-footer"></div>
@@ -556,7 +586,7 @@
         <div class="ribbon-fullscreen-dialog" role="dialog" aria-modal="true" aria-labelledby="ribbon-fullscreen-title">
             <div class="ribbon-fullscreen-header">
                 <h3 id="ribbon-fullscreen-title">テーマ負荷の推移</h3>
-                <button id="ribbon-fullscreen-close" class="modal-close ribbon-fullscreen-close" type="button" aria-label="閉じる">&times;</button>
+                <button id="ribbon-fullscreen-close" class="modal-close ribbon-fullscreen-close" type="button" aria-label="閉じる"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
             </div>
             <div id="ribbon-fullscreen-content" class="ribbon-fullscreen-content"></div>
         </div>
