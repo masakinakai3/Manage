@@ -181,18 +181,20 @@ function renderBaseDom() {
             <thead id="gantt-thead"></thead>
             <tbody id="gantt-tbody"></tbody>
         </table>
-        <div id="detail-empty"></div>
-        <form id="detail-form" hidden>
-            <div id="detail-target"></div>
-            <input id="detail-rate">
-            <textarea id="detail-memo"></textarea>
-            <input id="detail-bulk-rate">
-            <div id="detail-message"></div>
-        </form>
-        <button id="detail-save" type="button"></button>
-        <button id="detail-prev" type="button"></button>
-        <button id="detail-next" type="button"></button>
-        <button id="detail-preview-bulk" type="button"></button>
+        <aside id="gantt-detail-panel" class="detail-empty-state">
+            <div id="detail-empty"></div>
+            <form id="detail-form" hidden>
+                <div id="detail-target"></div>
+                <input id="detail-rate">
+                <textarea id="detail-memo"></textarea>
+                <input id="detail-bulk-rate">
+                <div id="detail-message"></div>
+            </form>
+            <button id="detail-save" type="button"></button>
+            <button id="detail-prev" type="button"></button>
+            <button id="detail-next" type="button"></button>
+            <button id="detail-preview-bulk" type="button"></button>
+        </aside>
         <div id="modal-overlay" hidden>
             <div id="modal-title"></div>
             <div id="modal-body"></div>
@@ -317,6 +319,29 @@ describe('gantt-renderer regressions', () => {
 
         expect(openCellEditor).toHaveBeenCalledTimes(1);
         expect(openCellEditor.mock.calls[0][0]).toBe(cell);
+        expect(document.getElementById('gantt-detail-panel')?.classList.contains('detail-editor-suppressed')).toBe(true);
+    });
+
+    it('uses the in-flow detail editor instead of a competing inline editor at compact widths', async () => {
+        const originalDescriptor = Object.getOwnPropertyDescriptor(window, 'matchMedia');
+        Object.defineProperty(window, 'matchMedia', {
+            configurable: true,
+            value: vi.fn(() => ({ matches: true })),
+        });
+        try {
+            const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+            await refreshGantt();
+
+            const cell = document.querySelector('.gantt-cell[data-theme]');
+            cell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+            expect(openCellEditor).not.toHaveBeenCalled();
+            expect(document.activeElement).toBe(document.getElementById('detail-rate'));
+            expect(document.getElementById('gantt-detail-panel')?.classList.contains('detail-empty-state')).toBe(false);
+        } finally {
+            if (originalDescriptor) Object.defineProperty(window, 'matchMedia', originalDescriptor);
+            else delete window.matchMedia;
+        }
     });
 
     it('moves the active cell with arrow keys and starts direct numeric entry', async () => {
@@ -742,12 +767,12 @@ describe('gantt-renderer regressions', () => {
         await refreshGantt();
 
         const dataset = getGanttGridExportDataset();
-        expect(dataset.headers).toEqual(['Theme / Member', '2026-04']);
-        expect(dataset.header_labels).toEqual(['Theme / Member', '2026-04']);
+        expect(dataset.headers).toEqual(['テーマ / メンバー', '2026-04']);
+        expect(dataset.header_labels).toEqual(['テーマ / メンバー', '2026-04']);
         expect(dataset.rows).toEqual([
             {
                 type: 'summary',
-                label: 'Theme A / Rank S / 進行中',
+                label: 'Theme A / ランク S / 進行中',
                 color: '#00aaff',
                 values: [{
                     text: '20%\nReview',
@@ -758,7 +783,7 @@ describe('gantt-renderer regressions', () => {
             },
             {
                 type: 'member',
-                label: 'Alice (Dev / Capacity 100%)',
+                label: 'Alice (Dev / 上限 100%)',
                 values: [{
                     text: '20%',
                     rate: 20,
@@ -776,9 +801,9 @@ describe('gantt-renderer regressions', () => {
         await refreshGantt();
 
         expect(buildGanttGridCsvContent()).toBe([
-            'Theme / Member,2026-04',
-            'Theme A / Rank S / 進行中,"20%\nReview"',
-            'Alice (Dev / Capacity 100%),20%',
+            'テーマ / メンバー,2026-04',
+            'Theme A / ランク S / 進行中,"20%\nReview"',
+            'Alice (Dev / 上限 100%),20%',
         ].join('\r\n'));
     });
 
@@ -823,9 +848,14 @@ describe('gantt-renderer regressions', () => {
         const toolbar = document.querySelector('.gantt-floating-actions');
         const inlineControls = document.getElementById('gantt-inline-period-controls');
         const tableActions = document.getElementById('gantt-table-actions');
+        const tableTools = document.getElementById('gantt-table-tools');
         expect(toolbar?.classList.contains('pointer-shield')).toBe(true);
         expect(inlineControls?.getAttribute('data-interactive-surface')).toBe('true');
         expect(tableActions?.getAttribute('data-interactive-surface')).toBe('true');
+        expect(tableTools?.tagName).toBe('DETAILS');
+        expect(tableTools?.hasAttribute('open')).toBe(false);
+        expect(tableTools?.querySelector('summary')?.textContent).toBe('表の操作・出力');
+        expect(tableActions?.parentElement).toBe(tableTools);
         expect(inlineControls?.querySelector('#scale-switcher')).not.toBeNull();
         expect(inlineControls?.querySelector('#shared-period-preset')).not.toBeNull();
         expect(inlineControls?.querySelector('.month-nav #gantt-prev')).not.toBeNull();

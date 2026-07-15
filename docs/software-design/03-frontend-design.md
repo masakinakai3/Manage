@@ -14,6 +14,7 @@
 | `frontend/js/api.js` | API クライアント |
 | `frontend/js/shared-state.js` | 共有表示条件 |
 | `frontend/js/ui.js` | toast / dialog / busy state |
+| `frontend/js/messages.js` | 共通状態・エラー・操作文言の日本語カタログ |
 | `frontend/js/gantt/*` | Gantt 関連機能 |
 | `frontend/js/member/member-view.js` | メンバー負荷画面 |
 | `frontend/js/insights-view.js` | Insights 画面 |
@@ -43,6 +44,7 @@ sequenceDiagram
 | `preset` | 表示期間プリセット |
 | `startMonth` | 表示開始月 |
 | `scale` | 1/3/6/12 か月スケール |
+| `visibleCount` | 表示する月バケット数 |
 | `ganttSearch` | Gantt 検索条件 |
 | `ganttCategory` | カテゴリフィルタ |
 | `ganttOwner` | 担当者フィルタ |
@@ -66,7 +68,7 @@ sequenceDiagram
 | 機能 | 説明 |
 |---|---|
 | 描画 | テーマ・メンバー・月のマトリクス表示 |
-| 編集 | セル単位編集、複数セル貼り付け |
+| 編集 | セル単位編集、複数セル貼り付け。通常幅はインライン、1024px以下は表下の詳細編集へ一本化 |
 | 操作 | キーボード移動、DnD、折りたたみ、ズーム |
 | 補助 | スナップショット、保存ビュー、CSV/XLSX 出力 |
 
@@ -105,7 +107,8 @@ sequenceDiagram
 | メンバー別集約 | 月ごとの総配員率表示 |
 | テーマ内訳展開 | メンバー行を展開してテーマ別配員を確認 |
 | 過負荷強調 | capacity 超過の視覚化 |
-| 詳細ポップアップ | セルホバーで構成テーマを表示 |
+| 詳細ポップアップ | hoverプレビューに加え、セル内buttonからキーボード／タッチ対応の固定内訳を表示 |
+| 観測窓 | 6/12/24か月プリセット、標準／コンパクト密度、次の過負荷への移動 |
 | CSV 出力 | メンバー軸の表形式出力 |
 
 ## 7. Insights 画面
@@ -119,7 +122,7 @@ Insights 画面は「編集」ではなく「発見」に特化しています�
 | Summary | 全体不足、余力、ボトルネック数 |
 | Health Checks | データ品質・運用上の問題・将来リスク |
 | Recommendations | 余力メンバーへの移管候補 |
-| Dashboard | 月次推移、部署負荷、影響テーマ、Project Load Ribbon |
+| Dashboard | 月次推移、部署負荷、影響テーマ、Project Load Ribbon。月buttonと詳細tableで正確な値、容量、欠損を提示 |
 
 ### 7.2 ドリルダウン
 
@@ -135,7 +138,14 @@ Insights の各カードは Gantt / Member Load に検索条件つきで遷移�
 | `showConfirmDialog()` | 確認ダイアログ |
 | `showPromptDialog()` | 入力ダイアログ |
 | `setSaveState()` | 保存状態ピル更新 |
+| `setDataState()` | `loading/fresh/stale/offline/error`の取得・接続状態を保存状態とは別に表示 |
 | `setBusyState()` | 処理中表示 |
+
+`api.js`は各requestで`manage:api-state`を発行します。`ui.js`は同時requestを追跡し、最終取得時刻、取得失敗、オフラインをサイドバーへ反映します。画面内エラーとグローバルなデータ状態は同じrequest結果から更新し、保存済み表示とデータ最新性を混同しません。
+
+共有状態、HTTPエラー、共通ダイアログ操作の文言は`messages.js`へ集約します。画面固有の業務用語は各viewに残し、別locale追加時にcatalogへ段階移行します。
+
+デザイン値は`index.css`のrole tokenへ集約します。画面CSSでの色リテラルと13px未満の文字は`tools/lint-frontend.mjs`が拒否し、主要操作は44px、コンパクト操作は36pxを下限とします。
 
 ## 9. HTML レイアウト
 

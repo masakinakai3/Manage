@@ -292,6 +292,7 @@ export function openCellEditor(cellEl, themeId, memberId, month, currentRate, on
         save,
         closeAfterSave: false,
         lastCommittedRate: currentRate === null || currentRate === undefined ? null : clampRate(currentRate),
+        onClose: options.onClose || null,
     };
 
     setTimeout(() => {
@@ -341,6 +342,7 @@ export function closeCellEditor() {
             activeEditor.cellEl.classList.remove('is-editing');
         }
         activeEditor.cleanup();
+        activeEditor.onClose?.();
         activeEditor = null;
     }
 }

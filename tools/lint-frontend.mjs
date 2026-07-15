@@ -41,6 +41,24 @@ function lintFile(filePath) {
         if (/[ \t]+$/.test(line)) {
             issues.push(`${relative(filePath)}:${index + 1} has trailing whitespace`);
         }
+
+        if (path.extname(filePath) === '.css') {
+            const trimmed = line.trim();
+            const colonIndex = line.indexOf(':');
+            const declarationValue = colonIndex >= 0 ? line.slice(colonIndex + 1) : '';
+            const hasColorLiteral = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/.test(declarationValue);
+            if (hasColorLiteral && !trimmed.startsWith('--')) {
+                issues.push(`${relative(filePath)}:${index + 1} uses a color literal outside a design token`);
+            }
+
+            const fontSize = line.match(/font-size:\s*([0-9.]+)(px|rem)/);
+            if (fontSize) {
+                const pixels = fontSize[2] === 'rem' ? Number.parseFloat(fontSize[1]) * 16 : Number.parseFloat(fontSize[1]);
+                if (pixels < 13 && !trimmed.startsWith('--')) {
+                    issues.push(`${relative(filePath)}:${index + 1} uses text smaller than the 13px minimum`);
+                }
+            }
+        }
     });
 }
 

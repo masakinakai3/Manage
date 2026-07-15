@@ -155,6 +155,7 @@ let ganttKeyboardBound = false;
 let pendingEdgeNavigation = null;
 let scenarioPreviewState = null;
 let scenarioPreviewContext = null;
+let ganttDensity = 'standard';
 let ganttRefreshRequestId = 0;
 
 export function showScenarioPreview(preview) {
@@ -299,6 +300,14 @@ export async function initGantt() {
     statusFilter = state.ganttStatus || 'all';
     priorityFilter = state.ganttPriority || 'all';
     groupBy = state.groupBy || 'none';
+    try {
+        ganttDensity = localStorage.getItem('manage_gantt_density') === 'compact' ? 'compact' : 'standard';
+    } catch {
+        ganttDensity = 'standard';
+    }
+    const densityInput = document.getElementById('gantt-density');
+    if (densityInput) densityInput.value = ganttDensity;
+    applyGanttDensity();
     bindControls();
     await loadSnapshots();
     subscribeViewState((next) => {
@@ -325,17 +334,30 @@ function ensureInlinePeriodControls() {
     const toolbar = ensureToolbar();
     const scaleSwitcher = document.getElementById('scale-switcher');
     const presetSelect = document.getElementById('shared-period-preset');
+    const densitySelect = document.getElementById('gantt-density');
     const monthNav = document.getElementById('gantt-prev')?.closest('.month-nav') || document.querySelector('.gantt-control-row-primary .month-nav');
     if (!toolbar || !scaleSwitcher || !presetSelect || !monthNav) return;
 
     const tableActions = ensureToolbarSlot('gantt-table-actions', 'gantt-table-actions', { prepend: true });
+    let tableTools = document.getElementById('gantt-table-tools');
+    if (!tableTools) {
+        tableTools = document.createElement('details');
+        tableTools.id = 'gantt-table-tools';
+        tableTools.className = 'gantt-table-tools';
+        tableTools.innerHTML = '<summary>表の操作・出力</summary>';
+        toolbar.prepend(tableTools);
+    }
+    markInteractiveSurface(tableTools);
+    if (tableActions && tableActions.parentElement !== tableTools) {
+        tableTools.append(tableActions);
+    }
     ['gantt-expand-all', 'gantt-collapse-all', 'gantt-export-csv', 'gantt-export-image'].forEach((id) => {
         const action = document.getElementById(id);
         moveControlsToToolbarSlot(tableActions, [action]);
     });
 
     const inlineControls = ensureToolbarSlot('gantt-inline-period-controls', 'gantt-inline-period-controls');
-    moveControlsToToolbarSlot(inlineControls, [scaleSwitcher, presetSelect, monthNav]);
+    moveControlsToToolbarSlot(inlineControls, [scaleSwitcher, presetSelect, densitySelect, monthNav]);
     syncPeriodControls();
 }
 
@@ -526,6 +548,15 @@ function bindControls() {
     document.getElementById('gantt-status-filter')?.addEventListener('change', (event) => updateViewState({ ganttStatus: event.target.value }));
     document.getElementById('gantt-priority-filter')?.addEventListener('change', (event) => updateViewState({ ganttPriority: event.target.value }));
     document.getElementById('gantt-group-by')?.addEventListener('change', (event) => updateViewState({ groupBy: event.target.value }));
+    document.getElementById('gantt-density')?.addEventListener('change', (event) => {
+        ganttDensity = event.target.value === 'compact' ? 'compact' : 'standard';
+        try {
+            localStorage.setItem('manage_gantt_density', ganttDensity);
+        } catch {
+            // Density still applies for the current session when storage is unavailable.
+        }
+        applyGanttDensity();
+    });
     document.getElementById('gantt-filter-reset')?.addEventListener('click', () => updateViewState({
         ganttSearch: '',
         ganttCategory: '',
@@ -553,6 +584,10 @@ function bindControls() {
     document.getElementById('detail-next-warning')?.addEventListener('click', () => jumpToMatchingCell((button) => button.classList.contains('rate-over')));
     document.getElementById('detail-preview-bulk')?.addEventListener('click', previewBulkUpdate);
     bindKeyboardInteractions();
+}
+
+function applyGanttDensity() {
+    document.getElementById('gantt-container')?.classList.toggle('density-compact', ganttDensity === 'compact');
 }
 
 let historyInputsBound = false;
@@ -599,10 +634,10 @@ function ensureGanttFilterControls() {
         <select id="gantt-status-filter" class="view-select">
             <option value="all">ステータス: すべて</option>
             <option value="open">ステータス: 未完了のみ</option>
-            <option value="planning">Planning</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
+            <option value="planning">計画中</option>
+            <option value="active">進行中</option>
+            <option value="completed">完了</option>
+            <option value="cancelled">中止</option>
         </select>
         <select id="gantt-priority-filter" class="view-select">
             <option value="all">優先度: すべて</option>
@@ -1067,7 +1102,7 @@ async function previewBulkUpdate() {
     const memo = document.getElementById('detail-memo').value.trim();
     const months = getVisibleMonths(startMonth, visibleCount, scale);
     const preview = months.map((month) => `- ${month}: ${lookupRate(allAllocations, selectedCell.themeId, selectedCell.memberId, month)}% → ${rate}%`).join('\n');
-    const ok = await showConfirmDialog({ title: "Preview bulk update", message: `${preview}\n\nMemo: ${memo || "-"}`, confirmText: "Apply", cancelText: "Cancel" });
+    const ok = await showConfirmDialog({ title: '一括更新の確認', message: `${preview}\n\nメモ: ${memo || 'なし'}`, confirmText: '反映する', cancelText: 'キャンセル' });
     if (!ok) return;
     const redo = months.map((month) => ({ theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month, allocation_rate: rate, memo }));
     const undo = months.map((month) => { const current = allAllocations.find((item) => item.theme_id === selectedCell.themeId && item.member_id === selectedCell.memberId && item.month === month); return { theme_id: selectedCell.themeId, member_id: selectedCell.memberId, month, allocation_rate: current?.allocation_rate || 0, memo: current?.memo || '' }; });
@@ -1115,15 +1150,15 @@ async function performDragAndDropMove({ undo, redo }) {
 
     try {
         await HistoryManager.perform(redo);
-        setSaveState('saved', 'Allocation move applied.');
+        setSaveState('saved', '配分を移動しました');
         showToast('配分を移動しました。Ctrl/Cmd + Z で元に戻せます。', 'success');
     } catch (error) {
         if (HistoryManager.index >= 0) {
             HistoryManager.stack.splice(HistoryManager.index, 1);
             HistoryManager.index -= 1;
         }
-        setSaveState('error', 'Failed to move allocation.');
-        showToast(`Failed to move allocation: ${formatError(error)}`, 'error');
+        setSaveState('error', '配分の移動に失敗しました');
+        showToast(`配分の移動に失敗しました: ${formatError(error)}`, 'error');
         throw error;
     }
 }
@@ -1142,6 +1177,28 @@ function openEditorForButton(button, options = {}) {
     const month = button.dataset.month;
     const currentRate = readCellRate(button.dataset.rate);
 
+    if (window.matchMedia?.('(max-width: 1024px)').matches) {
+        closeCellEditor();
+        const panel = document.getElementById('gantt-detail-panel');
+        const toggle = document.getElementById('detail-panel-toggle');
+        panel?.classList.remove('detail-collapsed');
+        if (toggle) {
+            toggle.innerHTML = '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
+            toggle.setAttribute('aria-label', '詳細パネルを閉じる');
+        }
+        try {
+            localStorage.setItem('detail_collapsed', 'false');
+        } catch {
+            // The in-flow editor remains usable when browser storage is unavailable.
+        }
+        panel?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+        document.getElementById('detail-rate')?.focus({ preventScroll: true });
+        return;
+    }
+
+    const detailPanel = document.getElementById('gantt-detail-panel');
+    detailPanel?.classList.add('detail-editor-suppressed');
+
     openCellEditor(
         button,
         themeId,
@@ -1152,6 +1209,10 @@ function openEditorForButton(button, options = {}) {
         (direction, changed, newRate) => handleEditorNavigationWithHistory(button, direction, changed, newRate),
         {
             ...options,
+            onClose: () => {
+                detailPanel?.classList.remove('detail-editor-suppressed');
+                options.onClose?.();
+            },
             optimisticSave: false,
             onCommitSuccess: (nextRate) => applyCellValue(button, nextRate, button.dataset.memo || ''),
             onHistoryShortcut: ({ isRedo }) => {
@@ -1167,7 +1228,7 @@ function openEditorForButton(button, options = {}) {
                 month,
                 nextRate,
                 button.dataset.memo || '',
-                { successMessage: `${month} 縺ｮ雋闕ｷ邇・ｒ菫晏ｭ倥＠縺ｾ縺励◆` },
+                { successMessage: `${month} の負荷率を保存しました` },
             ),
             clearChange: () => commitSingleCellChange(
                 themeId,
@@ -1175,7 +1236,7 @@ function openEditorForButton(button, options = {}) {
                 month,
                 null,
                 button.dataset.memo || '',
-                { successMessage: `${month} 縺ｮ雋闕ｷ繧偵け繝ｪ繧｢縺励∪縺励◆` },
+                { successMessage: `${month} の負荷率をクリアしました` },
             ),
         },
     );
@@ -1319,7 +1380,7 @@ function applyCellValue(button, rate, memo = '') {
 
     button.dataset.rate = hasRate ? String(safeRate) : '';
     button.dataset.memo = hasRate ? memo : '';
-    button.title = (hasRate ? memo : '') || 'No memo';
+    button.title = (hasRate ? memo : '') || 'メモなし';
     renderMemberCellButton(button, safeRate, memberId, month);
     refreshMemberMonthState(memberId, month);
 
@@ -1740,7 +1801,7 @@ async function pasteFromClipboard(fallbackText = '') {
 
     try {
         await allocations.bulkUpdate(redo);
-        setSaveState('saved', `${redo.length} cells pasted.`);
+        setSaveState('saved', `${redo.length}セルへ貼り付けました`);
     } catch (error) {
         setSaveState('error', '貼り付けの保存に失敗しました');
         showToast(`貼り付けの保存に失敗しました: ${formatError(error)}`, 'error');
@@ -1787,7 +1848,7 @@ async function clearSelectedRange() {
     HistoryManager.push(undo, redo);
     try {
         await allocations.bulkUpdate(redo);
-        setSaveState('saved', `${redo.length} cells cleared.`);
+        setSaveState('saved', `${redo.length}セルをクリアしました`);
     } catch (error) {
         setSaveState('error', 'セルのクリアに失敗しました');
         showToast(`セルのクリアに失敗しました: ${formatError(error)}`, 'error');
@@ -1877,7 +1938,7 @@ async function showAssignMemberModal(themeId) {
                     <input type="checkbox" value="${member.member_id}" ${isAssigned ? 'checked' : ''}>
                     <div>
                         <div>${escapeHtml(member.display_name)}${isAssigned ? ' <span class="member-assigned-badge">参加中</span>' : ''}</div>
-                        <div class="summary-subtext">${member.department || 'No Department'} / Capacity ${member.capacity}%</div>
+                        <div class="summary-subtext">${member.department || '部署未設定'} / 上限 ${member.capacity}%</div>
                     </div>
                 </label>`;
             }).join('')}
@@ -2059,7 +2120,7 @@ async function showMilestoneModal(themeId) {
             <div style="display:flex;align-items:center;gap:8px;">
                 <div id="theme-dev-complete-editor" style="flex:1;">${(initialDevCompleteItems.length ? initialDevCompleteItems : [{ month: '', is_completed: false }]).map((item) => renderDevCompleteRow(item)).join('')}</div>
                 <button class="btn btn-ghost btn-sm" id="theme-dev-complete-add" type="button">追加</button>
-                <span class="summary-subtext" style="white-space:nowrap;">★ 総計欄に表示されます</span>
+                <span class="summary-subtext gantt-dev-complete-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.65 5.37 5.93.86-4.29 4.18 1.01 5.91L12 16.53l-5.3 2.79 1.01-5.91-4.29-4.18 5.93-.86L12 3Z"/></svg>総計欄に表示されます</span>
             </div>
         </div>
         <div class="form-field">
@@ -2208,7 +2269,7 @@ function buildSummaryTooltip(theme, month, members, totalRate) {
     const lines = [`${theme.name} | ${month} | 合計 ${totalRate}%`];
     const milestones = getThemeMilestones(theme).filter((item) => monthBucketIncludes(item.month, month, scale));
     if (milestones.length) {
-        lines.push(`マイルストーン: ${milestones.map((item) => item.label || 'Milestone').join(', ')}`);
+        lines.push(`マイルストーン: ${milestones.map((item) => item.label || 'マイルストーン').join(', ')}`);
     }
     const breakdown = members
         .map((member) => ({
@@ -2279,7 +2340,7 @@ function renderActiveFilterChips() {
     container.innerHTML = chips.map((chip, index) => `
         <span class="filter-chip">
             <span>${escapeHtml(chip.label)}</span>
-            <button type="button" data-chip-index="${index}" aria-label="${escapeHtml(chip.label)} を解除">×</button>
+            <button type="button" data-chip-index="${index}" aria-label="${escapeHtml(chip.label)} を解除"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
         </span>
     `).join('') + '<span class="filter-chip filter-chip-reset"><button type="button" id="gantt-chip-reset-all">すべて解除</button></span>';
 
@@ -2432,15 +2493,15 @@ export function getGanttGridExportDataset() {
     });
 
     return {
-        headers: ['Theme / Member', ...months],
-        header_labels: ['Theme / Member', ...months.map((month) => formatMonthHeader(month, scale))],
+        headers: ['テーマ / メンバー', ...months],
+        header_labels: ['テーマ / メンバー', ...months.map((month) => formatMonthHeader(month, scale))],
         rows,
     };
 }
 
 function formatThemeExportLabel(theme) {
     const parts = [theme.name];
-    if (theme.dev_rank != null) parts.push(`Rank ${getDevRankLabel(theme.dev_rank)}`);
+    if (theme.dev_rank != null) parts.push(`ランク ${getDevRankLabel(theme.dev_rank)}`);
     if (theme.priority != null) parts.push(`P${theme.priority}`);
     if (theme.status) parts.push(STATUS_LABELS[theme.status] || theme.status);
     return parts.join(' / ');
@@ -2449,7 +2510,7 @@ function formatThemeExportLabel(theme) {
 function formatMemberExportLabel(member) {
     const details = [];
     if (member.department) details.push(member.department);
-    if (member.capacity != null) details.push(`Capacity ${member.capacity}%`);
+    if (member.capacity != null) details.push(`上限 ${member.capacity}%`);
     return details.length ? `${member.display_name} (${details.join(' / ')})` : member.display_name;
 }
 
@@ -2459,12 +2520,12 @@ function buildSummaryExportCell(theme, month, members, current) {
     const isDevComplete = getThemeDevCompleteItems(theme).some((item) => monthBucketIncludes(item.month, month, scale));
     const milestones = getThemeMilestones(theme)
         .filter((item) => monthBucketIncludes(item.month, month, scale))
-        .map((item) => item.label || 'Milestone');
+        .map((item) => item.label || 'マイルストーン');
     const textParts = [];
     const rateText = formatRateValue(rate, hasExplicitAllocation);
 
     if (isDevComplete) {
-        textParts.push(rateText ? `★${rateText}` : '★');
+        textParts.push(rateText ? `開発完了 ${rateText}` : '開発完了');
     } else if (rateText) {
         textParts.push(rateText);
     }
@@ -2485,7 +2546,7 @@ function formatSummaryCellContent(theme, totalRate, month, members, showZero = f
     const devCompleteItem = getThemeDevCompleteItems(theme).find((item) => monthBucketIncludes(item.month, month, scale));
     const isDevComplete = Boolean(devCompleteItem);
     const primaryLabel = isDevComplete
-        ? `<span class="gantt-star-label ${devCompleteItem.is_completed ? 'completed' : ''}" title="開発完了月">★${formatRateValue(totalRate, showZero) || ''}</span>`
+        ? `<span class="gantt-star-label ${devCompleteItem.is_completed ? 'completed' : ''}" title="開発完了月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.65 5.37 5.93.86-4.29 4.18 1.01 5.91L12 16.53l-5.3 2.79 1.01-5.91-4.29-4.18 5.93-.86L12 3Z"/></svg>${formatRateValue(totalRate, showZero) || ''}<span class="sr-only">開発完了月</span></span>`
         : `<span class="gantt-summary-value">${formatRateValue(totalRate, showZero)}</span>`;
     return `${primaryLabel}${diffChip(totalRate, month, theme.theme_id, null, members)}`;
 }
@@ -2520,7 +2581,7 @@ function monthBucketIncludes(targetMonth, periodStart, step) {
 function getThemeMilestones(theme) {
     if (Array.isArray(theme.milestones) && theme.milestones.length > 0) return theme.milestones;
     if (theme.milestone_month) {
-        return [{ month: theme.milestone_month, label: theme.milestone_label || 'Milestone' }];
+        return [{ month: theme.milestone_month, label: theme.milestone_label || 'マイルストーン' }];
     }
     return [];
 }
@@ -2531,13 +2592,13 @@ function milestoneChips(theme, month) {
     if (matches.length === 0) return '';
     const visibleMatches = matches.slice(0, 2);
     const chips = visibleMatches.map((item) => {
-        const label = escapeHtml(item.label || 'Milestone');
+        const label = escapeHtml(item.label || 'マイルストーン');
         const completedClass = item.is_completed ? 'completed' : '';
-        const tooltip = escapeHtmlAttr(`${theme.name}\n${item.month}\n${item.label || 'Milestone'}`);
+        const tooltip = escapeHtmlAttr(`${theme.name}\n${item.month}\n${item.label || 'マイルストーン'}`);
         return `<button class="gantt-milestone-chip ${completedClass}" data-theme-id="${theme.theme_id}" type="button" title="${tooltip}">${label}</button>`;
     }).join('');
     const remainder = matches.length > visibleMatches.length
-        ? `<button class="gantt-milestone-chip gantt-milestone-count" data-theme-id="${theme.theme_id}" type="button" title="${escapeHtmlAttr(matches.slice(2).map((item) => item.label || 'Milestone').join('\n'))}">+${matches.length - visibleMatches.length}</button>`
+        ? `<button class="gantt-milestone-chip gantt-milestone-count" data-theme-id="${theme.theme_id}" type="button" title="${escapeHtmlAttr(matches.slice(2).map((item) => item.label || 'マイルストーン').join('\n'))}">+${matches.length - visibleMatches.length}</button>`
         : '';
     return `<div class="gantt-milestones">${chips}${remainder}</div>`;
 }

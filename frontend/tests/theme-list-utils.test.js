@@ -58,4 +58,20 @@ describe('theme list filtering and summaries', () => {
         expect(getThemeCategoryTone('Platform')).toBeGreaterThanOrEqual(1);
         expect(getThemeCategoryTone('Platform')).toBeLessThanOrEqual(6);
     });
+
+    it('filters and sorts a 1000-row management fixture within the UI budget', () => {
+        const largeFixture = Array.from({ length: 1000 }, (_, index) => ({
+            name: `テーマ ${String(index).padStart(4, '0')}`,
+            category: index % 3 === 0 ? '基盤' : '製品',
+            status: index % 4 === 0 ? 'completed' : 'active',
+            priority: index % 10,
+            member_count: index % 12,
+        }));
+        const startedAt = performance.now();
+        const result = filterAndSortThemes(largeFixture, { ...filters, search: 'テーマ', sort: 'category-asc' });
+        const elapsed = performance.now() - startedAt;
+
+        expect(result).toHaveLength(1000);
+        expect(elapsed).toBeLessThan(250);
+    });
 });

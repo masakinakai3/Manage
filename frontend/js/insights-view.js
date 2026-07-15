@@ -15,6 +15,7 @@ let currentOverview = null;
 let currentScenarioResult = null;
 let currentScenarioCandidates = [];
 const SMALL_RIBBON_LOAD_THRESHOLD = 30;
+const GRAPH_PALETTE = ['#0072b2', '#e69f00', '#009e73', '#cc79a7', '#56b4e9', '#d55e00'];
 
 export async function initInsightsView() {
     initRibbonFullscreen();
@@ -34,8 +35,10 @@ export async function refreshInsightsView() {
 
     try {
         setBusyState(true, 'インサイトを読み込み中...');
+        setInsightsBusy(true);
         const overview = await insights.overview(from, toEnd);
         currentOverview = overview;
+        setScenarioAvailability(true);
         renderSummary(overview.summary || {});
         renderScenarioPlanner(overview);
         if (currentScenarioResult) {
@@ -46,8 +49,10 @@ export async function refreshInsightsView() {
         currentScenarioResult = null;
         currentScenarioCandidates = [];
         renderError(formatError(error, 'インサイトの読み込みに失敗しました。'));
+        setScenarioAvailability(false);
         updateScenarioClearButton();
     } finally {
+        setInsightsBusy(false);
         setBusyState(false);
     }
 }
@@ -96,14 +101,22 @@ function renderSummary(summary) {
 }
 
 function renderError(message) {
-    const html = `<div class="empty-panel">${escapeHtml(message)}</div>`;
     const summaryTarget = document.getElementById('insights-summary');
     if (summaryTarget) {
-        summaryTarget.innerHTML = html;
+        summaryTarget.innerHTML = `
+            <div class="empty-panel insight-error-panel" role="alert">
+                <strong>インサイトを表示できません</strong>
+                <p>${escapeHtml(message)}</p>
+                <button class="btn btn-primary" type="button" data-insights-retry>再試行</button>
+            </div>
+        `;
+        summaryTarget.querySelector('[data-insights-retry]')?.addEventListener('click', () => {
+            void refreshInsightsView();
+        });
     }
     const ribbonTarget = document.getElementById('dashboard-project-ribbon');
     if (ribbonTarget) {
-        ribbonTarget.innerHTML = html;
+        ribbonTarget.innerHTML = '<div class="empty-panel">接続が回復するとテーマ負荷の推移を表示します。</div>';
     }
 
     closeRibbonFullscreen();
@@ -134,7 +147,7 @@ function renderProjectRibbon(targetId, ribbonData) {
     }
 }
 
-function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 0 } = {}) {
+export function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 0 } = {}) {
     const items = trimRibbonItems(ribbonData.items || []);
     const xScale = Math.min(1.4, Math.max(0.45, ribbonXAxisScale || 1));
     const minWidth = fullscreen ? 1120 : Math.max(baseWidth, 640);
@@ -185,6 +198,10 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         ? [...explicitThemeOrder, ...fallbackThemeOrder.filter((themeId) => !explicitThemeOrder.includes(themeId))]
         : fallbackThemeOrder;
     const themeRank = new Map(themeOrder.map((themeId, index) => [themeId, index]));
+    themeOrder.forEach((themeId, index) => {
+        const theme = themeMetaById.get(themeId);
+        if (theme) theme.color = GRAPH_PALETTE[index % GRAPH_PALETTE.length];
+    });
     const formatRibbonMemberBreakdown = (segment) => {
         if (!segment) return ['担当内訳なし'];
         if ((segment.member_breakdown || []).length) {
@@ -194,7 +211,8 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
     };
 
     items.forEach((item, index) => {
-        const totalLoad = item.total_load || 0;
+        const parsedTotalLoad = parseOptionalNumber(item.total_load);
+        const totalLoad = parsedTotalLoad ?? 0;
         const stackHeight = totalLoad > 0 ? (innerHeight * totalLoad) / maxTotalLoad : 0;
         const stackTop = padding.top + innerHeight - stackHeight;
         let cursorY = stackTop;
@@ -212,6 +230,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
             const segmentHeight = heights[projectIndex] || 0;
             const segment = {
                 ...project,
+                color: themeMetaById.get(project.theme_id)?.color || GRAPH_PALETTE[projectIndex % GRAPH_PALETTE.length],
                 month: item.month,
                 x,
                 y0: cursorY,
@@ -224,6 +243,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         monthSegments.push({
             month: item.month,
             totalLoad,
+            hasTotalLoad: parsedTotalLoad !== null,
             capacity: Number(item.capacity || 0),
             x,
             segments,
@@ -298,53 +318,6 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         `;
     })() : '';
 
-    const monthHotspots = monthSegments.map((item) => {
-        const details = [...item.segments]
-            .sort((left, right) => right.load - left.load || left.name.localeCompare(right.name, 'ja'))
-            .map((segment) => `${segment.name}: ${segment.load}%`);
-        const tooltip = [
-            `${item.month} 合計 ${item.totalLoad}%${item.capacity > 0 ? ` / 総容量 ${item.capacity}%` : ''}`,
-            ...(details.length ? details : ['内訳なし']),
-            'クリックで内訳を固定表示',
-        ].join('\n');
-        return `
-            <rect
-                x="${item.x - (columnWidth / 2)}"
-                y="${padding.top}"
-                width="${columnWidth}"
-                height="${innerHeight}"
-                fill="transparent"
-                pointer-events="all"
-                class="project-ribbon__hotspot"
-                data-ribbon-month="${escapeHtmlAttr(item.month)}"
-            >
-                <title>${escapeHtml(tooltip)}</title>
-            </rect>
-        `;
-    });
-
-    const segmentHotspots = monthSegments.flatMap((item) => item.segments.map((segment) => {
-        const tooltipLines = [
-            `${segment.month} | ${segment.name} | ${segment.load}%`,
-            ...formatRibbonMemberBreakdown(segment),
-            'クリックで内訳を固定表示',
-        ];
-        return `
-            <rect
-                x="${segment.x - (columnWidth / 2)}"
-                y="${segment.y0}"
-                width="${columnWidth}"
-                height="${Math.max(segment.y1 - segment.y0, 0.5)}"
-                fill="transparent"
-                pointer-events="all"
-                class="project-ribbon__hotspot"
-                data-ribbon-month="${escapeHtmlAttr(segment.month)}"
-            >
-                <title>${escapeHtml(tooltipLines.join('\n'))}</title>
-            </rect>
-        `;
-    }));
-
     const blocks = monthSegments.flatMap((item) => item.segments.map((segment) => {
         const color = segment.color || '#6366f1';
         const heightValue = Math.max(segment.y1 - segment.y0, 0.5);
@@ -352,8 +325,11 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         const labelLimit = isSmallLoad
             ? (fullscreen ? 12 : 8)
             : (fullscreen ? 18 : (columnWidth > 52 ? 14 : 10));
-        const fontSize = 12;
-        const shouldRenderLabel = heightValue >= 24;
+        const fontSize = 13;
+        const themeName = String(segment.name || '');
+        const shouldRenderLabel = heightValue >= 32
+            && columnWidth >= 52
+            && (fullscreen || themeName.length <= 10);
         const tooltipLines = [
             `${segment.month} | ${segment.name} | ${segment.load}%`,
             ...formatRibbonMemberBreakdown(segment),
@@ -368,7 +344,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
                     rx="${Math.min(8, heightValue / 2)}"
                     ry="${Math.min(8, heightValue / 2)}"
                     fill="${escapeHtml(color)}"
-                    fill-opacity="0.78"
+                    fill-opacity="0.7"
                 >
                     <title>${escapeHtml(tooltipLines.join('\n'))}</title>
                 </rect>
@@ -391,7 +367,7 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         return `
         <g>
             <text x="${item.x}" y="${height - 28}" text-anchor="middle" class="project-ribbon__month-label">${escapeHtml(formatRibbonMonth(item.month))}</text>
-            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label${isOverCapacity ? ' project-ribbon__total-label--over' : ''}">合計 ${escapeHtml(String(item.totalLoad))}%</text>
+            <text x="${item.x}" y="${height - 10}" text-anchor="middle" class="project-ribbon__total-label${isOverCapacity ? ' project-ribbon__total-label--over' : ''}">${item.hasTotalLoad ? `合計 ${escapeHtml(String(item.totalLoad))}%` : '合計 データなし'}</text>
         </g>
     `;
     });
@@ -403,6 +379,21 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
         .map(([themeId]) => themeMetaById.get(themeId))
         .filter(Boolean);
     const remainingThemeCount = Math.max(orderedThemeTotals.length - topThemes.length, 0);
+    const chartDescriptionId = fullscreen ? 'project-ribbon-fullscreen-description' : 'project-ribbon-description';
+    const monthSelector = `
+        <div class="project-ribbon__month-selector" role="group" aria-label="月別負荷の選択">
+            ${monthSegments.map((item) => {
+        const overCapacity = item.capacity > 0 && item.totalLoad > item.capacity;
+        return `
+                <button class="project-ribbon__month-button${overCapacity ? ' is-over' : ''}" type="button" data-ribbon-month="${escapeHtmlAttr(item.month)}" aria-pressed="${ribbonDetailMonth === item.month ? 'true' : 'false'}">
+                    <span>${escapeHtml(formatRibbonMonth(item.month))}</span>
+                    <strong>${item.hasTotalLoad ? `${escapeHtml(String(item.totalLoad))}%` : 'データなし'}</strong>
+                    <small>${item.capacity > 0 ? `容量 ${escapeHtml(String(item.capacity))}%` : '容量未設定'}</small>
+                </button>
+            `;
+    }).join('')}
+        </div>
+    `;
 
     const scaleControl = `
         <label class="project-ribbon__scale-control">
@@ -430,18 +421,18 @@ function buildProjectRibbonMarkup(ribbonData, { fullscreen = false, baseWidth = 
             ${fullscreenControls}
             <div class="project-ribbon__toolbar project-ribbon__toolbar--scale">${chartHelp}${expandControl}${scaleControl}</div>
             <div class="project-ribbon__scroll" ${fullscreen ? `data-ribbon-step="${step}" data-ribbon-width="${width}"` : ''}>
-                <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-label="テーマ負荷の推移チャート">
+                <p class="sr-only" id="${chartDescriptionId}">月ごとのテーマ負荷を積み上げて比較するチャートです。正確な値はチャート下の月ボタンから詳細表で確認できます。</p>
+                <svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" class="project-ribbon__svg${fullscreen ? ' project-ribbon__svg--fullscreen' : ''}" role="img" aria-labelledby="${chartDescriptionId}">
                     <rect x="0" y="0" width="${width}" height="${height}" rx="18" ry="18" class="project-ribbon__bg"></rect>
                     <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + innerHeight}" class="project-ribbon__axis-line"></line>
                     ${yAxis.join('')}
                     ${capacityLine}
                     ${ribbons.join('')}
                     ${blocks.join('')}
-                    ${monthHotspots.join('')}
-                    ${segmentHotspots.join('')}
                     ${monthLabels.join('')}
                 </svg>
             </div>
+            ${monthSelector}
             <div class="project-ribbon__detail" data-ribbon-detail hidden></div>
             <div class="project-ribbon__legend">
                 ${topThemes.map((theme) => `
@@ -494,21 +485,34 @@ function showRibbonDetail(container, ribbonData, month, { toggle = false } = {})
     if (!item) return;
 
     ribbonDetailMonth = month;
+    container.querySelectorAll('[data-ribbon-month]').forEach((button) => {
+        button.setAttribute('aria-pressed', String(button.getAttribute('data-ribbon-month') === month));
+    });
     detail.dataset.month = month;
     const projects = [...(item.projects || [])].sort((left, right) => (right.load || 0) - (left.load || 0));
+    const totalLoad = parseOptionalNumber(item.total_load);
     detail.innerHTML = `
         <div class="project-ribbon__detail-header">
-            <strong>${escapeHtml(formatRibbonMonth(month))} の内訳(合計 ${escapeHtml(String(item.total_load || 0))}%${Number(item.capacity || 0) > 0 ? ` / 総容量 ${escapeHtml(String(item.capacity))}%` : ''})</strong>
+            <strong>${escapeHtml(formatRibbonMonth(month))} の内訳（${totalLoad === null ? '合計データなし' : `合計 ${escapeHtml(String(totalLoad))}%`}${Number(item.capacity || 0) > 0 ? ` / 総容量 ${escapeHtml(String(item.capacity))}%` : ''}）</strong>
             <button class="btn btn-ghost btn-sm" type="button" data-ribbon-detail-close>閉じる</button>
         </div>
-        ${projects.length ? projects.map((project) => `
-            <div class="project-ribbon__detail-row">
-                <span class="project-ribbon__legend-swatch" style="background:${escapeHtml(project.color || '#6366f1')}"></span>
-                <span class="project-ribbon__detail-name">${escapeHtml(project.name)}</span>
-                <span class="project-ribbon__detail-load">${escapeHtml(String(project.load))}%</span>
-                <span class="project-ribbon__detail-members">${(project.member_breakdown || []).map((member) => `${escapeHtml(member.display_name)} ${escapeHtml(String(member.load))}%`).join(' / ') || '担当内訳なし'}</span>
+        ${projects.length ? `
+            <div class="project-ribbon__detail-table-wrap">
+                <table class="project-ribbon__detail-table">
+                    <caption class="sr-only">${escapeHtml(formatRibbonMonth(month))}のテーマ別負荷</caption>
+                    <thead><tr><th scope="col">テーマ</th><th scope="col">負荷</th><th scope="col">担当内訳</th></tr></thead>
+                    <tbody>
+                        ${projects.map((project) => `
+                            <tr>
+                                <th scope="row"><span class="project-ribbon__legend-swatch" style="background:${escapeHtml(getRibbonDisplayColor(project.theme_id, ribbonData))}"></span>${escapeHtml(project.name)}</th>
+                                <td class="numeric-cell">${formatOptionalPercent(project.load)}</td>
+                                <td>${(project.member_breakdown || []).map((member) => `${escapeHtml(member.display_name)} ${formatOptionalPercent(member.load)}`).join(' / ') || '担当内訳なし'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
             </div>
-        `).join('') : '<div class="empty-panel">この月の配分はありません。</div>'}
+        ` : '<div class="empty-panel">この月の配分はありません。</div>'}
     `;
     detail.hidden = false;
     detail.querySelector('[data-ribbon-detail-close]')?.addEventListener('click', () => {
@@ -516,11 +520,59 @@ function showRibbonDetail(container, ribbonData, month, { toggle = false } = {})
     });
 }
 
+function parseOptionalNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatOptionalPercent(value) {
+    const parsed = parseOptionalNumber(value);
+    return parsed === null ? '<span class="data-missing">データなし</span>' : `${escapeHtml(String(parsed))}%`;
+}
+
 function hideRibbonDetail(detail) {
+    detail.closest('.project-ribbon')?.querySelectorAll('[data-ribbon-month]').forEach((button) => {
+        button.setAttribute('aria-pressed', 'false');
+    });
     detail.hidden = true;
     detail.dataset.month = '';
     detail.innerHTML = '';
     ribbonDetailMonth = null;
+}
+
+function getRibbonDisplayColor(themeId, ribbonData) {
+    const order = Array.isArray(ribbonData?.theme_order) ? ribbonData.theme_order : [];
+    const orderIndex = order.indexOf(themeId);
+    const fallbackIndex = (ribbonData?.items || [])
+        .flatMap((item) => item.projects || [])
+        .findIndex((project) => project.theme_id === themeId);
+    const index = orderIndex >= 0 ? orderIndex : Math.max(fallbackIndex, 0);
+    return GRAPH_PALETTE[index % GRAPH_PALETTE.length];
+}
+
+function setInsightsBusy(isBusy) {
+    const summary = document.getElementById('insights-summary');
+    const ribbon = document.getElementById('dashboard-project-ribbon');
+    summary?.setAttribute('aria-busy', String(isBusy));
+    ribbon?.setAttribute('aria-busy', String(isBusy));
+}
+
+function setScenarioAvailability(available) {
+    const form = document.getElementById('insight-scenario-form');
+    if (!form) return;
+    form.querySelectorAll('input, select, button').forEach((control) => {
+        control.disabled = !available;
+        if (!available) control.title = 'サーバー接続が回復すると操作できます';
+        else control.removeAttribute('title');
+    });
+    const hint = document.getElementById('insight-scenario-hint');
+    if (!available && hint) {
+        hint.textContent = 'サーバーへ接続できません。接続が回復してから再試行してください。';
+    } else if (available) {
+        updateScenarioHint();
+        updateScenarioClearButton();
+    }
 }
 
 function normalizeRibbonHeights(projects, stackHeight) {
@@ -761,6 +813,7 @@ function updateScenarioClearButton() {
     const clearButton = document.getElementById('insight-scenario-clear');
     if (!clearButton) return;
     clearButton.disabled = !currentScenarioResult;
+    clearButton.title = currentScenarioResult ? '現在の提案結果をクリアします' : 'クリアできる提案結果はありません';
 }
 
 function clearScenarioPlanner() {
@@ -793,7 +846,10 @@ async function submitScenarioPlanner() {
     }
 
     try {
-        if (submitButton) submitButton.disabled = true;
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.title = '候補を計算しています';
+        }
         renderScenarioMessage('候補を計算しています...');
         currentScenarioResult = await insights.scenarioSuggestions(payload);
         renderScenarioResults(currentScenarioResult);
@@ -804,7 +860,10 @@ async function submitScenarioPlanner() {
         renderScenarioMessage(formatError(error, '候補の計算に失敗しました。'));
         updateScenarioClearButton();
     } finally {
-        if (submitButton) submitButton.disabled = false;
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.removeAttribute('title');
+        }
     }
 }
 

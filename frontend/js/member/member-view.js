@@ -23,8 +23,11 @@ let memberDecisionFilter = 'all';
 let lastMemberLoads = {};
 let lastWarnings = [];
 let lastVisibleMonths = [];
+let memberDensity = 'standard';
+let lastOverloadCellKey = null;
 const expandedMemberIds = new Set();
 const MEMBER_MONTH_COLUMN_WIDTH = 88;
+const MEMBER_MONTH_COLUMN_WIDTH_COMPACT = 72;
 
 // `null` means "no allocation"; an explicit `0` is a real, distinct value.
 function normalizeMemberRate(rate) {
@@ -80,12 +83,14 @@ export async function initMemberView() {
     const state = loadViewState();
     startMonth = state.startMonth;
     scale = state.scale;
+    visibleCount = state.visibleCount || getPresetConfig(state.preset || 'rolling-6').visibleCount || 8;
     memberSearchQuery = state.memberSearch || '';
 
     setupControls();
     subscribeViewState((nextState) => {
         startMonth = nextState.startMonth;
         scale = nextState.scale;
+        visibleCount = nextState.visibleCount || getPresetConfig(nextState.preset || 'rolling-6').visibleCount || 8;
         memberSearchQuery = nextState.memberSearch || '';
 
         const searchInput = document.getElementById('member-search');
@@ -171,6 +176,32 @@ function setupControls() {
     });
     syncMemberSearchControls();
 
+    try {
+        memberDensity = localStorage.getItem('manage_member_density') === 'compact' ? 'compact' : 'standard';
+    } catch {
+        memberDensity = 'standard';
+    }
+    const densityInput = document.getElementById('member-density');
+    if (densityInput) {
+        densityInput.value = memberDensity;
+        densityInput.addEventListener('change', () => {
+            memberDensity = densityInput.value === 'compact' ? 'compact' : 'standard';
+            try {
+                localStorage.setItem('manage_member_density', memberDensity);
+            } catch {
+                // The view remains usable when browser storage is unavailable.
+            }
+            applyMemberDensity();
+            if (lastVisibleMonths.length > 0) renderTable(lastVisibleMonths, lastMemberLoads, lastWarnings, lastAllocations);
+        });
+    }
+    applyMemberDensity();
+
+    const guide = document.querySelector('.member-load-guide');
+    if (guide && window.matchMedia?.('(max-width: 720px)').matches) guide.open = false;
+
+    document.getElementById('member-jump-overload')?.addEventListener('click', jumpToNextOverload);
+
     document.getElementById('member-prev').addEventListener('click', () => {
         startMonth = addMonths(startMonth, -scale * 3);
         updateViewState({ startMonth });
@@ -186,8 +217,31 @@ function setupControls() {
         const config = getPresetConfig(preset);
         startMonth = config.startMonth;
         scale = config.scale;
-        updateViewState({ startMonth, scale, preset });
+        visibleCount = config.visibleCount || visibleCount;
+        updateViewState({ startMonth, scale, visibleCount, preset });
     });
+}
+
+function applyMemberDensity() {
+    document.getElementById('member-load-container')?.classList.toggle('density-compact', memberDensity === 'compact');
+}
+
+function getMemberMonthColumnWidth() {
+    return memberDensity === 'compact' ? MEMBER_MONTH_COLUMN_WIDTH_COMPACT : MEMBER_MONTH_COLUMN_WIDTH;
+}
+
+function jumpToNextOverload() {
+    const buttons = [...document.querySelectorAll('.member-detail-button[data-overloaded="true"]')];
+    if (buttons.length === 0) {
+        showToast('表示期間内に過負荷はありません。', 'info');
+        return;
+    }
+
+    const currentIndex = buttons.findIndex((button) => button.dataset.memberCellKey === lastOverloadCellKey);
+    const target = buttons[(currentIndex + 1) % buttons.length];
+    lastOverloadCellKey = target.dataset.memberCellKey;
+    target.scrollIntoView?.({ block: 'center', inline: 'center', behavior: 'smooth' });
+    target.focus({ preventScroll: true });
 }
 
 function syncScaleButtons() {
@@ -296,9 +350,9 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
 
             const excess = Math.max(0, load - member.capacity);
             const stateLabel = load === 0 ? '未割当' : (isOver ? `上限超過 ${excess}%` : `上限 ${member.capacity}%`);
-            html += `<td class="${month === current ? 'month-current' : ''}${load === 0 ? ' member-cell-empty' : ''}" tabindex="0" role="button" aria-label="${escapeHtml(member.display_name)} ${shortenMonth(month)} ${load}% ${stateLabel}" data-member-month="${month}" data-member-cell="${member.member_id}-${month}" data-member-id="${member.member_id}" data-month="${month}" data-details="${detailsJson}">`;
+            html += `<td class="${month === current ? 'month-current' : ''}${load === 0 ? ' member-cell-empty' : ''}" data-member-month="${month}" data-member-cell="${member.member_id}-${month}" data-member-id="${member.member_id}" data-month="${month}" data-details="${detailsJson}">`;
             if (load > 0) {
-                html += `<div class="member-cell-inner"><span class="load-cell ${className}">${load}%${isOver ? `<small>超過 +${excess}%</small>` : ''}</span>${barHtml}</div>`;
+                html += renderMemberSummaryButton(member, month, load, stateLabel, className, barHtml, isOver, excess);
             } else {
                 html += '<span class="member-empty-mark" aria-hidden="true">—</span>';
             }
@@ -309,7 +363,7 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
 
         themeIds.forEach((themeId) => {
             const theme = allThemes.find((item) => item.theme_id === themeId);
-            const themeName = theme ? theme.name : `Theme ${themeId}`;
+            const themeName = theme ? theme.name : `テーマ ${themeId}`;
             const themeColor = theme ? theme.color : '#888888';
             const themeLoads = memberThemes[themeId];
 
@@ -348,9 +402,10 @@ function renderHeader(months) {
             </span>
         </div>
     </th>`;
+    const monthColumnWidth = getMemberMonthColumnWidth();
     months.forEach((month) => {
         const label = formatMonthHeader(month, scale);
-        html += `<th class="${month === current ? 'month-current' : ''}" tabindex="0" role="button" aria-label="${shortenMonth(month)}列を強調" data-member-month="${month}" style="width:${MEMBER_MONTH_COLUMN_WIDTH}px;min-width:${MEMBER_MONTH_COLUMN_WIDTH}px;max-width:${MEMBER_MONTH_COLUMN_WIDTH}px;">${label.replace('\n', '<br>')}${month === current ? '<span class="current-month-label">現在</span>' : ''}</th>`;
+        html += `<th class="${month === current ? 'month-current' : ''}" tabindex="0" role="button" aria-label="${shortenMonth(month)}列を強調" data-member-month="${month}" style="width:${monthColumnWidth}px;min-width:${monthColumnWidth}px;max-width:${monthColumnWidth}px;">${label.replace('\n', '<br>')}${month === current ? '<span class="current-month-label">現在</span>' : ''}</th>`;
     });
     html += '</tr>';
     thead.innerHTML = html;
@@ -439,7 +494,7 @@ function buildStackedBar(month, memberThemes, capacity) {
 
         const theme = allThemes.find((item) => item.theme_id === parsedThemeId);
         details.push({
-            theme_name: theme ? theme.name : `Theme ${parsedThemeId}`,
+            theme_name: theme ? theme.name : `テーマ ${parsedThemeId}`,
             color: theme ? theme.color : '#888888',
             rate,
         });
@@ -463,7 +518,7 @@ function buildStackedBar(month, memberThemes, capacity) {
 }
 
 function bindTableInteractions(tbody) {
-    document.querySelectorAll('[data-member-month]').forEach((element) => {
+    document.querySelectorAll('#member-load-thead [data-member-month]').forEach((element) => {
         element.addEventListener('click', () => {
             const month = element.dataset.memberMonth || null;
             setSelectedMonth(selectedMonth === month ? null : month);
@@ -489,7 +544,9 @@ function bindTableInteractions(tbody) {
     });
 
     tbody.querySelectorAll('td[data-member-cell]').forEach((cell) => {
+        bindMemberDetailCell(cell);
         cell.addEventListener('mouseenter', (event) => {
+            if (document.querySelector('.member-detail-popup.is-pinned')) return;
             const details = parseCellDetails(cell);
             if (!details || details.length === 0) return;
             const member = allMembers.find((item) => item.member_id === Number.parseInt(cell.dataset.memberId, 10));
@@ -498,7 +555,7 @@ function bindTableInteractions(tbody) {
         });
 
         cell.addEventListener('mouseleave', () => {
-            document.querySelectorAll('.member-detail-popup').forEach((popup) => popup.remove());
+            document.querySelectorAll('.member-detail-popup:not(.is-pinned)').forEach((popup) => popup.remove());
         });
     });
 
@@ -532,6 +589,18 @@ function bindTableInteractions(tbody) {
             event.preventDefault();
             cell.click();
         });
+    });
+}
+
+function bindMemberDetailCell(cell) {
+    const button = cell.querySelector('.member-detail-button');
+    if (!button) return;
+    button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const details = parseCellDetails(cell);
+        const member = allMembers.find((item) => item.member_id === Number.parseInt(cell.dataset.memberId, 10));
+        if (!member || details.length === 0) return;
+        showDetailPopup(event, member, cell.dataset.month, details, { anchor: button, pinned: true });
     });
 }
 
@@ -588,8 +657,14 @@ function updateMemberSummaryCell(memberId, month) {
 
     cell.dataset.details = details.length > 0 ? encodeURIComponent(JSON.stringify(details)) : '';
     cell.innerHTML = total > 0
-        ? `<div class="member-cell-inner"><span class="load-cell ${className}">${total}%</span>${barHtml}</div>`
-        : '';
+        ? renderMemberSummaryButton(member, month, total, total > member.capacity ? `上限超過 ${total - member.capacity}%` : `上限 ${member.capacity}%`, className, barHtml, total > member.capacity, Math.max(0, total - member.capacity))
+        : '<span class="member-empty-mark" aria-hidden="true">—</span>';
+    bindMemberDetailCell(cell);
+}
+
+function renderMemberSummaryButton(member, month, load, stateLabel, className, barHtml, isOver, excess) {
+    const label = `${member.display_name} ${shortenMonth(month)} ${load}% ${stateLabel}。テーマ別内訳を表示`;
+    return `<button class="member-detail-button" type="button" aria-label="${escapeHtml(label)}" aria-haspopup="dialog" aria-expanded="false" data-overloaded="${isOver}" data-member-cell-key="${member.member_id}-${month}"><span class="member-cell-inner"><span class="load-cell ${className}">${load}%${isOver ? `<small>超過 +${excess}%</small>` : ''}</span>${barHtml}<span class="member-detail-button-label">内訳</span></span></button>`;
 }
 
 function moveEditorFocus(currentCell, direction) {
@@ -659,7 +734,7 @@ function monthBucketIncludes(targetMonth, periodStart, step) {
 function getThemeMilestones(theme) {
     if (Array.isArray(theme?.milestones) && theme.milestones.length > 0) return theme.milestones;
     if (theme?.milestone_month) {
-        return [{ month: theme.milestone_month, label: theme.milestone_label || 'Milestone' }];
+        return [{ month: theme.milestone_month, label: theme.milestone_label || 'マイルストーン' }];
     }
     return [];
 }
@@ -688,10 +763,10 @@ function milestoneBadges(theme, month) {
     if (matches.length === 0) return '';
 
     const [first, ...rest] = matches;
-    const firstLabel = escapeHtml(first.label || 'Milestone');
+    const firstLabel = escapeHtml(first.label || 'マイルストーン');
     const firstCompletedClass = first.is_completed ? ' completed' : '';
     const tooltip = escapeHtml(matches
-        .map((item) => `${item.is_completed ? '完了: ' : ''}${item.label || 'Milestone'}`)
+        .map((item) => `${item.is_completed ? '完了: ' : ''}${item.label || 'マイルストーン'}`)
         .join('\n'));
     const extraCount = rest.length > 0
         ? `<span class="member-theme-milestone member-theme-milestone-count" title="${tooltip}">+${rest.length}</span>`
@@ -703,8 +778,8 @@ function milestoneBadges(theme, month) {
 function devCompleteBadge(theme, month, rate) {
     const item = getThemeDevCompleteItems(theme).find((candidate) => monthBucketIncludes(candidate.month, month, scale));
     if (!item) return '';
-    const label = rate > 0 ? `★${rate}%` : '★';
-    return `<span class="member-theme-dev-complete${item.is_completed ? ' completed' : ''}" title="開発完了月">${label}</span>`;
+    const rateLabel = rate > 0 ? `<span>${rate}%</span>` : '';
+    return `<span class="member-theme-dev-complete${item.is_completed ? ' completed' : ''}" title="開発完了月"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.65 5.37 5.93.86-4.29 4.18 1.01 5.91L12 16.53l-5.3 2.79 1.01-5.91-4.29-4.18 5.93-.86L12 3Z"/></svg>${rateLabel}<span class="sr-only">開発完了月</span></span>`;
 }
 
 function escapeHtml(value) {
@@ -737,7 +812,7 @@ async function exportCSV() {
             csvContent += [
                 member.display_name,
                 member.department || '',
-                theme?.name || `Theme ${themeId}`,
+                theme?.name || `テーマ ${themeId}`,
                 theme?.category || '',
                 theme?.status || '',
                 ...months.map((month) => themes[themeId][month] || ''),
@@ -779,19 +854,26 @@ async function exportCSV() {
     }
 }
 
-function showDetailPopup(event, member, month, details) {
-    document.querySelectorAll('.member-detail-popup').forEach((popup) => popup.remove());
+function showDetailPopup(event, member, month, details, options = {}) {
+    closeMemberDetailPopups();
 
     const total = details.reduce((sum, detail) => sum + detail.rate, 0);
     const isOver = total > member.capacity;
+    const pinned = Boolean(options.pinned);
+    const anchor = options.anchor || null;
 
     const popup = document.createElement('div');
-    popup.className = 'member-detail-popup';
+    popup.className = `member-detail-popup${pinned ? ' is-pinned' : ''}`;
+    popup.setAttribute('role', pinned ? 'dialog' : 'tooltip');
+    popup.setAttribute('aria-label', `${member.display_name} ${shortenMonth(month)}の負荷内訳`);
     popup.innerHTML = `
-        <h4>${member.display_name} / ${shortenMonth(month)}</h4>
+        <div class="member-detail-popup-header">
+            <h4>${escapeHtml(member.display_name)} / ${escapeHtml(shortenMonth(month))}</h4>
+            ${pinned ? '<button class="member-detail-popup-close" type="button" aria-label="内訳を閉じる"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>' : ''}
+        </div>
         ${details.map((detail) => `
             <div class="detail-row">
-                <span class="theme-name"><span class="card-color-dot" style="background:${detail.color}"></span>${detail.theme_name}</span>
+                <span class="theme-name"><span class="card-color-dot" style="background:${safeThemeColor(detail.color)}"></span>${escapeHtml(detail.theme_name)}</span>
                 <span class="rate">${detail.rate}%</span>
             </div>
         `).join('')}
@@ -800,11 +882,46 @@ function showDetailPopup(event, member, month, details) {
             <span>${total}%${isOver ? ` (+${total - member.capacity}% 超過)` : ''}</span>
         </div>
     `;
-    popup.style.left = `${event.clientX + 12}px`;
-    popup.style.top = `${event.clientY}px`;
+    if (anchor) {
+        anchor.setAttribute('aria-expanded', 'true');
+        const anchorRect = anchor.getBoundingClientRect();
+        popup.style.left = `${anchorRect.left}px`;
+        popup.style.top = `${anchorRect.bottom + 8}px`;
+    } else {
+        popup.style.left = `${event.clientX + 12}px`;
+        popup.style.top = `${event.clientY}px`;
+    }
     document.body.appendChild(popup);
 
     const rect = popup.getBoundingClientRect();
-    if (rect.right > window.innerWidth) popup.style.left = `${event.clientX - rect.width - 12}px`;
-    if (rect.bottom > window.innerHeight) popup.style.top = `${event.clientY - rect.height}px`;
+    if (rect.right > window.innerWidth - 8) popup.style.left = `${Math.max(8, window.innerWidth - rect.width - 8)}px`;
+    if (rect.bottom > window.innerHeight - 8) {
+        const fallbackTop = anchor ? anchor.getBoundingClientRect().top - rect.height - 8 : event.clientY - rect.height;
+        popup.style.top = `${Math.max(8, fallbackTop)}px`;
+    }
+
+    if (pinned) {
+        const closeButton = popup.querySelector('.member-detail-popup-close');
+        const close = () => {
+            closeMemberDetailPopups();
+            anchor?.focus();
+        };
+        closeButton?.addEventListener('click', close);
+        popup.addEventListener('keydown', (keyboardEvent) => {
+            if (keyboardEvent.key !== 'Escape') return;
+            keyboardEvent.preventDefault();
+            close();
+        });
+        closeButton?.focus();
+    }
+}
+
+function closeMemberDetailPopups() {
+    document.querySelectorAll('.member-detail-popup').forEach((popup) => popup.remove());
+    document.querySelectorAll('.member-detail-button[aria-expanded="true"]').forEach((button) => button.setAttribute('aria-expanded', 'false'));
+}
+
+function safeThemeColor(value) {
+    const color = String(value || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(color) ? color : '#73768c';
 }

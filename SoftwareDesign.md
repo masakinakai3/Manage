@@ -154,7 +154,7 @@ flowchart TD
 | メンバー負荷画面 | `frontend/js/member/member-view.js` | メンバー別の集約表示とテーマ内訳 |
 | インサイト画面 | `frontend/js/insights-view.js` | 分析結果の可視化と画面間ドリルダウン |
 | 共通状態 | `frontend/js/shared-state.js` | `localStorage` と `CustomEvent` による共有状態 |
-| UI 共通部品 | `frontend/js/ui.js` | toast、confirm、prompt、busy/save 状態表示 |
+| UI 共通部品 | `frontend/js/ui.js` | toast、confirm、prompt、busy、通信状態、保存状態表示 |
 
 ## 6. 主要画面
 

@@ -50,14 +50,18 @@ export function subscribeViewState(handler) {
 
 export function getPresetConfig(preset) {
     const month = currentMonth();
+    const [year, monthNumber] = month.split('-').map(Number);
+    const quarterStart = Math.floor((monthNumber - 1) / 3) * 3 + 1;
 
     switch (preset) {
         case 'current-quarter':
-            return { startMonth: addMonths(month, -1), scale: 3, visibleCount: 14 };
+            return { startMonth: `${year}-${String(quarterStart).padStart(2, '0')}`, scale: 1, visibleCount: 3 };
         case 'current-year':
             return { startMonth: `${month.slice(0, 4)}-01`, scale: 1, visibleCount: 12 };
         case 'rolling-12':
             return { startMonth: addMonths(month, -1), scale: 1, visibleCount: 14 };
+        case 'rolling-24':
+            return { startMonth: addMonths(month, -1), scale: 1, visibleCount: 26 };
         case 'rolling-6':
         default:
             return { startMonth: addMonths(month, -1), scale: 1, visibleCount: 8 };

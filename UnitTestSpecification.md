@@ -70,15 +70,17 @@ npm run build
 | ファイル | 保護する主な動作 |
 |---|---|
 | `frontend/tests/api.test.js` | GET no-storeとwrite requestのcache挙動 |
+| `frontend/tests/ui.test.js` | APIエラー日本語化、データ／保存状態の分離、入力中Escape |
+| `frontend/tests/shared-state.test.js` | 四半期、6/12/24か月プリセット |
 | `frontend/tests/date-utils.test.js` | 月範囲、加減算、scale見出し、配賦集約 |
 | `frontend/tests/shortcut-utils.test.js` | Undo/Redo、入力中shortcut、memo field |
-| `frontend/tests/theme-list-utils.test.js` | filter/sort、legacy status、category tone |
+| `frontend/tests/theme-list-utils.test.js` | filter/sort、legacy status、category tone、1000行fixtureの処理budget |
 | `frontend/tests/gantt-editor.test.js` | edit、保存、0と空欄、keyboard、optimistic state |
 | `frontend/tests/gantt-dnd.test.js` | 同一Theme内移動と異Theme拒否 |
 | `frontend/tests/gantt-theme-reorder.test.js` | Theme行のdrop位置と自己drop拒否 |
-| `frontend/tests/gantt-renderer.test.js` | history、selection、期間移動、export、milestone、filter、完了表示、nested row |
-| `frontend/tests/member-view.test.js` | 集約、milestone、月highlight、summary filter、expand、edit/history |
-| `frontend/tests/insights-view.test.js` | Project Ribbonのlabel・accessible detail |
+| `frontend/tests/gantt-renderer.test.js` | history、selection、期間移動、export、milestone、filter、完了表示、nested row、狭幅の単一編集面 |
+| `frontend/tests/member-view.test.js` | 集約、milestone、月highlight、summary filter、expand、edit/history、内訳dialog |
+| `frontend/tests/insights-view.test.js` | Project Ribbonのlabel・月button・欠損と明示0の区別 |
 
 重要なUI回帰:
 
@@ -87,7 +89,10 @@ npm run build
 - 月highlightは単一で、再clickにより解除できる。
 - 完了状態はsummaryとnested rowの表示全体へ反映する。
 - CSV/XLSX datasetはvisible period、filter、label、row shapeを守る。
-- Member Loadのexpand controlはaccessibleで、不要なclick detail panelを生成しない。
+- Member Loadのexpand controlとセル内訳buttonはaccessibleで、不要な上部click detail panelを生成しない。
+- データ取得状態と保存状態を分離し、500/offline時に`fresh`を表示しない。
+- CSSの色リテラルと13px未満の文字はlintで拒否する。
+- 60か月の観測窓と1000行の一覧fixtureを回帰対象にする。
 
 ## 6. 変更別の必須test
 
@@ -112,8 +117,9 @@ npm run build
 4. `npm test`
 5. `npm run lint`
 6. `npm run format:check`
+7. `npm run build`
 
-CIは `npm run build`、browser/E2E、PyInstallerを実行しない。ローカル完了条件をCI合格だけへ縮小しない。
+CIはfrontend buildまで実行する。browser/E2E、PyInstallerは実行しないため、ローカル完了条件をCI合格だけへ縮小しない。
 
 ## 8. Test追加方針
 

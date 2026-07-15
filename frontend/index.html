@@ -15,9 +15,9 @@
             <div class="login-card">
                 <div class="login-header">
                     <div class="login-logo" aria-hidden="true">
-                        <svg class="brand-mark" viewBox="0 0 40 40" width="40" height="40">
-                            <rect width="40" height="40" rx="11" fill="currentColor"></rect>
-                            <path d="M11 12h18v4H11zm0 7h14v4H11zm0 7h10v4H11z" fill="white"></path>
+                        <svg class="brand-mark" viewBox="0 0 48 32" width="48" height="32">
+                            <path d="M4 6h40M4 16h30M4 26h20" fill="none" stroke="currentColor" stroke-width="3"></path>
+                            <path d="M40 16h4M30 26h14" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".45"></path>
                         </svg>
                     </div>
                     <div>
@@ -37,7 +37,7 @@
                             <button id="login-password-toggle" class="password-toggle" type="button" aria-label="パスワードを表示" aria-pressed="false">表示</button>
                         </div>
                     </label>
-                    <p id="login-message" class="summary-subtext" hidden></p>
+                    <p id="login-message" class="error-message" role="alert" aria-live="assertive" aria-atomic="true" hidden></p>
                     <button id="login-submit" class="btn btn-primary btn-block" type="submit">ログイン</button>
                 </form>
             </div>
@@ -47,15 +47,9 @@
         <nav id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">
-                    <svg width="28" height="28" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                        <rect width="40" height="40" rx="10" fill="url(#logo-grad2)"></rect>
-                        <path d="M12 14h16v3H12zm0 5h12v3H12zm0 5h8v3H12z" fill="white" opacity="0.9"></path>
-                        <defs>
-                            <linearGradient id="logo-grad2" x1="0" y1="0" x2="40" y2="40">
-                                <stop stop-color="#6366f1"></stop>
-                                <stop offset="1" stop-color="#8b5cf6"></stop>
-                            </linearGradient>
-                        </defs>
+                    <svg class="brand-mark" width="30" height="24" viewBox="0 0 48 32" fill="none" aria-hidden="true">
+                        <path d="M4 6h40M4 16h30M4 26h20" stroke="currentColor" stroke-width="3"></path>
+                        <path d="M40 16h4M30 26h14" stroke="currentColor" stroke-width="1.5" opacity=".45"></path>
                     </svg>
                 </div>
                 <span class="sidebar-title">Manage</span>
@@ -73,10 +67,14 @@
             <div class="sidebar-footer">
                 <div class="sidebar-status-panel">
                     <div class="sidebar-status-row">
-                        <span class="sidebar-status-label">保存状態</span>
-                        <span id="save-state" class="save-state-pill" data-role="save-state" data-state="idle">待機中</span>
+                        <span class="sidebar-status-label">データ</span>
+                        <span id="data-state" class="state-pill" data-role="data-state" data-state="loading" aria-live="polite">確認中</span>
                     </div>
-                    <div id="busy-state" class="sidebar-busy" data-role="busy-state" hidden>処理中...</div>
+                    <div class="sidebar-status-row">
+                        <span class="sidebar-status-label">保存</span>
+                        <span id="save-state" class="state-pill save-state-pill" data-role="save-state" data-state="idle" aria-live="polite">変更なし</span>
+                    </div>
+                    <div id="busy-state" class="sidebar-busy" data-role="busy-state" role="status" aria-live="polite" hidden>処理中...</div>
                 </div>
 
                 <div class="sidebar-actions">
@@ -126,13 +124,13 @@
                             <p class="view-subtitle">配分計画の調整、比較、保存をひとつの画面で進められます。</p>
                         </div>
                         <div class="gantt-header-status">
-                            <button id="gantt-controls-toggle" class="btn btn-ghost btn-sm gantt-controls-toggle" type="button" aria-expanded="true" aria-controls="gantt-controls-body">コントロールを閉じる</button>
+                            <button id="gantt-controls-toggle" class="btn btn-ghost btn-sm gantt-controls-toggle" type="button" aria-expanded="false" aria-controls="gantt-controls-body">コントロールを開く</button>
                             <span class="sidebar-busy header-busy" data-role="busy-state" hidden>処理中...</span>
                             <button id="shortcut-help-header-btn" class="btn btn-ghost btn-sm" type="button">ショートカット一覧</button>
                         </div>
                     </div>
 
-                    <div id="gantt-controls-body" class="view-controls gantt-view-controls">
+                    <div id="gantt-controls-body" class="view-controls gantt-view-controls is-collapsed">
                         <section class="gantt-control-section">
                             <div class="gantt-section-heading">
                                 <span class="gantt-section-eyebrow">期間操作</span>
@@ -148,8 +146,13 @@
                                 <select id="shared-period-preset" class="view-select">
                                     <option value="rolling-6">直近6か月</option>
                                     <option value="rolling-12">直近12か月</option>
+                                    <option value="rolling-24">直近24か月</option>
                                     <option value="current-quarter">現在四半期</option>
                                     <option value="current-year">今年</option>
+                                </select>
+                                <select id="gantt-density" class="view-select" aria-label="ガント表の密度">
+                                    <option value="standard">標準表示</option>
+                                    <option value="compact">コンパクト表示</option>
                                 </select>
                                 <div class="month-nav">
                                     <button id="gantt-prev" class="btn btn-icon" type="button">前へ</button>
@@ -239,7 +242,7 @@
 
                 <div class="gantt-workspace">
                     <div class="gantt-container" id="gantt-container">
-                        <details class="gantt-legend" aria-label="ガントチャートの凡例" open>
+                        <details class="gantt-legend" aria-label="ガントチャートの凡例">
                             <summary>凡例</summary>
                             <div class="gantt-legend-items">
                                 <span><i class="legend-swatch legend-low"></i>1～30%</span>
@@ -254,13 +257,13 @@
                                 <span><i class="legend-swatch legend-completed"></i>完了</span>
                                 <span><i class="legend-outline legend-current"></i>現在月</span>
                                 <span><i class="legend-outline legend-selected"></i>選択セル</span>
-                                <span><strong>★</strong> 開発完了月</span>
+                                <span><svg class="legend-status-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.65 5.37 5.93.86-4.29 4.18 1.01 5.91L12 16.53l-5.3 2.79 1.01-5.91-4.29-4.18 5.93-.86L12 3Z"/></svg>開発完了月</span>
                             </div>
                         </details>
                         <div class="gantt-floating-actions">
                             <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたむ</button>
-                            <button id="gantt-export-csv" class="btn btn-primary btn-sm" type="button" aria-label="現在表示中のガントチャートをCSV出力">CSV出力</button>
+                            <button id="gantt-export-csv" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをCSV出力">CSV出力</button>
                             <button id="gantt-export-image" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをPNG画像で出力">画像出力</button>
                         </div>
                         <div id="gantt-mobile-theme-list" class="gantt-mobile-theme-list" hidden></div>
@@ -318,7 +321,7 @@
                                 <button id="detail-preview-bulk" class="btn btn-ghost btn-sm" type="button">一括更新プレビュー</button>
                                 <button id="detail-save" class="btn btn-primary btn-sm" type="button">保存</button>
                             </div>
-                            <div id="detail-message" class="summary-subtext"></div>
+                            <div id="detail-message" class="summary-subtext" role="status" aria-live="polite"></div>
                         </div>
                     </aside>
                 </div>
@@ -341,8 +344,14 @@
                         <select id="member-period-preset" class="view-select">
                             <option value="rolling-6">直近6か月</option>
                             <option value="rolling-12">直近12か月</option>
+                            <option value="rolling-24">直近24か月</option>
                             <option value="current-quarter">現在四半期</option>
                             <option value="current-year">今年</option>
+                        </select>
+                        <label class="sr-only" for="member-density">表の密度</label>
+                        <select id="member-density" class="view-select" aria-label="表の密度">
+                            <option value="standard">標準表示</option>
+                            <option value="compact">コンパクト表示</option>
                         </select>
                         </div>
                         <div class="member-control-group member-control-search">
@@ -355,22 +364,23 @@
                             <button id="member-today" class="btn btn-ghost btn-sm" type="button">現在へ</button>
                             <button id="member-next" class="btn btn-icon" type="button">次へ</button>
                         </div>
+                            <button class="btn btn-ghost btn-sm" id="member-jump-overload" type="button">次の過負荷へ</button>
                             <button class="btn btn-ghost btn-sm" id="member-export-csv" type="button">CSV 出力</button>
                         </div>
                     </div>
                 </div>
                 <section id="member-load-summary" class="summary-grid"></section>
-                <section class="member-load-guide" aria-label="負荷表示の凡例">
+                <details class="member-load-guide" aria-label="負荷表示の凡例" open>
+                    <summary>負荷の見方と操作</summary>
                     <div class="member-load-legend">
-                        <strong>負荷の見方</strong>
                         <span><i class="member-legend-swatch load-low"></i>余力大 1〜30%</span>
                         <span><i class="member-legend-swatch load-mid"></i>余力あり 31〜60%</span>
                         <span><i class="member-legend-swatch load-full"></i>上限付近 61〜100%</span>
                         <span><i class="member-legend-swatch load-over"></i>上限超過</span>
                         <span><i class="member-legend-empty"></i>未割当</span>
                     </div>
-                    <p>セルを選ぶと内訳を固定表示できます。現在月をもう一度選ぶと強調を解除します。</p>
-                </section>
+                    <p>負荷セルの詳細ボタンを選ぶと内訳を確認できます。月見出しをもう一度選ぶと強調を解除します。</p>
+                </details>
                 <div class="member-load-container" id="member-load-container">
                     <table class="member-load-table" id="member-load-table">
                         <thead id="member-load-thead"></thead>
@@ -437,7 +447,7 @@
                             </div>
                         </form>
                         <p id="insight-scenario-hint" class="summary-subtext">工数と期間から、割当候補・後ろ倒し候補・開始可能月候補を提案します。</p>
-                        <div id="insight-scenario-results" class="insight-scenario-results"></div>
+                        <div id="insight-scenario-results" class="insight-scenario-results" aria-live="polite"></div>
                         </div>
                     </article>
                 </section>
@@ -520,7 +530,7 @@
                 <div class="management-layout">
                     <div class="card-list management-list" id="user-list"></div>
                     <aside class="management-guide" aria-label="ユーザ管理の案内">
-                        <span class="management-guide-kicker">SECURITY</span>
+                        <span class="management-guide-kicker">アカウント保護</span>
                         <h3>権限は必要最小限に</h3>
                         <p>管理者はユーザ追加、削除、権限変更を行えます。通常利用には一般ユーザーを選択してください。</p>
                         <ul>
@@ -562,7 +572,7 @@
     </div>
 
     <div id="toast-container" class="toast-container" aria-live="polite" aria-atomic="true"></div>
-    <div id="tooltip" class="tooltip" hidden></div>
+    <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
 
     <div id="cell-editor" class="cell-editor" hidden>
         <input type="text" id="cell-editor-input" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
@@ -572,14 +582,6 @@
             <button id="cell-editor-clear" class="btn btn-danger btn-sm" type="button">クリア</button>
             <button id="cell-editor-cancel" class="btn btn-ghost btn-sm" type="button">閉じる</button>
         </div>
-    </div>
-
-    <div id="context-menu" class="context-menu" hidden>
-        <div class="context-menu-item" id="ctx-edit">編集</div>
-        <div class="context-menu-item" id="ctx-copy">コピー</div>
-        <div class="context-menu-item disabled" id="ctx-paste">貼り付け</div>
-        <div class="context-menu-divider"></div>
-        <div class="context-menu-item context-menu-danger" id="ctx-clear">クリア</div>
     </div>
 
     <div id="ribbon-fullscreen-overlay" class="ribbon-fullscreen-overlay" hidden>

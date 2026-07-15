@@ -53,6 +53,20 @@ const VIEW_LABELS = {
     users: 'ユーザ管理',
 };
 
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+function safeThemeColor(value) {
+    const color = String(value || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(color) ? color : THEME_COLORS[0];
+}
+
 let currentUser = null;
 let currentView = 'gantt';
 let savedViewsCache = [];
@@ -64,7 +78,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initUi();
     initAuth();
     initSidebarToggleScrollBehavior();
-    setSaveState('idle', '起動中...');
+    setSaveState('idle', '変更なし');
 
     try {
         currentUser = await auth.me();
@@ -123,7 +137,7 @@ async function showApp() {
         initOnboarding();
     }
 
-    setSaveState('saved', '表示内容は最新です');
+    setSaveState('idle', '変更なし');
 }
 
 function initAuth() {
@@ -232,6 +246,11 @@ function initNavigation() {
     });
 
     document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && !event.isComposing && !document.getElementById('modal-overlay')?.hidden) {
+            event.preventDefault();
+            closeModal();
+            return;
+        }
         if (event.defaultPrevented || shouldIgnoreShortcut(event)) return;
         const shortcutKey = getShortcutKey(event);
 
@@ -251,10 +270,6 @@ function initNavigation() {
             HistoryManager.redo();
         }
 
-        if (event.key === 'Escape' && !document.getElementById('modal-overlay')?.hidden) {
-            event.preventDefault();
-            closeModal();
-        }
     });
 }
 
@@ -372,7 +387,7 @@ function initUiConfig() {
     };
     const storedGanttControlsState = localStorage.getItem('gantt_controls_collapsed');
     const ganttControlsCollapsed = window.matchMedia('(max-width: 1024px)').matches
-        || storedGanttControlsState === 'true';
+        || storedGanttControlsState !== 'false';
     applyGanttControlsCollapsed(ganttControlsCollapsed);
     ganttControlsToggle?.addEventListener('click', () => {
         const collapsed = !ganttControls?.classList.contains('is-collapsed');
@@ -549,23 +564,26 @@ function renderThemeList() {
     list.innerHTML = visibleThemes.map((theme) => {
         const isInactive = ['completed', 'done', 'cancelled'].includes(theme.status);
         const categoryTone = getThemeCategoryTone(theme.category);
+        const themeColor = safeThemeColor(theme.color);
         return `
-            <article class="card theme-card theme-card-category-${categoryTone}${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}" style="--theme-accent:${theme.color || '#6366f1'}">
+            <article class="card theme-card management-row theme-card-category-${categoryTone}${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}" style="--theme-accent:${themeColor}">
                 <div class="card-header">
-                    <div class="card-title">
-                        <span class="card-color-dot" style="background:${theme.color}" aria-hidden="true"></span>
-                        ${theme.name}
+                    <div class="management-row-main">
+                        <div class="card-title">
+                            <span class="card-color-dot" style="background:${themeColor}" aria-hidden="true"></span>
+                            ${escapeHtml(theme.name)}
+                        </div>
+                        <div class="card-meta">
+                            <span class="status-badge status-${escapeHtml(theme.status)}">${escapeHtml(STATUS_LABELS[theme.status] || theme.status)}</span>
+                            <span><span class="card-meta-label">カテゴリ</span>${escapeHtml(theme.category || '未設定')}</span>
+                            <span><span class="card-meta-label">担当</span>${theme.member_count || 0}名</span>
+                            <span class="theme-priority-value">P${theme.priority ?? 0}</span>
+                        </div>
                     </div>
                     <div class="card-actions">
                         <button class="btn btn-ghost theme-edit-btn" data-edit-theme="${theme.theme_id}" type="button">編集</button>
                         <button class="btn btn-ghost btn-delete theme-delete-btn" data-delete-theme="${theme.theme_id}" type="button">削除</button>
                     </div>
-                </div>
-                <div class="card-meta">
-                    <span class="status-badge status-${theme.status}">${STATUS_LABELS[theme.status] || theme.status}</span>
-                    <span><span class="card-meta-label">カテゴリ</span>${theme.category || '未設定'}</span>
-                    <span><span class="card-meta-label">担当</span>${theme.member_count || 0}名</span>
-                    <span class="theme-priority-value">P${theme.priority ?? 0}</span>
                 </div>
             </article>`;
     }).join('');
@@ -635,12 +653,12 @@ async function openThemeModal(theme = null) {
         usedColorsMap[item.color].push(item.name);
     });
 
-    const selectedColor = theme?.color || THEME_COLORS[0];
+    const selectedColor = safeThemeColor(theme?.color);
     const colorOptions = THEME_COLORS.map((color, index) => {
         const usedBy = usedColorsMap[color] || [];
         const title = usedBy.length > 0 ? `使用中: ${usedBy.join(', ')}` : '未使用';
         const selected = color === selectedColor;
-        return `<button class="color-choice ${usedBy.length ? 'is-used' : ''}${selected ? ' is-selected' : ''}" type="button" data-color="${color}" aria-label="カラー ${index + 1}、${title}" aria-pressed="${selected}" title="${title}"><span class="color-choice-swatch" style="background:${color}"></span><span class="color-choice-state">${usedBy.length ? '使用中' : '未使用'}</span></button>`;
+        return `<button class="color-choice ${usedBy.length ? 'is-used' : ''}${selected ? ' is-selected' : ''}" type="button" data-color="${color}" aria-label="カラー ${index + 1}、${escapeHtml(title)}" aria-pressed="${selected}" title="${escapeHtml(title)}"><span class="color-choice-swatch" style="background:${color}"></span><span class="color-choice-state">${usedBy.length ? '使用中' : '未使用'}</span></button>`;
     }).join('');
     const compareMilestoneMonth = (left, right) => {
         const leftMonth = left?.month || '9999-99';
@@ -677,15 +695,15 @@ async function openThemeModal(theme = null) {
 
     const renderMilestoneRow = (item = { month: '', label: '', is_completed: false }) => `
         <div class="theme-milestone-row theme-editor-row">
-            <input class="theme-milestone-month" type="month" value="${item.month || ''}">
-            <input class="theme-milestone-label" type="text" value="${item.label || ''}" placeholder="例: リリース">
+            <input class="theme-milestone-month" type="month" value="${escapeHtml(item.month || '')}">
+            <input class="theme-milestone-label" type="text" value="${escapeHtml(item.label || '')}" placeholder="例: リリース">
             <label class="theme-editor-check"><input class="theme-milestone-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
             <button class="btn btn-ghost btn-sm theme-milestone-remove" type="button">削除</button>
         </div>
     `;
     const renderDevCompleteRow = (item = { month: '', is_completed: false }) => `
         <div class="theme-dev-complete-row theme-editor-row theme-editor-row--compact">
-            <input class="theme-dev-complete-month" type="month" value="${item.month || ''}">
+            <input class="theme-dev-complete-month" type="month" value="${escapeHtml(item.month || '')}">
             <label class="theme-editor-check"><input class="theme-dev-complete-completed" type="checkbox" ${item.is_completed ? 'checked' : ''}>完了</label>
             <button class="btn btn-ghost btn-sm theme-dev-complete-remove" type="button">削除</button>
         </div>
@@ -694,12 +712,14 @@ async function openThemeModal(theme = null) {
     document.getElementById('modal-body').innerHTML = `
         <div class="theme-form-grid">
         <div class="form-field theme-form-wide">
-            <label for="modal-theme-name">テーマ名</label>
-            <input id="modal-theme-name" type="text" value="${theme?.name || ''}" required>
+            <label for="modal-theme-name">テーマ名 <span class="form-required">必須</span></label>
+            <input id="modal-theme-name" type="text" value="${escapeHtml(theme?.name || '')}" aria-describedby="modal-theme-name-hint" required>
+            <p id="modal-theme-name-hint" class="form-hint">一覧、ガント、CSVに表示される名称です。</p>
         </div>
         <div class="form-field">
-            <label for="modal-theme-category">カテゴリ</label>
-            <input id="modal-theme-category" type="text" value="${theme?.category || ''}">
+            <label for="modal-theme-category">カテゴリ（任意）</label>
+            <input id="modal-theme-category" type="text" value="${escapeHtml(theme?.category || '')}" aria-describedby="modal-theme-category-hint">
+            <p id="modal-theme-category-hint" class="form-hint">一覧の絞り込みとグループ表示に使います。</p>
         </div>
         <div class="form-field">
             <label for="modal-theme-status">ステータス</label>
@@ -719,26 +739,35 @@ async function openThemeModal(theme = null) {
         </div>
         <div class="form-field">
             <label for="modal-theme-priority">優先度</label>
-            <input id="modal-theme-priority" type="number" value="${theme?.priority ?? 0}" min="0" max="9">
+            <input id="modal-theme-priority" type="number" value="${theme?.priority ?? 0}" min="0" max="9" aria-describedby="modal-theme-priority-hint">
+            <p id="modal-theme-priority-hint" class="form-hint">0が最優先、9が最低です。</p>
         </div>
-        <div class="form-field theme-form-wide">
-            <label>開発完了月</label>
-            <div class="theme-editor-group">
-                <div id="theme-dev-complete-editor">${(initialDevCompleteItems.length ? initialDevCompleteItems : [{ month: '', is_completed: false }]).map((item) => renderDevCompleteRow(item)).join('')}</div>
-                <button class="btn btn-ghost btn-sm" id="theme-dev-complete-add" type="button">追加</button>
-                <span class="summary-subtext">★ 総計欄に表示されます</span>
+        <details class="theme-form-section theme-form-wide">
+            <summary>計画マーカーと表示色</summary>
+            <p class="form-hint">必要な場合だけ、開発完了月・マイルストーン・識別色を設定します。</p>
+            <div class="theme-form-section-body">
+                <div class="form-field">
+                    <label>開発完了月</label>
+                    <div class="theme-editor-group">
+                        <div id="theme-dev-complete-editor">${(initialDevCompleteItems.length ? initialDevCompleteItems : [{ month: '', is_completed: false }]).map((item) => renderDevCompleteRow(item)).join('')}</div>
+                        <button class="btn btn-ghost btn-sm" id="theme-dev-complete-add" type="button">追加</button>
+                        <span class="summary-subtext gantt-dev-complete-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.65 5.37 5.93.86-4.29 4.18 1.01 5.91L12 16.53l-5.3 2.79 1.01-5.91-4.29-4.18 5.93-.86L12 3Z"/></svg>総計欄に表示されます</span>
+                    </div>
+                </div>
+                <div class="form-field">
+                    <label>マイルストーン</label>
+                    <div id="theme-milestones-editor">${initialMilestones.map((item) => renderMilestoneRow(item)).join('')}</div>
+                    <button class="btn btn-ghost btn-sm" id="theme-milestone-add" type="button">追加</button>
+                </div>
+                <div class="form-field">
+                    <label>カラー</label>
+                    <div id="modal-color-picker">${colorOptions}</div>
+                    <input id="modal-theme-color" type="hidden" value="${selectedColor}">
+                    <p class="form-hint">ガントと負荷内訳でテーマを識別する色です。使用中の色も選択できます。</p>
+                </div>
             </div>
-        </div>
-        <div class="form-field theme-form-wide">
-            <label>マイルストーン</label>
-            <div id="theme-milestones-editor">${initialMilestones.map((item) => renderMilestoneRow(item)).join('')}</div>
-            <button class="btn btn-ghost btn-sm" id="theme-milestone-add" type="button">追加</button>
-        </div>
-        <div class="form-field theme-form-wide">
-            <label>カラー</label>
-            <div id="modal-color-picker">${colorOptions}</div>
-            <input id="modal-theme-color" type="hidden" value="${selectedColor}">
-        </div>
+        </details>
+        <p id="modal-form-error" class="modal-form-error theme-form-wide" role="alert" aria-live="assertive" hidden></p>
         </div>
     `;
 
@@ -828,7 +857,7 @@ async function openThemeModal(theme = null) {
         };
 
         if (!payload.name) {
-            showToast('テーマ名を入力してください。', 'warning');
+            setModalFormError('テーマ名を入力してください。', document.getElementById('modal-theme-name'));
             return;
         }
 
@@ -847,7 +876,9 @@ async function openThemeModal(theme = null) {
             showToast(isEdit ? 'テーマを更新しました。' : 'テーマを追加しました。', 'success');
         } catch (error) {
             setSaveState('error', 'テーマ保存に失敗しました');
-            showToast(`テーマ保存に失敗しました: ${formatError(error)}`, 'error');
+            const message = `テーマ保存に失敗しました: ${formatError(error)}`;
+            setModalFormError(message);
+            showToast(message, 'error');
         }
     };
 }
@@ -894,9 +925,9 @@ async function loadUserList() {
             <article class="card management-row">
                 <div class="card-header">
                     <div class="management-row-main">
-                        <div class="card-title">${user.username}</div>
+                        <div class="card-title">${escapeHtml(user.username)}</div>
                         <div class="card-meta">
-                            <span class="status-badge ${user.role === 'admin' ? 'status-active' : 'status-done'}">${ROLE_LABELS[user.role] || user.role}</span>
+                            <span class="status-badge ${user.role === 'admin' ? 'status-active' : 'status-done'}">${escapeHtml(ROLE_LABELS[user.role] || user.role)}</span>
                             <span>ID ${user.id}</span>
                             ${user.id === currentUser?.id ? '<span>現在ログイン中</span>' : ''}
                         </div>
@@ -956,8 +987,9 @@ function openUserModal(user = null) {
     document.getElementById('modal-title').textContent = isEdit ? 'ユーザを編集' : 'ユーザを追加';
     document.getElementById('modal-body').innerHTML = `
         <div class="form-field">
-            <label for="modal-user-name">ユーザ名</label>
-            <input id="modal-user-name" type="text" value="${user?.username || ''}" required>
+            <label for="modal-user-name">ユーザ名 <span class="form-required">必須</span></label>
+            <input id="modal-user-name" type="text" value="${escapeHtml(user?.username || '')}" aria-describedby="modal-user-name-hint" autocomplete="username" required>
+            <p id="modal-user-name-hint" class="form-hint">ログイン画面で入力する識別名です。</p>
         </div>
         <div class="form-field">
             <label for="modal-user-role">権限</label>
@@ -967,9 +999,11 @@ function openUserModal(user = null) {
             </select>
         </div>
         <div class="form-field">
-            <label for="modal-user-password">${isEdit ? '新しいパスワード（変更時のみ）' : 'パスワード'}</label>
-            <input id="modal-user-password" type="password" value="" ${isEdit ? '' : 'required'}>
+            <label for="modal-user-password">${isEdit ? '新しいパスワード（変更時のみ）' : 'パスワード'} ${isEdit ? '' : '<span class="form-required">必須</span>'}</label>
+            <input id="modal-user-password" type="password" value="" aria-describedby="modal-user-password-hint" autocomplete="new-password" ${isEdit ? '' : 'required'}>
+            <p id="modal-user-password-hint" class="form-hint">${isEdit ? '空欄のまま更新すると、現在のパスワードを保持します。' : '空白でないパスワードを設定してください。'}</p>
         </div>
+        <p id="modal-form-error" class="modal-form-error" role="alert" aria-live="assertive" hidden></p>
     `;
     document.getElementById('modal-footer').innerHTML = `
         <button class="btn btn-ghost" id="modal-cancel-btn" type="button">キャンセル</button>
@@ -987,11 +1021,11 @@ function openUserModal(user = null) {
         };
 
         if (!payload.username) {
-            showToast('ユーザ名を入力してください。', 'warning');
+            setModalFormError('ユーザ名を入力してください。', document.getElementById('modal-user-name'));
             return;
         }
         if (!isEdit && !payload.password) {
-            showToast('パスワードを入力してください。', 'warning');
+            setModalFormError('パスワードを入力してください。', document.getElementById('modal-user-password'));
             return;
         }
         if (isEdit && !payload.password) {
@@ -1009,7 +1043,9 @@ function openUserModal(user = null) {
             closeModal();
             await loadUserList();
         } catch (error) {
-            showToast(`ユーザ保存に失敗しました: ${formatError(error)}`, 'error');
+            const message = `ユーザ保存に失敗しました: ${formatError(error)}`;
+            setModalFormError(message);
+            showToast(message, 'error');
         }
     };
 }
@@ -1019,13 +1055,14 @@ function openPasswordResetModal(user) {
     document.getElementById('modal-body').innerHTML = `
         <div class="form-field">
             <label>対象ユーザ</label>
-            <input type="text" value="${user.username}" disabled>
+            <input type="text" value="${escapeHtml(user.username)}" disabled>
         </div>
         <div class="form-field">
-            <label for="modal-reset-password">新しいパスワード</label>
-            <input id="modal-reset-password" type="password" value="" required>
+            <label for="modal-reset-password">新しいパスワード <span class="form-required">必須</span></label>
+            <input id="modal-reset-password" type="password" value="" autocomplete="new-password" required>
         </div>
-        <p class="summary-subtext">入力したパスワードで次回ログインできます。</p>
+        <p class="form-hint">入力したパスワードで次回ログインできます。</p>
+        <p id="modal-form-error" class="modal-form-error" role="alert" aria-live="assertive" hidden></p>
     `;
     document.getElementById('modal-footer').innerHTML = `
         <button class="btn btn-ghost" id="modal-cancel-btn" type="button">キャンセル</button>
@@ -1038,7 +1075,7 @@ function openPasswordResetModal(user) {
     document.getElementById('modal-save-btn').onclick = async () => {
         const password = document.getElementById('modal-reset-password').value;
         if (!password) {
-            showToast('新しいパスワードを入力してください。', 'warning');
+            setModalFormError('新しいパスワードを入力してください。', document.getElementById('modal-reset-password'));
             return;
         }
 
@@ -1047,7 +1084,9 @@ function openPasswordResetModal(user) {
             closeModal();
             showToast(`パスワードを再設定しました: ${user.username}`, 'success');
         } catch (error) {
-            showToast(`パスワード再設定に失敗しました: ${formatError(error)}`, 'error');
+            const message = `パスワード再設定に失敗しました: ${formatError(error)}`;
+            setModalFormError(message);
+            showToast(message, 'error');
         }
     };
 }
@@ -1080,9 +1119,9 @@ async function loadMemberList() {
             <article class="card management-row${member.is_active ? '' : ' management-row--inactive'}">
                 <div class="card-header">
                     <div class="management-row-main">
-                        <div class="card-title">${member.display_name}</div>
+                        <div class="card-title">${escapeHtml(member.display_name)}</div>
                         <div class="card-meta">
-                            <span class="${member.department ? '' : 'data-warning'}">${member.department || '部署未設定'}</span>
+                            <span class="${member.department ? '' : 'data-warning'}">${escapeHtml(member.department || '部署未設定')}</span>
                             <span>稼働上限 ${member.capacity}%</span>
                             <span class="status-badge ${member.is_active ? 'status-active' : 'status-done'}">${member.is_active ? '有効' : '無効'}</span>
                         </div>
@@ -1134,20 +1173,24 @@ async function loadMemberList() {
 
 function openMemberModal(member = null) {
     const isEdit = Boolean(member);
+    document.getElementById('modal')?.classList.add('modal-compact');
     document.getElementById('modal-title').textContent = isEdit ? 'メンバーを編集' : 'メンバーを追加';
 
     document.getElementById('modal-body').innerHTML = `
         <div class="form-field">
-            <label for="modal-member-name">表示名</label>
-            <input id="modal-member-name" type="text" value="${member?.display_name || ''}" required>
+            <label for="modal-member-name">表示名 <span class="form-required">必須</span></label>
+            <input id="modal-member-name" type="text" value="${escapeHtml(member?.display_name || '')}" aria-describedby="modal-member-name-hint" required>
+            <p id="modal-member-name-hint" class="form-hint">ガント、負荷表、CSVに表示される名称です。</p>
         </div>
         <div class="form-field">
-            <label for="modal-member-dept">部署</label>
-            <input id="modal-member-dept" type="text" value="${member?.department || ''}">
+            <label for="modal-member-dept">部署（任意）</label>
+            <input id="modal-member-dept" type="text" value="${escapeHtml(member?.department || '')}" aria-describedby="modal-member-dept-hint">
+            <p id="modal-member-dept-hint" class="form-hint">未入力の場合は「部署未設定」と表示します。</p>
         </div>
         <div class="form-field">
-            <label for="modal-member-capacity">稼働上限 (%)</label>
-            <input id="modal-member-capacity" type="number" value="${member?.capacity ?? 100}" min="1" max="200">
+            <label for="modal-member-capacity">稼働上限（%）</label>
+            <input id="modal-member-capacity" type="number" value="${member?.capacity ?? 100}" min="1" max="200" aria-describedby="modal-member-capacity-hint">
+            <p id="modal-member-capacity-hint" class="form-hint">1〜200。月別負荷がこの値を超えると警告します。</p>
         </div>
         ${isEdit ? `
             <div class="form-field">
@@ -1158,6 +1201,7 @@ function openMemberModal(member = null) {
                 </select>
             </div>
         ` : ''}
+        <p id="modal-form-error" class="modal-form-error" role="alert" aria-live="assertive" hidden></p>
     `;
 
     document.getElementById('modal-footer').innerHTML = `
@@ -1176,7 +1220,11 @@ function openMemberModal(member = null) {
         };
 
         if (!payload.display_name) {
-            showToast('表示名を入力してください。', 'warning');
+            setModalFormError('表示名を入力してください。', document.getElementById('modal-member-name'));
+            return;
+        }
+        if (!Number.isInteger(payload.capacity) || payload.capacity < 1 || payload.capacity > 200) {
+            setModalFormError('稼働上限は1〜200の整数で入力してください。', document.getElementById('modal-member-capacity'));
             return;
         }
 
@@ -1199,7 +1247,9 @@ function openMemberModal(member = null) {
             showToast(isEdit ? 'メンバーを更新しました。' : 'メンバーを追加しました。', 'success');
         } catch (error) {
             setSaveState('error', 'メンバー保存に失敗しました');
-            showToast(`メンバー保存に失敗しました: ${formatError(error)}`, 'error');
+            const message = `メンバー保存に失敗しました: ${formatError(error)}`;
+            setModalFormError(message);
+            showToast(message, 'error');
         }
     };
 }
@@ -1222,6 +1272,18 @@ function getModalFocusable() {
         .filter((element) => element.offsetParent !== null || element === document.activeElement);
 }
 
+function setModalFormError(message, field = null) {
+    const region = document.getElementById('modal-form-error');
+    if (region) {
+        region.textContent = message;
+        region.hidden = false;
+    }
+    if (field) {
+        field.setAttribute('aria-invalid', 'true');
+        field.focus();
+    }
+}
+
 /**
  * Reveal the shared modal, move focus into it, and trap Tab within it.
  * Focus goes to the first field inside the modal body, falling back to the
@@ -1234,7 +1296,26 @@ function activateModal() {
     lastModalTrigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     overlay.hidden = false;
 
+    document.querySelectorAll('#modal-body input, #modal-body select, #modal-body textarea').forEach((field) => {
+        const clearValidation = () => {
+            field.removeAttribute('aria-invalid');
+            const region = document.getElementById('modal-form-error');
+            if (region) {
+                region.hidden = true;
+                region.textContent = '';
+            }
+        };
+        field.addEventListener('input', clearValidation);
+        field.addEventListener('change', clearValidation);
+    });
+
     modalKeydownHandler = (event) => {
+        if (event.key === 'Escape' && !event.isComposing) {
+            event.preventDefault();
+            event.stopPropagation();
+            closeModal();
+            return;
+        }
         if (event.key !== 'Tab') return;
         const focusable = getModalFocusable();
         if (focusable.length === 0) return;
@@ -1265,6 +1346,7 @@ function activateModal() {
 
 function closeModal() {
     document.getElementById('modal-overlay').hidden = true;
+    document.getElementById('modal')?.classList.remove('modal-compact');
     if (modalKeydownHandler) {
         document.removeEventListener('keydown', modalKeydownHandler, true);
         modalKeydownHandler = null;
@@ -1279,6 +1361,7 @@ function presetLabel(value) {
     const labels = {
         'rolling-6': '直近 6 か月',
         'rolling-12': '直近 12 か月',
+        'rolling-24': '直近 24 か月',
         'current-quarter': '今四半期',
         'current-year': '今年',
     };

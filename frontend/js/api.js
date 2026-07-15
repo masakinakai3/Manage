@@ -10,23 +10,49 @@
  */
 
 const API_BASE = '/api';
+let requestSeed = 0;
+
+function emitApiState(detail) {
+    if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+    window.dispatchEvent(new CustomEvent('manage:api-state', { detail }));
+}
 
 async function request(path, options = {}) {
     const url = `${API_BASE}${path}`;
     const method = String(options.method || 'GET').toUpperCase();
-    const res = await fetch(url, {
-        cache: options.cache || (method === 'GET' || method === 'HEAD' ? 'no-store' : 'default'),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json', ...options.headers },
-        ...options,
-    });
-    if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        const err = new Error(data.error || `HTTP ${res.status}`);
-        err.status = res.status;
-        throw err;
+    const requestId = `${Date.now()}-${++requestSeed}`;
+    emitApiState({ state: 'loading', requestId, method, path });
+
+    try {
+        const res = await fetch(url, {
+            cache: options.cache || (method === 'GET' || method === 'HEAD' ? 'no-store' : 'default'),
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json', ...options.headers },
+            ...options,
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            const err = new Error(data.error || `HTTP ${res.status}`);
+            err.status = res.status;
+            err.code = data.code || `HTTP_${res.status}`;
+            throw err;
+        }
+        const data = await res.json();
+        emitApiState({ state: 'success', requestId, method, path });
+        return data;
+    } catch (error) {
+        const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        const isNetworkError = offline || error instanceof TypeError;
+        error.isNetworkError = isNetworkError;
+        emitApiState({
+            state: isNetworkError ? 'offline' : 'error',
+            requestId,
+            method,
+            path,
+            status: error.status || 0,
+        });
+        throw error;
     }
-    return res.json();
 }
 
 // Auth
@@ -159,16 +185,7 @@ export const savedViews = {
     upsert: (data) => request('/saved-views', {
         method: 'POST', body: JSON.stringify(data),
     }),
-    delete: async (id) => {
-        const res = await fetch(`${API_BASE}/saved-views/${id}`, {
-            method: 'DELETE',
-            credentials: 'include',
-        });
-        if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.error || `HTTP ${res.status}`);
-        }
-    },
+    delete: (id) => request(`/saved-views/${id}`, { method: 'DELETE' }),
 };
 
 // Insights

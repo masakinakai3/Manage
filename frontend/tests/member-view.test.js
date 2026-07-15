@@ -185,7 +185,9 @@ describe('member-view milestones', () => {
 
         const marker = document.querySelector('.member-theme-cell .member-theme-dev-complete');
         expect(marker).not.toBeNull();
-        expect(marker?.textContent).toBe('★20%');
+        expect(marker?.querySelector('svg')).not.toBeNull();
+        expect(marker?.textContent).toContain('20%');
+        expect(marker?.getAttribute('title')).toBe('開発完了月');
         expect(marker?.classList.contains('completed')).toBe(true);
     });
 
@@ -251,7 +253,7 @@ describe('member-view milestones', () => {
         expect(group?.getAttribute('title')).toContain('Launch');
     });
 
-    it('highlights only the clicked member-load month column and toggles off on repeat click', async () => {
+    it('highlights only the selected month header column and toggles off on repeat click', async () => {
         visibleMonths = ['2026-04', '2026-05'];
         allocationsList = [
             { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
@@ -262,22 +264,22 @@ describe('member-view milestones', () => {
 
         await refreshMemberView();
 
-        const aprilCell = document.querySelector('td[data-member-cell="10-2026-04"]');
-        const mayCell = document.querySelector('td[data-member-cell="10-2026-05"]');
+        const aprilHeader = document.querySelector('th[data-member-month="2026-04"]');
+        const mayHeader = document.querySelector('th[data-member-month="2026-05"]');
 
-        aprilCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        aprilHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
         expect(document.querySelector('th[data-member-month="2026-04"]')?.classList.contains('month-selected')).toBe(true);
         expect(document.querySelector('td[data-member-cell="10-2026-04"]')?.classList.contains('month-selected')).toBe(true);
         expect(document.querySelector('th[data-member-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
 
-        mayCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        mayHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
         expect(document.querySelector('th[data-member-month="2026-04"]')?.classList.contains('month-selected')).toBe(false);
         expect(document.querySelector('th[data-member-month="2026-05"]')?.classList.contains('month-selected')).toBe(true);
         expect(document.querySelector('td[data-member-cell="10-2026-05"]')?.classList.contains('month-selected')).toBe(true);
 
-        mayCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        mayHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
         expect(document.querySelector('th[data-member-month="2026-05"]')?.classList.contains('month-selected')).toBe(false);
         expect(document.querySelector('td[data-member-cell="10-2026-05"]')?.classList.contains('month-selected')).toBe(false);
@@ -322,7 +324,7 @@ describe('member-view milestones', () => {
         expect(document.querySelectorAll('tr.member-row')).toHaveLength(2);
     });
 
-    it('uses accessible expand controls without rendering a click detail panel', async () => {
+    it('uses accessible expand and breakdown controls without restoring the removed upper detail panel', async () => {
         const { refreshMemberView } = await import('../js/member/member-view.js');
         await refreshMemberView();
 
@@ -333,9 +335,19 @@ describe('member-view milestones', () => {
         expect(toggle?.getAttribute('aria-expanded')).toBe('true');
 
         const summaryCell = document.querySelector('td[data-member-cell]');
-        expect(summaryCell?.getAttribute('tabindex')).toBe('0');
-        summaryCell?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(summaryCell?.hasAttribute('tabindex')).toBe(false);
+        expect(summaryCell?.hasAttribute('role')).toBe(false);
+        const breakdownButton = summaryCell?.querySelector('.member-detail-button');
+        expect(breakdownButton?.tagName).toBe('BUTTON');
+        expect(breakdownButton?.getAttribute('aria-haspopup')).toBe('dialog');
+        breakdownButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.querySelector('.member-detail-popup[role="dialog"]')).not.toBeNull();
+        expect(breakdownButton?.getAttribute('aria-expanded')).toBe('true');
         expect(document.querySelector('.member-load-detail-panel')).toBeNull();
+
+        document.querySelector('.member-detail-popup-close')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        expect(document.querySelector('.member-detail-popup')).toBeNull();
+        expect(breakdownButton?.getAttribute('aria-expanded')).toBe('false');
     });
 
     it('places member expand controls beside the member column header', async () => {

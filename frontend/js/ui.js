@@ -8,9 +8,16 @@
  * Shared UI helpers for notifications, dialogs, and save-state feedback.
  */
 
+import { message } from './messages.js';
+
 let activeDialogResolver = null;
 let toastSeed = 0;
 let lastFocusedElement = null;
+const apiActivity = {
+    active: new Set(),
+    failures: new Map(),
+};
+const MESSAGED_ERROR_STATUSES = new Set([400, 401, 403, 404, 409, 422, 500]);
 
 export function initUi() {
     const dialog = document.getElementById('dialog-overlay');
@@ -21,12 +28,36 @@ export function initUi() {
     }
 
     document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape') return;
-        if (!document.getElementById('dialog-overlay')?.hidden) {
+        const dialog = document.getElementById('dialog-overlay');
+        if (dialog?.hidden) return;
+
+        if (event.key === 'Escape' && !event.isComposing) {
             event.preventDefault();
             resolveDialog(false);
+            return;
+        }
+
+        if (event.key !== 'Tab') return;
+        const focusable = Array.from(dialog.querySelectorAll('button:not([disabled]), input:not([disabled]):not([hidden])'));
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
         }
     });
+
+    window.addEventListener('manage:api-state', handleApiState);
+    window.addEventListener('offline', () => setDataState('offline', message('data.offline')));
+    window.addEventListener('online', () => setDataState('stale', message('data.checking')));
+    setDataState(
+        navigator.onLine === false ? 'offline' : 'stale',
+        message(navigator.onLine === false ? 'data.offline' : 'data.checking'),
+    );
 }
 
 export function showToast(message, type = 'info', timeout = 3200) {
@@ -59,8 +90,8 @@ export function showToast(message, type = 'info', timeout = 3200) {
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
     closeBtn.className = 'toast-close';
-    closeBtn.setAttribute('aria-label', '通知を閉じる');
-    closeBtn.textContent = '×';
+    closeBtn.setAttribute('aria-label', message('action.closeNotification'));
+    closeBtn.innerHTML = '<svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg>';
     closeBtn.addEventListener('click', dismiss);
     toast.appendChild(closeBtn);
 
@@ -86,27 +117,74 @@ export function setSaveState(state, message) {
     });
 }
 
-export function setBusyState(isBusy, message = '') {
+export function setDataState(state, message) {
+    const badges = document.querySelectorAll('[data-role="data-state"], #data-state');
+    badges.forEach((badge) => {
+        badge.dataset.state = state;
+        badge.textContent = message;
+    });
+}
+
+export function setBusyState(isBusy, statusMessage = '') {
     const badges = document.querySelectorAll('[data-role="busy-state"], #busy-state');
     if (badges.length === 0) return;
 
     badges.forEach((badge) => {
         badge.hidden = !isBusy;
-        badge.textContent = message || '処理中...';
+        badge.textContent = statusMessage || message('busy.default');
     });
 }
 
-export function formatError(error, fallback = '処理に失敗しました。') {
+export function formatError(error, fallback = message('error.default')) {
     if (!error) return fallback;
-    if (typeof error === 'string') return error;
-    return error.message || fallback;
+    const rawMessage = typeof error === 'string' ? error : String(error.message || '');
+    const lowerMessage = rawMessage.toLowerCase();
+    const status = Number(error?.status || rawMessage.match(/http\s+(\d{3})/i)?.[1] || 0);
+
+    if (lowerMessage.includes('invalid credentials')) {
+        return message('auth.invalidCredentials');
+    }
+    if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('networkerror') || error?.isNetworkError) {
+        return message('error.network');
+    }
+    if (MESSAGED_ERROR_STATUSES.has(status)) return message(`error.${status}`);
+    if (/[ぁ-んァ-ヶ一-龠]/.test(rawMessage)) return rawMessage;
+    return fallback;
+}
+
+function handleApiState(event) {
+    const detail = event.detail || {};
+    const requestId = String(detail.requestId || detail.path || 'unknown');
+    const path = String(detail.path || requestId);
+
+    if (detail.state === 'loading') {
+        apiActivity.active.add(requestId);
+        if (apiActivity.failures.size === 0) setDataState('loading', message('data.loading'));
+        return;
+    }
+
+    apiActivity.active.delete(requestId);
+    if (detail.state === 'success') {
+        apiActivity.failures.delete(path);
+        if (apiActivity.active.size === 0 && apiActivity.failures.size === 0) {
+            const time = new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' }).format(new Date());
+            setDataState('fresh', message('data.fresh', { time }));
+        }
+        return;
+    }
+
+    apiActivity.failures.set(path, detail);
+    setDataState(
+        detail.state === 'offline' ? 'offline' : 'error',
+        message(detail.state === 'offline' ? 'data.offline' : 'data.error'),
+    );
 }
 
 export function showConfirmDialog({
     title,
-    message,
-    confirmText = '実行する',
-    cancelText = 'キャンセル',
+    message: dialogMessage,
+    confirmText = message('action.execute'),
+    cancelText = message('action.cancel'),
     danger = false,
 }) {
     const overlay = document.getElementById('dialog-overlay');
@@ -116,12 +194,12 @@ export function showConfirmDialog({
     const confirmBtn = document.getElementById('dialog-confirm');
 
     if (!overlay || !titleEl || !messageEl || !cancelBtn || !confirmBtn) {
-        return Promise.resolve(window.confirm(message));
+        return Promise.resolve(window.confirm(dialogMessage));
     }
 
     rememberFocus();
     titleEl.textContent = title;
-    messageEl.textContent = message;
+    messageEl.textContent = dialogMessage;
     confirmBtn.textContent = confirmText;
     cancelBtn.textContent = cancelText;
     confirmBtn.className = `btn ${danger ? 'btn-danger' : 'btn-primary'}`;
@@ -137,10 +215,10 @@ export function showConfirmDialog({
 
 export function showPromptDialog({
     title,
-    message,
+    message: dialogMessage,
     defaultValue = '',
-    confirmText = '保存',
-    cancelText = 'キャンセル',
+    confirmText = message('action.save'),
+    cancelText = message('action.cancel'),
 }) {
     const overlay = document.getElementById('dialog-overlay');
     const titleEl = document.getElementById('dialog-title');
@@ -150,12 +228,12 @@ export function showPromptDialog({
     const confirmBtn = document.getElementById('dialog-confirm');
 
     if (!overlay || !titleEl || !messageEl || !input || !cancelBtn || !confirmBtn) {
-        return Promise.resolve(window.prompt(message, defaultValue));
+        return Promise.resolve(window.prompt(dialogMessage, defaultValue));
     }
 
     rememberFocus();
     titleEl.textContent = title;
-    messageEl.textContent = message;
+    messageEl.textContent = dialogMessage;
     input.hidden = false;
     input.value = defaultValue;
     confirmBtn.textContent = confirmText;

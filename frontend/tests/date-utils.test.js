@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { shortenMonth, monthRange, addMonths, formatMonth, aggregateRate } from '../js/utils/date-utils.js';
+import { shortenMonth, monthRange, addMonths, formatMonth, aggregateRate, getVisibleMonths } from '../js/utils/date-utils.js';
 
 describe('Date Utilities', () => {
     describe('shortenMonth', () => {
@@ -75,6 +75,17 @@ describe('Date Utilities', () => {
         it('should return 0 if all zero or missing', () => {
             const rates = { '2024-01': 0 };
             expect(aggregateRate(rates, '2024-01', 3)).toBe(0);
+        });
+    });
+
+    describe('large observation windows', () => {
+        it('generates a 60-month fixture without gaps', () => {
+            const months = getVisibleMonths('2024-01', 60, 1);
+
+            expect(months).toHaveLength(60);
+            expect(months[0]).toBe('2024-01');
+            expect(months.at(-1)).toBe('2028-12');
+            expect(new Set(months).size).toBe(60);
         });
     });
 });

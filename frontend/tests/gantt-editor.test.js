@@ -281,4 +281,16 @@ describe('gantt-editor regressions', () => {
         expect(onSave).toHaveBeenCalledWith(null);
         expect(editor.hidden).toBe(true);
     });
+
+    it('notifies the owning surface when the inline editor closes', async () => {
+        const { openCellEditor } = await import('../js/gantt/gantt-editor.js');
+        const onClose = vi.fn();
+        const cell = document.getElementById('cell');
+
+        openCellEditor(cell, 1, 2, '2026-04', 20, vi.fn(), vi.fn(), { onClose });
+        document.getElementById('cell-editor-cancel').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+        expect(onClose).toHaveBeenCalledTimes(1);
+        expect(document.getElementById('cell-editor').hidden).toBe(true);
+    });
 });
