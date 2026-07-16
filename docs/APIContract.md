@@ -88,6 +88,8 @@
 ## Export / Import
 
 - `GET /export/json`
+  - Returns backup version 3 with `users`, `themes`, `members`, `allocations`, and `theme_members`
+  - `users` contains `id`, `username`, `role`, and `password_hash`; plaintext passwords are never exported
 - `POST /export/csv`
   - Body: `content`, `filename`
   - Gantt screen CSV is generated in the browser from the visible grid dataset. It preserves the current visible period, active filters, row order, collapsed rows, labels, rates, milestone text, and memo-derived cell text, then downloads a UTF-8 BOM CSV directly.
@@ -95,6 +97,8 @@
   - Body: `headers`, `rows`, `filename`, optional `layout` (`gantt` for structured layout), `header_labels`
 - `POST /import/json`
   - Multipart file upload with field name `file`
+  - Version 3 `users` replaces all user accounts and returns `requires_reauthentication: true`; at least one admin is required
+  - Backups without `users` remain supported and preserve the current user accounts
 
 ## Error Contract
 

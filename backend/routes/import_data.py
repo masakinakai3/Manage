@@ -8,11 +8,64 @@
 
 import json
 from flask import Blueprint, request, jsonify
-from models import db, Theme, ThemeMilestone, Member, Allocation, theme_members as theme_members_table
+from flask_login import current_user, logout_user
+from models import db, User, Theme, ThemeMilestone, Member, Allocation, theme_members as theme_members_table
 from authz import admin_required
 from routes.themes import _normalize_dev_rank
 
 import_data_bp = Blueprint('import_data', __name__)
+
+
+def _validate_users(users):
+    """Validate and normalize user records from a version 3+ backup."""
+    if not isinstance(users, list):
+        raise ValueError('users must be an array')
+
+    normalized = []
+    user_ids = set()
+    usernames = set()
+    for index, item in enumerate(users):
+        if not isinstance(item, dict):
+            raise ValueError(f'users[{index}] must be an object')
+
+        user_id = item.get('id')
+        username = item.get('username')
+        password_hash = item.get('password_hash')
+        role = item.get('role')
+
+        if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
+            raise ValueError(f'users[{index}].id must be a positive integer')
+        if user_id in user_ids:
+            raise ValueError(f'Duplicate user id: {user_id}')
+
+        if not isinstance(username, str) or not username.strip():
+            raise ValueError(f'users[{index}].username is required')
+        username = username.strip()
+        if len(username) > 80:
+            raise ValueError(f'users[{index}].username is too long')
+        if username in usernames:
+            raise ValueError(f'Duplicate username: {username}')
+
+        if not isinstance(password_hash, str) or not password_hash:
+            raise ValueError(f'users[{index}].password_hash is required')
+        if len(password_hash) > 256:
+            raise ValueError(f'users[{index}].password_hash is too long')
+        if role not in ('admin', 'user'):
+            raise ValueError(f'users[{index}].role must be admin or user')
+
+        user_ids.add(user_id)
+        usernames.add(username)
+        normalized.append({
+            'id': user_id,
+            'username': username,
+            'password_hash': password_hash,
+            'role': role,
+        })
+
+    if not any(user['role'] == 'admin' for user in normalized):
+        raise ValueError('At least one admin user is required')
+
+    return normalized
 
 
 @import_data_bp.route('/json', methods=['POST'])
@@ -59,6 +112,13 @@ def import_json():
         missing = required_keys - data.keys()
         return jsonify({'error': f'Missing required keys: {missing}'}), 400
 
+    users = None
+    if 'users' in data:
+        try:
+            users = _validate_users(data['users'])
+        except ValueError as e:
+            return jsonify({'error': f'Invalid users: {e}'}), 400
+
     try:
         # --- Delete existing data inside a transaction ---
         db.session.execute(theme_members_table.delete())
@@ -66,6 +126,16 @@ def import_json():
         ThemeMilestone.query.delete()
         Theme.query.delete()
         Member.query.delete()
+
+        # Version 2 and older backups do not contain users. Preserve the
+        # existing accounts when importing those files for compatibility.
+        if users is not None:
+            active_user = current_user._get_current_object()
+            if active_user in db.session:
+                db.session.expunge(active_user)
+            User.query.delete(synchronize_session=False)
+            for user in users:
+                db.session.add(User(**user))
 
         # --- Re-create members, track old_id -> new Member object ---
         member_map = {}  # old member_id -> new Member
@@ -161,9 +231,15 @@ def import_json():
         db.session.rollback()
         return jsonify({'error': f'Import failed: {e}'}), 500
 
+    requires_reauthentication = users is not None
+    if requires_reauthentication:
+        logout_user()
+
     return jsonify({
         'message': 'Import successful',
+        'users': len(users) if users is not None else None,
         'themes': len(theme_map),
         'members': len(member_map),
         'allocations': len(data['allocations']),
+        'requires_reauthentication': requires_reauthentication,
     })

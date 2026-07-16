@@ -16,7 +16,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from models import Allocation, Member, Theme, db
+from models import Allocation, Member, Theme, User, db
 from authz import admin_required
 
 export_bp = Blueprint('export', __name__)
@@ -302,6 +302,15 @@ def export_json():
     themes = [theme.to_dict() for theme in Theme.query.order_by(Theme.theme_id).all()]
     members = [member.to_dict() for member in Member.query.order_by(Member.member_id).all()]
     allocations = [allocation.to_dict() for allocation in Allocation.query.all()]
+    users = [
+        {
+            'id': user.id,
+            'username': user.username,
+            'password_hash': user.password_hash,
+            'role': user.role,
+        }
+        for user in User.query.order_by(User.id).all()
+    ]
 
     theme_members = []
     for theme in Theme.query.all():
@@ -309,8 +318,9 @@ def export_json():
             theme_members.append({'theme_id': theme.theme_id, 'member_id': member.member_id})
 
     payload = {
-        'version': 2,
+        'version': 3,
         'exported_at': db.session.execute(db.select(db.func.datetime('now'))).scalar(),
+        'users': users,
         'themes': themes,
         'members': members,
         'allocations': allocations,

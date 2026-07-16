@@ -150,9 +150,10 @@ flowchart TD
 
 `import_data.py` は JSON バックアップをトランザクション内で全復元します。
 
-1. 既存の関連データ削除（`Allocation`、`ThemeMilestone`、テーマ・メンバー紐付け、`Theme`、`Member`。`User`・`Snapshot`・`SavedView` は削除対象外）  
-2. `Member` 復元  
-3. `Theme` 復元（`dev_rank`, `dev_complete_months` を含む）  
-4. `ThemeMilestone` 復元（`is_completed` を含む）  
-5. テーマ-メンバー紐付け復元  
-6. `Allocation` 復元  
+1. 既存の関連データ削除（`Allocation`、`ThemeMilestone`、テーマ・メンバー紐付け、`Theme`、`Member`。version 3で `users` がある場合は `User` も対象。`Snapshot`・`SavedView` は削除対象外）
+2. version 3ではユーザーID・ユーザー名・権限・パスワードハッシュを復元し、管理者不在を拒否して完了後に実行中セッションをログアウト
+3. `Member` 復元
+4. `Theme` 復元（`dev_rank`, `dev_complete_months` を含む）
+5. `ThemeMilestone` 復元（`is_completed` を含む）
+6. テーマ-メンバー紐付け復元
+7. `Allocation` 復元

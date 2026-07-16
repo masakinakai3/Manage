@@ -252,6 +252,7 @@ erDiagram
 
 | テーブル | ポイント |
 |---|---|
+| `users` | パスワードはハッシュのみを保持する。JSONバックアップversion 3ではID・ユーザー名・権限・ハッシュを復元し、復元後は再ログインを要求する |
 | `themes` | 旧互換の `milestone_month` / `milestone_label` を保持しつつ、実体は `theme_milestones` に寄せている。`dev_complete_months` は JSON 配列で複数の完了月とその完了状態を保持する |
 | `members` | `is_active` により論理的な運用停止を表現する |
 | `allocations` | `theme_id + member_id + month` に UNIQUE 制約がある |

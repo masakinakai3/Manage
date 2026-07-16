@@ -280,7 +280,7 @@ function initBackup() {
 
         const shouldImport = await showConfirmDialog({
             title: 'JSON をインポートしますか',
-            message: `選択ファイル: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(1)} KB\n\n現在のテーマ・メンバー・割当データは、このファイルの内容で置き換わります。`,
+            message: `選択ファイル: ${file.name}\nサイズ: ${(file.size / 1024).toFixed(1)} KB\n\n現在のテーマ・メンバー・割当データは、このファイルの内容で置き換わります。ユーザーを含むバックアップではユーザーアカウントも置き換わり、完了後にログアウトします。`,
             confirmText: 'インポートする',
             cancelText: 'キャンセル',
             danger: true,
@@ -294,11 +294,24 @@ function initBackup() {
         try {
             setBusyState(true, 'インポートしています...');
             const result = await dataBackup.importJson(file);
+            const userSummary = result.users === null ? '' : ` / ユーザー ${result.users} 件`;
+
+            if (result.requires_reauthentication) {
+                setSaveState('saved', 'インポートが完了しました');
+                showToast(
+                    `インポート完了: テーマ ${result.themes} 件 / メンバー ${result.members} 件 / 割当 ${result.allocations} 件${userSummary}。再ログインしてください。`,
+                    'success',
+                    2400,
+                );
+                window.setTimeout(() => window.location.reload(), 1800);
+                return;
+            }
+
             await Promise.all([refreshGantt(), refreshMemberView()]);
 
             setSaveState('saved', 'インポートが完了しました');
             showToast(
-                `インポート完了: テーマ ${result.themes} 件 / メンバー ${result.members} 件 / 割当 ${result.allocations} 件`,
+                `インポート完了: テーマ ${result.themes} 件 / メンバー ${result.members} 件 / 割当 ${result.allocations} 件${userSummary}`,
                 'success',
                 4500,
             );

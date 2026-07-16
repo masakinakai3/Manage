@@ -98,6 +98,75 @@ def test_admin_cannot_delete_self(auth_client, app):
     assert response.status_code == 400
 
 
+def test_json_backup_round_trip_restores_users_and_requires_login(auth_client, app):
+    create_response = auth_client.post('/api/auth/users', json={
+        'username': 'planner',
+        'password': 'planner-pass',
+        'role': 'user',
+    })
+    assert create_response.status_code == 201
+    planner_id = create_response.json['id']
+
+    export_response = auth_client.get('/api/export/json')
+    assert export_response.status_code == 200
+    backup = export_response.json
+    assert backup['version'] == 3
+
+    exported_users = {user['username']: user for user in backup['users']}
+    assert set(exported_users) == {'admin', 'planner'}
+    assert exported_users['planner']['id'] == planner_id
+    assert exported_users['planner']['role'] == 'user'
+    assert exported_users['planner']['password_hash'] != 'planner-pass'
+    assert 'password' not in exported_users['planner']
+
+    with app.app_context():
+        planner = db.session.get(User, planner_id)
+        planner.username = 'changed-planner'
+        planner.role = 'admin'
+        planner.set_password('changed-pass')
+        temporary = User(username='temporary', role='user')
+        temporary.set_password('temporary-pass')
+        db.session.add(temporary)
+        db.session.commit()
+
+    import_response = auth_client.post(
+        '/api/import/json',
+        data={'file': (io.BytesIO(json.dumps(backup).encode('utf-8')), 'backup.json')},
+        content_type='multipart/form-data',
+    )
+
+    assert import_response.status_code == 200
+    assert import_response.json['users'] == 2
+    assert import_response.json['requires_reauthentication'] is True
+    assert auth_client.get('/api/auth/me').status_code == 401
+
+    with app.app_context():
+        restored_users = User.query.order_by(User.id).all()
+        assert [user.username for user in restored_users] == ['admin', 'planner']
+        restored_planner = db.session.get(User, planner_id)
+        assert restored_planner.role == 'user'
+        assert restored_planner.check_password('planner-pass')
+        assert not restored_planner.check_password('changed-pass')
+
+
+def test_import_rejects_user_backup_without_admin_before_replacing_data(auth_client, app):
+    export_response = auth_client.get('/api/export/json')
+    backup = export_response.json
+    backup['users'][0]['role'] = 'user'
+
+    response = auth_client.post(
+        '/api/import/json',
+        data={'file': (io.BytesIO(json.dumps(backup).encode('utf-8')), 'backup.json')},
+        content_type='multipart/form-data',
+    )
+
+    assert response.status_code == 400
+    assert 'At least one admin user is required' in response.json['error']
+    assert auth_client.get('/api/auth/me').status_code == 200
+    with app.app_context():
+        assert User.query.filter_by(username='admin', role='admin').count() == 1
+
+
 def test_startup_can_reset_admin_password():
     reset_app = create_app({
         "TESTING": True,
@@ -248,6 +317,8 @@ def test_import_json_preserves_dev_rank(auth_client, app):
 
     assert response.status_code == 200
     assert response.json['themes'] == 1
+    assert response.json['users'] is None
+    assert response.json['requires_reauthentication'] is False
 
     response = auth_client.get('/api/themes')
     assert response.status_code == 200

@@ -59,6 +59,8 @@ npm run build
 - 管理者はuser CRUDを行え、自分自身は削除できない。
 - Themeの `dev_rank` 空値、複数の `dev_complete_months`、milestone配列を保持する。
 - JSON Importは `dev_rank` と完了状態つき `dev_complete_months` を保持する。
+- JSON Export / ImportはユーザーID・ユーザー名・権限・パスワードハッシュを往復し、平文パスワードを出力せず、管理者不在のバックアップをデータ置換前に拒否する。
+- ユーザーを含むJSON Importは実行中セッションをログアウトし、ユーザーを含まない旧形式では既存ユーザーとセッションを保持する。
 - bulk/single Allocationは0を実レコードとして保持し、`null` で削除する。
 - Insightsはsummary、health checks、recommendations、dashboard、project ribbonを返す。
 - Project Ribbonは同一Themeの複数Member配賦を合算する。
