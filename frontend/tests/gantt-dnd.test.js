@@ -129,4 +129,26 @@ describe('gantt dnd history payloads', () => {
 
         expect(performMove).not.toHaveBeenCalled();
     });
+
+    it('does not treat the second press of a double click as a drag move', async () => {
+        const performMove = vi.fn(async () => {});
+        const { initGanttDnD } = await import('../js/gantt/gantt-dnd.js');
+        const source = document.getElementById('source-cell');
+        const target = document.getElementById('target-cell');
+        const container = document.getElementById('gantt-container');
+
+        document.elementFromPoint = vi.fn()
+            .mockReturnValueOnce(source)
+            .mockReturnValueOnce(target);
+
+        initGanttDnD({ performMove });
+
+        source.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, detail: 1, clientX: 10, clientY: 10 }));
+        container.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, detail: 1, clientX: 10, clientY: 10 }));
+        source.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, detail: 2, clientX: 10, clientY: 10 }));
+        container.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, detail: 2, clientX: 20, clientY: 20 }));
+        await Promise.resolve();
+
+        expect(performMove).not.toHaveBeenCalled();
+    });
 });

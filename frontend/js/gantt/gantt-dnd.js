@@ -22,6 +22,12 @@ export function initGanttDnD({ performMove }) {
     let dragState = null;
 
     container.addEventListener('mousedown', (e) => {
+        if (e.detail > 1) {
+            dragState?.cell.classList.remove('dragging');
+            dragState = null;
+            return;
+        }
+
         const cell = e.target.closest('.gantt-row-member .gantt-cell[data-rate]');
         if (!cell || parseInt(cell.dataset.rate) === 0) return;
 
