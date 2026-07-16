@@ -14,6 +14,7 @@
 | `frontend/js/api.js` | API クライアント |
 | `frontend/js/shared-state.js` | 共有表示条件 |
 | `frontend/js/ui.js` | toast / dialog / busy state |
+| `frontend/js/sidebar.js` | サイドバーの開閉、狭幅ドロワー、focus / Escape 制御 |
 | `frontend/js/messages.js` | 共通状態・エラー・操作文言の日本語カタログ |
 | `frontend/js/gantt/*` | Gantt 関連機能 |
 | `frontend/js/member/member-view.js` | メンバー負荷画面 |
@@ -69,7 +70,7 @@ sequenceDiagram
 |---|---|
 | 描画 | テーマ・メンバー・月のマトリクス表示 |
 | 編集 | セル単位編集、複数セル貼り付け。通常幅はインライン、1024px以下は表下の詳細編集へ一本化 |
-| 操作 | キーボード移動、DnD、折りたたみ、ズーム |
+| 操作 | キーボード移動、DnD、折りたたみ、ズーム。720px以下では画面幅変更時もテーマナビを同期 |
 | 補助 | スナップショット、保存ビュー、CSV/XLSX 出力 |
 
 ### 5.2 関係ファイル
@@ -109,6 +110,7 @@ sequenceDiagram
 | 過負荷強調 | capacity 超過の視覚化 |
 | 詳細ポップアップ | hoverプレビューに加え、セル内buttonからキーボード／タッチ対応の固定内訳を表示 |
 | 観測窓 | 6/12/24か月プリセット、標準／コンパクト密度、次の過負荷への移動 |
+| 狭幅表示 | 820px以下では表示条件を折りたたみ、サマリと表を先に提示 |
 | CSV 出力 | メンバー軸の表形式出力 |
 
 ## 7. Insights 画面
@@ -145,7 +147,9 @@ Insights の各カードは Gantt / Member Load に検索条件つきで遷移�
 
 共有状態、HTTPエラー、共通ダイアログ操作の文言は`messages.js`へ集約します。画面固有の業務用語は各viewに残し、別locale追加時にcatalogへ段階移行します。
 
-デザイン値は`index.css`のrole tokenへ集約します。画面CSSでの色リテラルと13px未満の文字は`tools/lint-frontend.mjs`が拒否し、主要操作は44px、コンパクト操作は36pxを下限とします。
+`sidebar.js`は1024px以下でサイドバーをモーダルドロワーとして扱います。開閉状態と`aria-expanded`を同期し、背景click、Escape、ナビ選択で閉じます。開いている間はフォーカスをドロワー内に維持し、閉じるとトグルへ戻します。狭幅での開閉はデスクトップの折りたたみ設定を上書きしません。
+
+デザイン値は`index.css`のrole tokenへ集約します。操作部品の境界は`--color-control-border`、表内の低強調罫線は`--color-grid-line`を使い分けます。画面CSSでの色リテラルと13px未満の文字は`tools/lint-frontend.mjs`が拒否し、主要操作は44px、コンパクト操作は36pxを下限とします。
 
 ## 9. HTML レイアウト
 

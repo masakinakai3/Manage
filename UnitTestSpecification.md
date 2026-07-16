@@ -70,7 +70,8 @@ npm run build
 | ファイル | 保護する主な動作 |
 |---|---|
 | `frontend/tests/api.test.js` | GET no-storeとwrite requestのcache挙動 |
-| `frontend/tests/ui.test.js` | APIエラー日本語化、データ／保存状態の分離、入力中Escape |
+| `frontend/tests/ui.test.js` | APIエラー日本語化、データ／保存状態の分離、toast表示とclose名、入力中Escape |
+| `frontend/tests/sidebar.test.js` | 狭幅ドロワーのARIA、Escape、背景click、focus trap、幅変更 |
 | `frontend/tests/shared-state.test.js` | 四半期、6/12/24か月プリセット |
 | `frontend/tests/date-utils.test.js` | 月範囲、加減算、scale見出し、配賦集約 |
 | `frontend/tests/shortcut-utils.test.js` | Undo/Redo、入力中shortcut、memo field |
@@ -78,7 +79,7 @@ npm run build
 | `frontend/tests/gantt-editor.test.js` | edit、保存、0と空欄、keyboard、optimistic state |
 | `frontend/tests/gantt-dnd.test.js` | 同一Theme内移動と異Theme拒否 |
 | `frontend/tests/gantt-theme-reorder.test.js` | Theme行のdrop位置と自己drop拒否 |
-| `frontend/tests/gantt-renderer.test.js` | history、selection、期間移動、export、milestone、filter、完了表示、nested row、狭幅の単一編集面 |
+| `frontend/tests/gantt-renderer.test.js` | history、selection、期間移動、export、milestone、filter、完了／中止表示、nested row、狭幅の単一編集面とtheme navigator |
 | `frontend/tests/member-view.test.js` | 集約、milestone、月highlight、summary filter、expand、edit/history、内訳dialog |
 | `frontend/tests/insights-view.test.js` | Project Ribbonのlabel・月button・欠損と明示0の区別 |
 
@@ -87,10 +88,12 @@ npm run build
 - 未設定配賦と明示0を区別する。
 - Gantt編集、copy/paste、Undo/Redo、端を越える月移動を維持する。
 - 月highlightは単一で、再clickにより解除できる。
-- 完了状態はsummaryとnested rowの表示全体へ反映する。
+- 完了・中止状態はsummaryとnested rowの表示全体へ非アクティブ表示として反映する。
+- 720px境界を越えるresizeでGanttのモバイルtheme navigatorを生成・破棄する。
 - CSV/XLSX datasetはvisible period、filter、label、row shapeを守る。
 - Member Loadのexpand controlとセル内訳buttonはaccessibleで、不要な上部click detail panelを生成しない。
-- データ取得状態と保存状態を分離し、500/offline時に`fresh`を表示しない。
+- Member Loadの狭幅表示条件は`aria-expanded`と表示状態を同期する。
+- データ取得状態と保存状態を分離し、500/offline時に`fresh`を表示せず、読込失敗で保存状態を上書きしない。
 - CSSの色リテラルと13px未満の文字はlintで拒否する。
 - 60か月の観測窓と1000行の一覧fixtureを回帰対象にする。
 

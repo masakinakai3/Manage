@@ -177,6 +177,7 @@ function renderBaseDom() {
         <div id="aggregate-by-status"></div>
         <div id="aggregate-by-department"></div>
         <div id="snapshot-diff-summary"></div>
+        <div id="gantt-mobile-theme-list" hidden></div>
         <table id="gantt-table">
             <thead id="gantt-thead"></thead>
             <tbody id="gantt-tbody"></tbody>
@@ -249,6 +250,11 @@ describe('gantt-renderer regressions', () => {
         toPng.mockResolvedValue('data:image/png;base64,abc');
         openThemeEditListener.mockClear();
         visibleMonths = ['2026-04'];
+        Object.defineProperty(window, 'innerWidth', {
+            configurable: true,
+            writable: true,
+            value: 1024,
+        });
         allocationRows = [{
             theme_id: 1,
             member_id: 10,
@@ -1014,6 +1020,62 @@ describe('gantt-renderer regressions', () => {
 
         expect(document.querySelector('.gantt-row-summary')?.classList.contains('theme-row-completed')).toBe(true);
         expect(document.querySelector('.gantt-row-member')?.classList.contains('theme-row-completed')).toBe(true);
+        expect(document.querySelector('.gantt-row-summary')?.classList.contains('theme-row-inactive')).toBe(true);
+        expect(document.querySelector('.gantt-row-member')?.classList.contains('theme-row-inactive')).toBe(true);
+    });
+
+    it('greys out cancelled theme rows as inactive', async () => {
+        themeList.mockResolvedValueOnce([{
+            theme_id: 1,
+            name: 'Theme A',
+            status: 'cancelled',
+            dev_rank: 'S',
+            color: '#00aaff',
+            category: 'Delivery',
+            milestones: [],
+            member_ids: [10],
+        }]);
+
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+        await refreshGantt();
+
+        expect(document.querySelector('.gantt-row-summary')?.classList.contains('theme-row-cancelled')).toBe(true);
+        expect(document.querySelector('.gantt-row-summary')?.classList.contains('theme-row-inactive')).toBe(true);
+        expect(document.querySelector('.gantt-row-member')?.classList.contains('theme-row-inactive')).toBe(true);
+    });
+
+    it('creates and removes the mobile theme navigator when the viewport crosses the breakpoint', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-04',
+            scale: 1,
+            ganttSearch: '',
+            ganttCategory: '',
+            ganttOwner: '',
+            ganttStatus: 'all',
+            ganttPriority: 'all',
+            groupBy: 'none',
+        });
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+        const mobileList = document.getElementById('gantt-mobile-theme-list');
+        const inlineControls = document.getElementById('gantt-inline-period-controls');
+
+        expect(mobileList?.hidden).toBe(true);
+        expect(mobileList?.children).toHaveLength(0);
+        expect(inlineControls?.parentElement).toBe(document.querySelector('.gantt-floating-actions'));
+
+        window.innerWidth = 390;
+        window.dispatchEvent(new Event('resize'));
+        expect(mobileList?.hidden).toBe(false);
+        expect(mobileList?.querySelectorAll('[data-mobile-theme-id]')).toHaveLength(1);
+        expect(inlineControls?.parentElement).toBe(document.getElementById('gantt-table-tools'));
+
+        window.innerWidth = 1024;
+        window.dispatchEvent(new Event('resize'));
+        expect(mobileList?.hidden).toBe(true);
+        expect(mobileList?.children).toHaveLength(0);
+        expect(inlineControls?.parentElement).toBe(document.querySelector('.gantt-floating-actions'));
     });
 
     it('supports grouping by development rank', async () => {

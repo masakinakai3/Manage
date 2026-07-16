@@ -60,7 +60,7 @@ export function initUi() {
     );
 }
 
-export function showToast(message, type = 'info', timeout = 3200) {
+export function showToast(content, type = 'info', timeout = 3200) {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
@@ -74,7 +74,7 @@ export function showToast(message, type = 'info', timeout = 3200) {
 
     const text = document.createElement('span');
     text.className = 'toast-message';
-    text.textContent = message;
+    text.textContent = content;
     toast.appendChild(text);
 
     let removed = false;

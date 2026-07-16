@@ -133,7 +133,6 @@ export async function refreshMemberView() {
         renderTable(months, memberLoads, warnings, allocationsList);
     } catch (error) {
         console.error('Failed to load member view:', error);
-        setSaveState('error', 'メンバー負荷の読み込みに失敗しました');
         showToast(`メンバー負荷の読み込みに失敗しました: ${formatError(error)}`, 'error');
     } finally {
         setBusyState(false);
@@ -142,6 +141,15 @@ export async function refreshMemberView() {
 
 function setupControls() {
     document.getElementById('member-export-csv')?.addEventListener('click', exportCSV);
+
+    const controlsToggle = document.getElementById('member-controls-toggle');
+    const controls = document.getElementById('member-load-controls');
+    controlsToggle?.addEventListener('click', () => {
+        const expanded = controlsToggle.getAttribute('aria-expanded') === 'true';
+        controlsToggle.setAttribute('aria-expanded', String(!expanded));
+        controlsToggle.textContent = expanded ? '表示条件を開く' : '表示条件を閉じる';
+        controls?.classList.toggle('is-open', !expanded);
+    });
 
     document.querySelectorAll('#member-scale-switcher .scale-btn').forEach((button) => {
         button.addEventListener('click', () => {

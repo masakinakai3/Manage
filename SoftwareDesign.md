@@ -147,6 +147,7 @@ flowchart TD
 | コンポーネント | 主ファイル | 責務 |
 |---|---|---|
 | アプリハブ | `frontend/js/app.js` | 初期化、画面切替、モーダル起動、テーマ/メンバー管理、保存ビュー |
+| 共通ナビゲーション | `frontend/js/sidebar.js` | サイドバー開閉、狭幅ドロワー、ARIA・focus・Escape制御 |
 | API クライアント | `frontend/js/api.js` | REST API 呼び出しの一元化 |
 | Gantt 画面 | `frontend/js/gantt/gantt-renderer.js` | テーブル描画、選択、編集、CSV/XLSX 出力用データ作成 |
 | セル編集 | `frontend/js/gantt/gantt-editor.js` | セル内エディタの表示と保存操作 |

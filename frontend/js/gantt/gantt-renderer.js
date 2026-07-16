@@ -157,6 +157,8 @@ let scenarioPreviewState = null;
 let scenarioPreviewContext = null;
 let ganttDensity = 'standard';
 let ganttRefreshRequestId = 0;
+let mobileViewportBound = false;
+let mobileViewportActive = window.innerWidth <= 720;
 
 export function showScenarioPreview(preview) {
     scenarioPreviewState = normalizeScenarioPreviewState(preview);
@@ -309,6 +311,7 @@ export async function initGantt() {
     if (densityInput) densityInput.value = ganttDensity;
     applyGanttDensity();
     bindControls();
+    bindMobileViewportChanges();
     await loadSnapshots();
     subscribeViewState((next) => {
         startMonth = next.startMonth;
@@ -358,6 +361,10 @@ function ensureInlinePeriodControls() {
 
     const inlineControls = ensureToolbarSlot('gantt-inline-period-controls', 'gantt-inline-period-controls');
     moveControlsToToolbarSlot(inlineControls, [scaleSwitcher, presetSelect, densitySelect, monthNav]);
+    const inlineParent = window.innerWidth <= 720 ? tableTools : toolbar;
+    if (inlineControls && inlineControls.parentElement !== inlineParent) {
+        inlineParent.append(inlineControls);
+    }
     syncPeriodControls();
 }
 
@@ -2650,6 +2657,19 @@ function renderMobileThemeList(themes, months) {
     });
 }
 
+function bindMobileViewportChanges() {
+    if (mobileViewportBound) return;
+    mobileViewportBound = true;
+    mobileViewportActive = window.innerWidth <= 720;
+    window.addEventListener('resize', () => {
+        const nextMobileViewport = window.innerWidth <= 720;
+        if (nextMobileViewport === mobileViewportActive) return;
+        mobileViewportActive = nextMobileViewport;
+        ensureInlinePeriodControls();
+        renderMobileThemeList(filterThemes(), getVisibleMonths(startMonth, visibleCount, scale));
+    });
+}
+
 function renderTable(months) {
     const current = currentMonth();
     scenarioPreviewContext = buildScenarioPreviewContext();
@@ -2674,13 +2694,19 @@ function renderTable(months) {
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
-            const completedRowClass = theme.status === 'completed' ? ' theme-row-completed' : '';
+            const inactive = ['completed', 'cancelled'].includes(theme.status);
+            const rowStateClass = [
+                inactive ? 'theme-row-inactive' : '',
+                theme.status === 'completed' ? 'theme-row-completed' : '',
+                theme.status === 'cancelled' ? 'theme-row-cancelled' : '',
+            ].filter(Boolean).join(' ');
+            const rowStateClassName = rowStateClass ? ` ${rowStateClass}` : '';
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
             const dragHandle = groupBy === 'none'
                 ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg></span>`
                 : '';
-            rows.push(`<tr class="gantt-row-summary${completedRowClass}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member${completedRowClass} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">上限 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+            rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
+            members.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">上限 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
 

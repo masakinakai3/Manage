@@ -44,6 +44,7 @@
         </div>
     </div>
     <div id="app-screen" class="screen" hidden>
+        <div id="sidebar-backdrop" class="sidebar-backdrop" hidden></div>
         <nav id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">
@@ -99,7 +100,7 @@
             </div>
         </nav>
 
-        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="サイドバー切替" aria-label="サイドバーを切り替える">
+        <button id="sidebar-toggle" class="sidebar-toggle-btn" type="button" title="サイドバーを開く" aria-label="サイドバーを開く" aria-controls="sidebar" aria-expanded="false">
             <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
         </button>
 
@@ -333,7 +334,8 @@
                         <h2>メンバー負荷</h2>
                         <p>メンバーごとの負荷、余力、過負荷の原因を月別に確認できます。</p>
                     </div>
-                    <div class="view-controls member-load-controls" aria-label="メンバー負荷の表示設定">
+                    <button id="member-controls-toggle" class="btn btn-ghost btn-sm member-controls-toggle" type="button" aria-expanded="false" aria-controls="member-load-controls">表示条件を開く</button>
+                    <div id="member-load-controls" class="view-controls member-load-controls" aria-label="メンバー負荷の表示設定">
                         <div class="member-control-group member-control-period" aria-label="集計期間">
                         <div class="scale-switcher" id="member-scale-switcher">
                             <button class="scale-btn active" data-scale="1" type="button">1M</button>
@@ -370,7 +372,7 @@
                     </div>
                 </div>
                 <section id="member-load-summary" class="summary-grid"></section>
-                <details class="member-load-guide" aria-label="負荷表示の凡例" open>
+                <details class="member-load-guide" aria-label="負荷表示の凡例">
                     <summary>負荷の見方と操作</summary>
                     <div class="member-load-legend">
                         <span><i class="member-legend-swatch load-low"></i>余力大 1〜30%</span>

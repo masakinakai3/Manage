@@ -123,6 +123,8 @@ function renderBaseDom() {
             <button class="scale-btn" data-scale="3" type="button">3</button>
         </div>
         <input id="member-search" type="text">
+        <button id="member-controls-toggle" type="button" aria-expanded="false" aria-controls="member-load-controls">表示条件を開く</button>
+        <div id="member-load-controls"></div>
         <button id="member-export-csv" type="button"></button>
         <button id="member-prev" type="button"></button>
         <button id="member-next" type="button"></button>
@@ -173,6 +175,34 @@ describe('member-view milestones', () => {
         const milestones = Array.from(document.querySelectorAll('.member-theme-cell .member-theme-milestone'));
         expect(milestones).toHaveLength(1);
         expect(milestones[0].textContent).toBe('Release');
+    });
+
+    it('toggles narrow-layout display controls without changing view state', async () => {
+        const { initMemberView } = await import('../js/member/member-view.js');
+        await initMemberView();
+        const toggle = document.getElementById('member-controls-toggle');
+        const controls = document.getElementById('member-load-controls');
+
+        toggle?.click();
+        expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+        expect(toggle?.textContent).toBe('表示条件を閉じる');
+        expect(controls?.classList.contains('is-open')).toBe(true);
+
+        toggle?.click();
+        expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+        expect(controls?.classList.contains('is-open')).toBe(false);
+    });
+
+    it('keeps read failures out of the save-state channel', async () => {
+        const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        membersList.mockRejectedValueOnce(new Error('offline'));
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+
+        await refreshMemberView();
+
+        expect(setSaveState).not.toHaveBeenCalled();
+        expect(showToast).toHaveBeenCalledWith('メンバー負荷の読み込みに失敗しました: offline', 'error');
+        errorSpy.mockRestore();
     });
 
     it('renders dev-complete marker for the matching month', async () => {

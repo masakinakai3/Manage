@@ -44,6 +44,17 @@ describe('shared UI state and error messages', () => {
         expect(document.getElementById('save-state')?.textContent).toBe('保存中');
     });
 
+    it('renders a toast with an accessible close action', async () => {
+        const { showToast } = await import('../js/ui.js');
+
+        expect(() => showToast('保存しました。', 'success', 10000)).not.toThrow();
+
+        const toast = document.querySelector('.toast');
+        expect(toast?.textContent).toContain('保存しました。');
+        expect(toast?.getAttribute('role')).toBe('status');
+        expect(toast?.querySelector('.toast-close')?.getAttribute('aria-label')).toBe('通知を閉じる');
+    });
+
     it('closes a shared dialog with Escape while an input is focused', async () => {
         const { initUi, showPromptDialog } = await import('../js/ui.js');
         initUi();

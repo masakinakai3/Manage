@@ -10,6 +10,7 @@ import { initGantt, refreshGantt, clearScenarioPreview, HistoryManager } from '.
 import { initInsightsView, refreshInsightsView } from './insights-view.js';
 import { initMemberView, refreshMemberView } from './member/member-view.js';
 import { getShortcutKey, shouldIgnoreShortcut } from './shortcut-utils.js';
+import { initSidebarNavigation } from './sidebar.js';
 import { filterAndSortThemes, getThemeCategoryTone, summarizeThemeStatuses } from './theme-list-utils.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
@@ -77,7 +78,6 @@ let themeListCache = [];
 document.addEventListener('DOMContentLoaded', async () => {
     initUi();
     initAuth();
-    initSidebarToggleScrollBehavior();
     setSaveState('idle', '変更なし');
 
     try {
@@ -92,21 +92,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     showLogin();
 });
-
-function initSidebarToggleScrollBehavior() {
-    const toggle = document.getElementById('sidebar-toggle');
-    const updateVisibility = () => {
-        const scrollTop = Math.max(
-            document.body.scrollTop || 0,
-            document.documentElement.scrollTop || 0,
-            window.scrollY || 0,
-        );
-        toggle.classList.toggle('is-content-scrolled', window.innerWidth <= 1024 && scrollTop > 24);
-    };
-    window.addEventListener('scroll', updateVisibility, { passive: true, capture: true });
-    window.addEventListener('resize', updateVisibility, { passive: true });
-    updateVisibility();
-}
 
 async function showApp() {
     document.getElementById('login-screen').hidden = true;
@@ -395,34 +380,7 @@ function initUiConfig() {
         localStorage.setItem('gantt_controls_collapsed', String(collapsed));
     });
 
-    // Sidebar toggle
-    const sidebar = document.getElementById('sidebar');
-    const sidebarToggle = document.getElementById('sidebar-toggle');
-    const isNarrowLayout = () => window.matchMedia('(max-width: 1024px)').matches;
-    let wasNarrowLayout = isNarrowLayout();
-    if (localStorage.getItem('sidebar_collapsed') === 'true' || isNarrowLayout()) {
-        sidebar?.classList.add('sidebar-collapsed');
-    }
-    sidebarToggle?.addEventListener('click', () => {
-        sidebar?.classList.toggle('sidebar-collapsed');
-        const collapsed = sidebar?.classList.contains('sidebar-collapsed');
-        localStorage.setItem('sidebar_collapsed', String(collapsed));
-    });
-    document.querySelectorAll('#sidebar .nav-item').forEach((item) => item.addEventListener('click', () => {
-        if (isNarrowLayout()) sidebar?.classList.add('sidebar-collapsed');
-    }));
-    window.addEventListener('resize', () => {
-        const narrowLayout = isNarrowLayout();
-        if (narrowLayout) sidebar?.classList.add('sidebar-collapsed');
-        if (narrowLayout && !wasNarrowLayout) applyGanttControlsCollapsed(true);
-        wasNarrowLayout = narrowLayout;
-    });
-    window.matchMedia('(max-width: 1024px)').addEventListener('change', (event) => {
-        if (event.matches) {
-            sidebar?.classList.add('sidebar-collapsed');
-            applyGanttControlsCollapsed(true);
-        }
-    });
+    initSidebarNavigation({ onEnterNarrow: () => applyGanttControlsCollapsed(true) });
 
     // Detail panel toggle
     const detailPanel = document.getElementById('gantt-detail-panel');
@@ -581,8 +539,8 @@ function renderThemeList() {
                         </div>
                     </div>
                     <div class="card-actions">
-                        <button class="btn btn-ghost theme-edit-btn" data-edit-theme="${theme.theme_id}" type="button">編集</button>
-                        <button class="btn btn-ghost btn-delete theme-delete-btn" data-delete-theme="${theme.theme_id}" type="button">削除</button>
+                        <button class="btn btn-ghost theme-edit-btn" data-edit-theme="${theme.theme_id}" type="button" aria-label="${escapeHtml(`${theme.name}を編集`)}">編集</button>
+                        <button class="btn btn-ghost btn-delete theme-delete-btn" data-delete-theme="${theme.theme_id}" type="button" aria-label="${escapeHtml(`${theme.name}を削除`)}">削除</button>
                     </div>
                 </div>
             </article>`;
@@ -933,9 +891,9 @@ async function loadUserList() {
                         </div>
                     </div>
                     <div class="card-actions">
-                        <button class="btn btn-ghost btn-sm" data-edit-user="${user.id}" type="button">編集</button>
-                        <button class="btn btn-ghost btn-sm" data-reset-user-password="${user.id}" type="button">PW再設定</button>
-                        ${user.id === currentUser?.id ? '' : `<button class="btn btn-ghost btn-delete btn-sm" data-delete-user="${user.id}" type="button">削除</button>`}
+                        <button class="btn btn-ghost btn-sm" data-edit-user="${user.id}" type="button" aria-label="${escapeHtml(`${user.username}を編集`)}">編集</button>
+                        <button class="btn btn-ghost btn-sm" data-reset-user-password="${user.id}" type="button" aria-label="${escapeHtml(`${user.username}のパスワードを再設定`)}">PW再設定</button>
+                        ${user.id === currentUser?.id ? '' : `<button class="btn btn-ghost btn-delete btn-sm" data-delete-user="${user.id}" type="button" aria-label="${escapeHtml(`${user.username}を削除`)}">削除</button>`}
                     </div>
                 </div>
             </article>
@@ -1127,8 +1085,8 @@ async function loadMemberList() {
                         </div>
                     </div>
                     <div class="card-actions">
-                        <button class="btn btn-ghost btn-sm" data-edit-member="${member.member_id}" type="button">編集</button>
-                        <button class="btn btn-ghost btn-delete btn-sm" data-delete-member="${member.member_id}" type="button">削除</button>
+                        <button class="btn btn-ghost btn-sm" data-edit-member="${member.member_id}" type="button" aria-label="${escapeHtml(`${member.display_name}を編集`)}">編集</button>
+                        <button class="btn btn-ghost btn-delete btn-sm" data-delete-member="${member.member_id}" type="button" aria-label="${escapeHtml(`${member.display_name}を削除`)}">削除</button>
                     </div>
                 </div>
             </article>
