@@ -69,4 +69,17 @@ describe('shared UI state and error messages', () => {
         await expect(result).resolves.toBeNull();
         expect(document.getElementById('dialog-overlay')?.hidden).toBe(true);
     });
+
+    it('returns the prompt value before clearing the shared input', async () => {
+        const { showPromptDialog } = await import('../js/ui.js');
+        const result = showPromptDialog({ title: '上限', message: '入力してください', defaultValue: '100' });
+        const input = document.getElementById('dialog-input');
+        input.value = '90';
+
+        document.getElementById('dialog-confirm')?.click();
+
+        await expect(result).resolves.toBe('90');
+        expect(input.value).toBe('');
+        expect(input.hidden).toBe(true);
+    });
 });

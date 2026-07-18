@@ -75,14 +75,15 @@ def get_warnings(from_month=None, to_month=None):
         if not member:
             continue
         for month, load in months.items():
-            if load > member.capacity:
+            capacity = member.capacity_for_month(month)
+            if load > capacity:
                 warnings.append({
                     'member_id': member_id,
                     'display_name': member.display_name,
                     'month': month,
                     'load': load,
-                    'capacity': member.capacity,
-                    'excess': load - member.capacity,
+                    'capacity': capacity,
+                    'excess': load - capacity,
                 })
 
     warnings.sort(key=lambda w: (w['month'], w['member_id']))

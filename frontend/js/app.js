@@ -1093,7 +1093,7 @@ async function loadMemberList() {
                         <div class="card-title">${escapeHtml(member.display_name)}</div>
                         <div class="card-meta">
                             <span class="${member.department ? '' : 'data-warning'}">${escapeHtml(member.department || '部署未設定')}</span>
-                            <span>稼働上限 ${member.capacity}%</span>
+                            <span>通常月の上限 ${member.capacity}%</span>
                             <span class="status-badge ${member.is_active ? 'status-active' : 'status-done'}">${member.is_active ? '有効' : '無効'}</span>
                         </div>
                     </div>
@@ -1159,9 +1159,9 @@ function openMemberModal(member = null) {
             <p id="modal-member-dept-hint" class="form-hint">未入力の場合は「部署未設定」と表示します。</p>
         </div>
         <div class="form-field">
-            <label for="modal-member-capacity">稼働上限（%）</label>
+            <label for="modal-member-capacity">通常月の稼働上限（%）</label>
             <input id="modal-member-capacity" type="number" value="${member?.capacity ?? 100}" min="1" max="200" aria-describedby="modal-member-capacity-hint">
-            <p id="modal-member-capacity-hint" class="form-hint">1〜200。月別負荷がこの値を超えると警告します。</p>
+            <p id="modal-member-capacity-hint" class="form-hint">1〜200。月別指定がない月に適用します。月別の調整はメンバー負荷画面で行えます。</p>
         </div>
         ${isEdit ? `
             <div class="form-field">

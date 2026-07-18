@@ -635,8 +635,48 @@
 }
 
 .member-empty-mark {
+    display: block;
     color: var(--color-text-muted);
     opacity: 0.65;
+}
+
+.member-capacity-button {
+    display: block;
+    max-width: calc(100% - 4px);
+    margin: 2px auto 0;
+    padding: 1px 5px;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: var(--color-bg-elevated);
+    color: var(--color-text-secondary);
+    font: inherit;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.member-capacity-button:hover,
+.member-capacity-button:focus-visible {
+    border-color: var(--color-primary);
+    color: var(--color-primary-hover);
+}
+
+.member-capacity-button.is-overridden {
+    border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    background: var(--color-primary-subtle);
+    color: var(--color-primary-hover);
+}
+
+.member-capacity-button:disabled {
+    border-color: transparent;
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: default;
+    opacity: 0.8;
 }
 
 .current-month-label {
@@ -732,6 +772,10 @@
     height: 1px;
     overflow: hidden;
     clip-path: inset(50%);
+}
+
+.density-compact .member-capacity-button {
+    padding-inline: 3px;
 }
 
 /* The stacked bar track */

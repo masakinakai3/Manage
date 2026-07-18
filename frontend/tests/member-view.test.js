@@ -6,6 +6,7 @@ const openCellEditor = vi.fn();
 const setBusyState = vi.fn();
 const setSaveState = vi.fn();
 const showToast = vi.fn();
+const showPromptDialog = vi.fn();
 const formatError = vi.fn((error) => error.message);
 const bulkUpdate = vi.fn(async () => ({}));
 const historyPush = vi.fn();
@@ -42,6 +43,8 @@ const themesList = vi.fn(async () => ([{
 const memberLoads = vi.fn(async () => ({ 10: { '2026-04': 20, '2026-05': 30 } }));
 const warnings = vi.fn(async () => ([]));
 const allocationsApiList = vi.fn(async () => allocationsList);
+const updateMonthlyCapacity = vi.fn(async () => ({}));
+const deleteMonthlyCapacity = vi.fn(async () => ({}));
 
 vi.mock('../js/gantt/gantt-editor.js', () => ({
     openCellEditor,
@@ -60,6 +63,7 @@ vi.mock('../js/ui.js', () => ({
     formatError,
     setBusyState,
     setSaveState,
+    showPromptDialog,
     showToast,
 }));
 
@@ -110,6 +114,8 @@ vi.mock('../js/api.js', () => ({
     },
     members: {
         list: membersList,
+        updateMonthlyCapacity,
+        deleteMonthlyCapacity,
     },
     themes: {
         list: themesList,
@@ -154,6 +160,7 @@ describe('member-view milestones', () => {
         setBusyState.mockClear();
         setSaveState.mockClear();
         showToast.mockClear();
+        showPromptDialog.mockReset();
         bulkUpdate.mockClear();
         historyPush.mockClear();
         refreshGantt.mockClear();
@@ -162,6 +169,32 @@ describe('member-view milestones', () => {
         memberLoads.mockClear();
         warnings.mockClear();
         allocationsApiList.mockClear();
+        updateMonthlyCapacity.mockClear();
+        deleteMonthlyCapacity.mockClear();
+        membersList.mockResolvedValue([{
+            member_id: 10,
+            display_name: 'Alice',
+            department: 'Dev',
+            capacity: 100,
+        }]);
+        themesList.mockResolvedValue([{
+            theme_id: 1,
+            name: 'Theme A',
+            color: '#00aaff',
+            category: 'Delivery',
+            status: 'active',
+            dev_complete_month: '2026-04',
+            dev_complete_months: [{ month: '2026-04', is_completed: true }],
+            milestones: [
+                { month: '2026-04', label: 'Release', is_completed: false },
+                { month: '2026-05', label: 'Review', is_completed: true },
+            ],
+        }]);
+        memberLoads.mockResolvedValue({ 10: { '2026-04': 20, '2026-05': 30 } });
+        warnings.mockResolvedValue([]);
+        allocationsApiList.mockImplementation(async () => allocationsList);
+        updateMonthlyCapacity.mockResolvedValue({});
+        deleteMonthlyCapacity.mockResolvedValue({});
     });
 
     it('renders theme-row milestones for matching months', async () => {
@@ -329,6 +362,53 @@ describe('member-view milestones', () => {
         expect(labels).toEqual(['平均負荷', '過負荷', '余力あり', '未割当']);
         expect(summary?.textContent).toContain('全1名の月平均');
         expect(summary?.textContent).toContain('警告セル 0件を表示');
+    });
+
+    it('uses a monthly capacity override for overload state and shows it as editable', async () => {
+        membersList.mockResolvedValue([{
+            member_id: 10,
+            display_name: 'Alice',
+            department: 'Dev',
+            capacity: 100,
+            monthly_capacities: { '2026-04': 60 },
+        }]);
+        memberLoads.mockResolvedValue({ 10: { '2026-04': 80 } });
+
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        expect(document.querySelector('.load-cell')?.classList.contains('load-over')).toBe(true);
+        expect(document.querySelector('.member-capacity-button')?.textContent).toContain('上限 60%');
+        expect(document.querySelector('.member-capacity-button')?.classList.contains('is-overridden')).toBe(true);
+        expect(document.querySelector('.member-detail-button')?.getAttribute('aria-label')).toContain('上限超過 20%');
+    });
+
+    it('saves a monthly capacity from the member-load cell', async () => {
+        showPromptDialog.mockResolvedValueOnce('60');
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        document.querySelector('.member-capacity-button')?.click();
+
+        await vi.waitFor(() => {
+            expect(updateMonthlyCapacity).toHaveBeenCalledWith(10, '2026-04', 60);
+        });
+        expect(deleteMonthlyCapacity).not.toHaveBeenCalled();
+        expect(refreshGantt).toHaveBeenCalled();
+        expect(setSaveState).toHaveBeenCalledWith('saved', '月別キャパシティを保存しました');
+    });
+
+    it('keeps an explicitly entered normal value as a monthly override', async () => {
+        showPromptDialog.mockResolvedValueOnce('100');
+        const { refreshMemberView } = await import('../js/member/member-view.js');
+        await refreshMemberView();
+
+        document.querySelector('.member-capacity-button')?.click();
+
+        await vi.waitFor(() => {
+            expect(updateMonthlyCapacity).toHaveBeenCalledWith(10, '2026-04', 100);
+        });
+        expect(deleteMonthlyCapacity).not.toHaveBeenCalled();
     });
 
     it('filters the table from summary cards and clears on repeat click', async () => {

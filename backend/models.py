@@ -57,6 +57,20 @@ class Member(db.Model):
     allocations = db.relationship('Allocation', backref='member', lazy='dynamic',
                                   cascade='all, delete-orphan')
     themes = db.relationship('Theme', secondary=theme_members, back_populates='members')
+    capacity_overrides = db.relationship(
+        'MemberCapacity',
+        back_populates='member',
+        lazy='selectin',
+        cascade='all, delete-orphan',
+        order_by='MemberCapacity.month',
+    )
+
+    def capacity_for_month(self, month):
+        """Return the member's capacity for a month, falling back to the normal value."""
+        for override in self.capacity_overrides:
+            if override.month == month:
+                return override.capacity
+        return self.capacity
 
     def to_dict(self):
         return {
@@ -64,8 +78,28 @@ class Member(db.Model):
             'display_name': self.display_name,
             'department': self.department,
             'capacity': self.capacity,
+            'monthly_capacities': {
+                override.month: override.capacity
+                for override in self.capacity_overrides
+            },
             'is_active': self.is_active,
         }
+
+
+class MemberCapacity(db.Model):
+    """Per-month capacity override for a member."""
+    __tablename__ = 'member_capacities'
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.Integer, db.ForeignKey('members.member_id'), nullable=False)
+    month = db.Column(db.String(7), nullable=False)  # 'YYYY-MM'
+    capacity = db.Column(db.Integer, nullable=False, default=100)
+
+    member = db.relationship('Member', back_populates='capacity_overrides')
+
+    __table_args__ = (
+        db.UniqueConstraint('member_id', 'month', name='uq_member_capacity'),
+    )
 
 
 class Theme(db.Model):

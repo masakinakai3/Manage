@@ -49,6 +49,7 @@ flowchart TD
 | `Theme` | 計画対象テーマ |
 | `ThemeMilestone` | テーマに紐づくマイルストーン |
 | `Member` | メンバー情報 |
+| `MemberCapacity` | メンバーごとの月別キャパシティ上書き |
 | `Allocation` | 月次配員 |
 | `Snapshot` | Gantt スナップショット |
 | `SavedView` | 表示状態保存 |
@@ -61,6 +62,7 @@ flowchart TD
 | `Allocation` | `theme_id + member_id + month` の UNIQUE 制約を持つ |
 | `ThemeMilestone` | `Theme` の一対多。表示順は `position` |
 | `SavedView.state` | JSON 文字列として保存される |
+| `MemberCapacity` | `member_id + month` が一意。未登録月は `Member.capacity`（既定100%）を使う |
 
 ## 4. ルート設計
 
@@ -75,7 +77,7 @@ flowchart TD
 | ファイル | 役割 | 備考 |
 |---|---|---|
 | `themes.py` | テーマ CRUD、担当割当（一括含む）、マイルストーン更新、dev_rank 管理 | 旧 `milestone_month` と新 `milestones[]` を橋渡し。`dev_complete_months` は JSON 形式で管理 |
-| `members.py` | メンバー CRUD | `active=true/false` フィルタあり |
+| `members.py` | メンバー CRUD、月別キャパシティ更新・解除 | `active=true/false` フィルタ、`/capacities/{month}` あり |
 
 ### 4.3 配員
 
@@ -101,7 +103,7 @@ flowchart TD
 |---|---|
 | `get_theme_loads()` | テーマ別・月別総配員率 |
 | `get_member_loads()` | メンバー別・月別総配員率 |
-| `get_warnings()` | 容量超過メンバーの警告一覧 |
+| `get_warnings()` | 月別キャパシティを基準にした容量超過メンバーの警告一覧 |
 
 ## 6. インサイト設計
 
@@ -150,9 +152,9 @@ flowchart TD
 
 `import_data.py` は JSON バックアップをトランザクション内で全復元します。
 
-1. 既存の関連データ削除（`Allocation`、`ThemeMilestone`、テーマ・メンバー紐付け、`Theme`、`Member`。version 3で `users` がある場合は `User` も対象。`Snapshot`・`SavedView` は削除対象外）
+1. 既存の関連データ削除（`Allocation`、`MemberCapacity`、`ThemeMilestone`、テーマ・メンバー紐付け、`Theme`、`Member`。version 3以降で `users` がある場合は `User` も対象。`Snapshot`・`SavedView` は削除対象外）
 2. version 3ではユーザーID・ユーザー名・権限・パスワードハッシュを復元し、管理者不在を拒否して完了後に実行中セッションをログアウト
-3. `Member` 復元
+3. `Member` と `monthly_capacities` 復元
 4. `Theme` 復元（`dev_rank`, `dev_complete_months` を含む）
 5. `ThemeMilestone` 復元（`is_completed` を含む）
 6. テーマ-メンバー紐付け復元

@@ -27,7 +27,7 @@
 | 機能カテゴリ | できること |
 |---|---|
 | テーマ管理 | テーマ作成、状態管理、優先度、開発ランク、期間、マイルストーン設定、複数開発完了月、担当メンバー紐付け（一括割当含む） |
-| メンバー管理 | メンバー作成、部署、稼働率、アクティブ/非アクティブ管理 |
+| メンバー管理 | メンバー作成、部署、通常月と月別の稼働上限、アクティブ/非アクティブ管理 |
 | 配員編集 | Gantt セル編集、ドラッグ&ドロップ、複数セル貼り付け、メモ保存、**Undo / Redo** |
 | 負荷確認 | メンバー別負荷一覧、過負荷警告、余力確認 |
 | 分析 | シナリオシミュレーション、将来不足予測、部署偏り |
@@ -137,7 +137,7 @@ flowchart TD
 | コンポーネント | 主ファイル | 責務 |
 |---|---|---|
 | アプリファクトリ | `backend/app.py` | Flask 初期化、CORS、LoginManager、静的配信、マイグレーション、初期管理者作成 |
-| モデル | `backend/models.py` | `User`, `Theme`, `ThemeMilestone`, `Member`, `Allocation`, `Snapshot`, `SavedView` 定義 |
+| モデル | `backend/models.py` | `User`, `Theme`, `ThemeMilestone`, `Member`, `MemberCapacity`, `Allocation`, `Snapshot`, `SavedView` 定義 |
 | ルート | `backend/routes/*.py` | 画面ごとの API 提供 |
 | サービス | `backend/services/allocation_service.py` | テーマ負荷、メンバー負荷、過負荷警告の集計 |
 | 分析 | `backend/routes/insights.py` | 内部指標の計算、予測、シナリオ候補の生成 |
@@ -196,6 +196,7 @@ erDiagram
     users ||--o{ saved_views : creates
     themes ||--o{ allocations : has
     members ||--o{ allocations : receives
+    members ||--o{ member_capacities : overrides
     themes ||--o{ theme_milestones : owns
     themes }o--o{ members : assigned
 
@@ -237,6 +238,13 @@ erDiagram
         bool is_active
     }
 
+    member_capacities {
+        int id PK
+        int member_id FK
+        string month
+        int capacity
+    }
+
     allocations {
         int id PK
         int theme_id FK
@@ -252,9 +260,10 @@ erDiagram
 
 | テーブル | ポイント |
 |---|---|
-| `users` | パスワードはハッシュのみを保持する。JSONバックアップversion 3ではID・ユーザー名・権限・ハッシュを復元し、復元後は再ログインを要求する |
+| `users` | パスワードはハッシュのみを保持する。JSONバックアップversion 3以降ではID・ユーザー名・権限・ハッシュを復元し、復元後は再ログインを要求する |
 | `themes` | 旧互換の `milestone_month` / `milestone_label` を保持しつつ、実体は `theme_milestones` に寄せている。`dev_complete_months` は JSON 配列で複数の完了月とその完了状態を保持する |
-| `members` | `is_active` により論理的な運用停止を表現する |
+| `members` | `capacity` は月別指定がない通常月の上限（既定100%）。`is_active` により論理的な運用停止を表現する |
+| `member_capacities` | `member_id + month` を一意キーとして月別上限を保持し、未登録月は `members.capacity` へフォールバックする |
 | `allocations` | `theme_id + member_id + month` に UNIQUE 制約がある |
 | `saved_views` | 画面状態を JSON 文字列として保持する。`view` でどの画面用かを識別する |
 | `snapshots` | Gantt 状態の比較用スナップショットを保持する |
@@ -267,7 +276,7 @@ erDiagram
 |---|---|---|
 | Auth | `/api/auth/*` | 認証とユーザー管理 |
 | Themes | `/api/themes*` | テーマ CRUD と担当紐付け |
-| Members | `/api/members*` | メンバー CRUD |
+| Members | `/api/members*` | メンバー CRUD と月別キャパシティ更新・解除 |
 | Allocations | `/api/allocations*` | 配員 CRUD と負荷集計 |
 | Insights | `/api/insights/overview` | 分析結果取得 |
 | Snapshots | `/api/snapshots*` | Gantt スナップショット保存 |

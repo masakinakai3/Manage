@@ -43,11 +43,15 @@
 ## Members
 
 - `GET /members?active=true|false`
-  - Returns: `member_id`, `display_name`, `department`, `capacity`, `is_active`
+  - Returns: `member_id`, `display_name`, `department`, normal-month `capacity`, `monthly_capacities` map, `is_active`
 - `POST /members`
   - Body: `display_name`, optional `department`, `capacity`
 - `PUT /members/{member_id}`
   - Body: any updatable member field
+- `PUT /members/{member_id}/capacities/{month}`
+  - Body: `capacity` (integer, 1-200); creates or replaces the `YYYY-MM` override
+- `DELETE /members/{member_id}/capacities/{month}`
+  - Removes the override so the normal-month `capacity` applies
 - `DELETE /members/{member_id}`
 
 ## Allocations

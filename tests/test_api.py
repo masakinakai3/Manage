@@ -7,7 +7,7 @@
 import io
 import json
 from app import create_app
-from models import db, Theme, ThemeMilestone, Member, Allocation, SavedView, User
+from models import db, Theme, ThemeMilestone, Member, MemberCapacity, Allocation, SavedView, User
 
 def test_login(client):
     """Test login functionality."""
@@ -106,11 +106,24 @@ def test_json_backup_round_trip_restores_users_and_requires_login(auth_client, a
     })
     assert create_response.status_code == 201
     planner_id = create_response.json['id']
+    member_response = auth_client.post('/api/members', json={
+        'display_name': 'Capacity Planner',
+        'department': 'Platform',
+    })
+    member_id = member_response.json['member_id']
+    capacity_response = auth_client.put(
+        f'/api/members/{member_id}/capacities/2026-08',
+        json={'capacity': 60},
+    )
+    assert capacity_response.status_code == 200
 
     export_response = auth_client.get('/api/export/json')
     assert export_response.status_code == 200
     backup = export_response.json
-    assert backup['version'] == 3
+    assert backup['version'] == 4
+    exported_member = next(member for member in backup['members'] if member['display_name'] == 'Capacity Planner')
+    assert exported_member['capacity'] == 100
+    assert exported_member['monthly_capacities'] == {'2026-08': 60}
 
     exported_users = {user['username']: user for user in backup['users']}
     assert set(exported_users) == {'admin', 'planner'}
@@ -147,6 +160,59 @@ def test_json_backup_round_trip_restores_users_and_requires_login(auth_client, a
         assert restored_planner.role == 'user'
         assert restored_planner.check_password('planner-pass')
         assert not restored_planner.check_password('changed-pass')
+        restored_member = Member.query.filter_by(display_name='Capacity Planner').one()
+        assert restored_member.capacity_for_month('2026-07') == 100
+        assert restored_member.capacity_for_month('2026-08') == 60
+
+
+def test_member_monthly_capacity_controls_warnings(auth_client, app):
+    member_response = auth_client.post('/api/members', json={
+        'display_name': 'Monthly Capacity Member',
+        'capacity': 100,
+    })
+    member_id = member_response.json['member_id']
+    assert member_response.json['monthly_capacities'] == {}
+
+    invalid_response = auth_client.put(
+        f'/api/members/{member_id}/capacities/2026-13',
+        json={'capacity': 60},
+    )
+    assert invalid_response.status_code == 400
+
+    update_response = auth_client.put(
+        f'/api/members/{member_id}/capacities/2026-08',
+        json={'capacity': 60},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json['monthly_capacities'] == {'2026-08': 60}
+
+    with app.app_context():
+        theme = Theme(name='Capacity Theme')
+        db.session.add(theme)
+        db.session.flush()
+        db.session.add(Allocation(
+            theme_id=theme.theme_id,
+            member_id=member_id,
+            month='2026-08',
+            allocation_rate=80,
+        ))
+        db.session.commit()
+
+    warning_response = auth_client.get('/api/allocations/warnings?from=2026-08&to=2026-08')
+    assert warning_response.status_code == 200
+    assert warning_response.json == [{
+        'member_id': member_id,
+        'display_name': 'Monthly Capacity Member',
+        'month': '2026-08',
+        'load': 80,
+        'capacity': 60,
+        'excess': 20,
+    }]
+
+    reset_response = auth_client.delete(f'/api/members/{member_id}/capacities/2026-08')
+    assert reset_response.status_code == 200
+    assert reset_response.json['monthly_capacities'] == {}
+    assert auth_client.get('/api/allocations/warnings?from=2026-08&to=2026-08').json == []
 
 
 def test_import_rejects_user_backup_without_admin_before_replacing_data(auth_client, app):
@@ -429,6 +495,7 @@ def test_insights_overview(auth_client, app):
         )
         member_a = Member(display_name='Insight Alice', department='Platform', capacity=100)
         member_b = Member(display_name='Insight Bob', department='Platform', capacity=100)
+        member_a.capacity_overrides.append(MemberCapacity(month='2024-05', capacity=60))
         db.session.add_all([theme, member_a, member_b])
         db.session.commit()
 
@@ -439,6 +506,7 @@ def test_insights_overview(auth_client, app):
             Allocation(theme_id=theme.theme_id, member_id=member_b.member_id, month='2024-06', allocation_rate=20),
         ])
         db.session.commit()
+        member_a_id = member_a.member_id
 
     response = auth_client.get('/api/insights/overview?from=2024-05&to=2024-06')
     assert response.status_code == 200
@@ -459,6 +527,9 @@ def test_insights_overview(auth_client, app):
     assert any(item['code'] == 'closed_theme_with_remaining_allocation' for item in data['health_checks'])
     assert any(group['category'] == 'resource_operations' for group in data['health_groups'])
     assert data['dashboard']['forecast'][0]['month'] == '2024-05'
+    assert data['dashboard']['forecast'][0]['capacity'] == 160
+    assert data['dashboard']['forecast'][1]['capacity'] == 200
+    assert any(item['member_id'] == member_a_id and item['capacity'] == 60 for item in data['recommendations'])
     assert data['dashboard']['department_load'][0]['department'] == 'Platform'
 
 

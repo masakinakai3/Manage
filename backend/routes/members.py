@@ -4,13 +4,22 @@
 # https://opensource.org/licenses/mit-license.php
 #
 
-"""Member CRUD routes."""
+"""Member CRUD and monthly capacity routes."""
+
+import re
 
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
-from models import db, Member
+from models import db, Member, MemberCapacity
 
 members_bp = Blueprint('members', __name__)
+MONTH_RE = re.compile(r'^\d{4}-(0[1-9]|1[0-2])$')
+
+
+def _validated_capacity(value):
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1 or value > 200:
+        raise ValueError('capacity must be an integer between 1 and 200')
+    return value
 
 
 @members_bp.route('', methods=['GET'])
@@ -72,10 +81,14 @@ def create_member():
     data = request.get_json()
     if not data or not data.get('display_name'):
         return jsonify({'error': 'display_name is required'}), 400
+    try:
+        capacity = _validated_capacity(data.get('capacity', 100))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
     member = Member(
         display_name=data['display_name'],
         department=data.get('department', ''),
-        capacity=data.get('capacity', 100),
+        capacity=capacity,
     )
     db.session.add(member)
     db.session.commit()
@@ -119,11 +132,58 @@ def update_member(member_id):
     member = db.session.get(Member, member_id)
     if not member:
         return jsonify({'error': 'Not found'}), 404
-    data = request.get_json()
+    data = request.get_json() or {}
+    if 'capacity' in data:
+        try:
+            data['capacity'] = _validated_capacity(data['capacity'])
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
     for field in ('display_name', 'department', 'capacity', 'is_active'):
         if field in data:
             setattr(member, field, data[field])
     db.session.commit()
+    return jsonify(member.to_dict())
+
+
+@members_bp.route('/<int:member_id>/capacities/<month>', methods=['PUT'])
+@login_required
+def update_member_capacity(member_id, month):
+    """Create or replace a member's capacity override for one month."""
+    member = db.session.get(Member, member_id)
+    if not member:
+        return jsonify({'error': 'Not found'}), 404
+    if not MONTH_RE.fullmatch(month):
+        return jsonify({'error': 'month must use YYYY-MM format'}), 400
+
+    data = request.get_json() or {}
+    try:
+        capacity = _validated_capacity(data.get('capacity'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    override = MemberCapacity.query.filter_by(member_id=member_id, month=month).first()
+    if override:
+        override.capacity = capacity
+    else:
+        db.session.add(MemberCapacity(member_id=member_id, month=month, capacity=capacity))
+    db.session.commit()
+    return jsonify(member.to_dict())
+
+
+@members_bp.route('/<int:member_id>/capacities/<month>', methods=['DELETE'])
+@login_required
+def delete_member_capacity(member_id, month):
+    """Remove a monthly override so the member's normal capacity applies again."""
+    member = db.session.get(Member, member_id)
+    if not member:
+        return jsonify({'error': 'Not found'}), 404
+    if not MONTH_RE.fullmatch(month):
+        return jsonify({'error': 'month must use YYYY-MM format'}), 400
+
+    override = MemberCapacity.query.filter_by(member_id=member_id, month=month).first()
+    if override:
+        db.session.delete(override)
+        db.session.commit()
     return jsonify(member.to_dict())
 
 

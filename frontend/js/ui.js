@@ -242,7 +242,7 @@ export function showPromptDialog({
     overlay.hidden = false;
 
     return new Promise((resolve) => {
-        activeDialogResolver = (accepted) => resolve(accepted ? input.value.trim() : null);
+        activeDialogResolver = (accepted, submittedValue = '') => resolve(accepted ? submittedValue.trim() : null);
         cancelBtn.onclick = () => resolveDialog(false);
         confirmBtn.onclick = () => resolveDialog(true);
         input.onkeydown = (event) => {
@@ -272,6 +272,7 @@ function restoreFocus() {
 function resolveDialog(result) {
     const overlay = document.getElementById('dialog-overlay');
     const input = document.getElementById('dialog-input');
+    const submittedValue = input?.value || '';
     const resolver = activeDialogResolver;
     activeDialogResolver = null;
 
@@ -283,5 +284,5 @@ function resolveDialog(result) {
     }
 
     restoreFocus();
-    if (resolver) resolver(result);
+    if (resolver) resolver(result, submittedValue);
 }

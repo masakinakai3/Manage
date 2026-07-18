@@ -6,6 +6,7 @@ import { formatError, setBusyState, setSaveState, showConfirmDialog, showPromptD
 import { closeCellEditor, isCellEditorOpen, openCellEditor } from './gantt-editor.js';
 import { initGanttDnD } from './gantt-dnd.js';
 import { initGanttThemeReorder } from './gantt-theme-reorder.js';
+import { getMemberCapacity } from '../member/member-capacity.js';
 import { toPng } from 'html-to-image';
 
 const STATUS_LABELS = { planning: '計画中', active: '進行中', stop: '停止', completed: '完了', cancelled: '中止' };
@@ -927,7 +928,7 @@ function renderDetailPanelV2() {
     const member = allMembers.find((item) => item.member_id === selectedCell.memberId);
     const allocation = allAllocations.find((item) => item.theme_id === selectedCell.themeId && item.member_id === selectedCell.memberId && item.month === selectedCell.month);
     const totalLoad = memberMonthTotal(selectedCell.memberId, selectedCell.month);
-    const capacity = member?.capacity || 100;
+    const capacity = getMemberCapacity(member, selectedCell.month);
     const isWarning = totalLoad > capacity;
 
     empty.hidden = true;
@@ -1404,7 +1405,8 @@ function renderMemberCellButton(button, rate, memberId, month) {
     const safeRate = hasRate ? Math.max(0, Math.min(100, Number.parseInt(rate, 10) || 0)) : 0;
     const member = allMembers.find((item) => item.member_id === memberId);
     const totalRate = memberMonthTotal(memberId, month);
-    const hasWarning = totalRate > (member?.capacity || 100);
+    const capacity = getMemberCapacity(member, month);
+    const hasWarning = totalRate > capacity;
     button.className = `gantt-cell ${rateClass(safeRate)}${hasRate && safeRate === 0 ? ' cell-explicit-zero' : ''}${hasRate ? '' : ' cell-unset'}${hasWarning ? ' capacity-warning' : ''}`;
     button.innerHTML = `${hasRate ? `${safeRate}%` : '<span class="gantt-empty-mark" aria-hidden="true">-</span>'}${diffChip(safeRate, month, Number.parseInt(button.dataset.theme, 10), memberId)}${hasWarning ? '<span class="warning-icon">!</span>' : ''}`;
     syncSelectionStyles();
@@ -1417,14 +1419,15 @@ function refreshMemberMonthState(memberId, month) {
     memberLoads[memberId][month] = totalRate;
 
     warnings = warnings.filter((item) => !(item.member_id === memberId && item.month === month));
-    if (totalRate > (member?.capacity || 100)) {
+    const capacity = getMemberCapacity(member, month);
+    if (totalRate > capacity) {
         warnings.push({
             member_id: memberId,
             display_name: member?.display_name || '',
             month,
             load: totalRate,
-            capacity: member?.capacity || 100,
-            excess: totalRate - (member?.capacity || 100),
+            capacity,
+            excess: totalRate - capacity,
         });
     }
 
@@ -1945,7 +1948,7 @@ async function showAssignMemberModal(themeId) {
                     <input type="checkbox" value="${member.member_id}" ${isAssigned ? 'checked' : ''}>
                     <div>
                         <div>${escapeHtml(member.display_name)}${isAssigned ? ' <span class="member-assigned-badge">参加中</span>' : ''}</div>
-                        <div class="summary-subtext">${member.department || '部署未設定'} / 上限 ${member.capacity}%</div>
+                        <div class="summary-subtext">${member.department || '部署未設定'} / 通常上限 ${member.capacity}%</div>
                     </div>
                 </label>`;
             }).join('')}
@@ -2706,7 +2709,7 @@ function renderTable(months) {
                 ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg></span>`
                 : '';
             rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">上限 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+            members.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">通常 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
 

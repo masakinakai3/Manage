@@ -9,7 +9,8 @@ import { HistoryManager, refreshGantt } from '../gantt/gantt-renderer.js';
 import { allocations, members as membersApi, themes as themesApi } from '../api.js';
 import { currentMonth, getVisibleMonths, formatMonthHeader, addMonths, aggregateRate, shortenMonth } from '../utils/date-utils.js';
 import { getPresetConfig, loadViewState, subscribeViewState, updateViewState } from '../shared-state.js';
-import { formatError, setBusyState, setSaveState, showToast } from '../ui.js';
+import { formatError, setBusyState, setSaveState, showPromptDialog, showToast } from '../ui.js';
+import { getAggregatedMemberCapacity, getMemberCapacity, hasMonthlyCapacityOverride } from './member-capacity.js';
 
 let allMembers = [];
 let allThemes = [];
@@ -79,6 +80,48 @@ async function commitMemberCellChange(themeId, memberId, month, allocationRate) 
     }
 }
 
+async function editMonthlyCapacity(member, month) {
+    if (scale !== 1) {
+        showToast('月別キャパシティは 1M 表示で編集してください。', 'info');
+        return;
+    }
+
+    const currentCapacity = getMemberCapacity(member, month);
+    const value = await showPromptDialog({
+        title: `${member.display_name} / ${shortenMonth(month)} のキャパシティ`,
+        message: `1〜200の整数で入力してください。空欄にすると通常月の上限 ${member.capacity}% に戻します。`,
+        defaultValue: String(currentCapacity),
+        confirmText: '保存',
+    });
+    if (value === null) return;
+
+    const capacity = Number.parseInt(value, 10);
+    const isIntegerText = /^\d+$/.test(value);
+    const shouldReset = value === '';
+    if (!shouldReset && (!isIntegerText || !Number.isInteger(capacity) || capacity < 1 || capacity > 200)) {
+        showToast('キャパシティは1〜200の整数で入力してください。', 'error');
+        return;
+    }
+
+    try {
+        setBusyState(true, '月別キャパシティを保存しています...');
+        setSaveState('saving', '月別キャパシティを保存しています');
+        if (shouldReset) {
+            await membersApi.deleteMonthlyCapacity(member.member_id, month);
+        } else {
+            await membersApi.updateMonthlyCapacity(member.member_id, month, capacity);
+        }
+        await Promise.all([refreshGantt(), refreshMemberView()]);
+        setSaveState('saved', '月別キャパシティを保存しました');
+        showToast(shouldReset ? '通常月のキャパシティに戻しました。' : '月別キャパシティを保存しました。', 'success');
+    } catch (error) {
+        setSaveState('error', '月別キャパシティの保存に失敗しました');
+        showToast(`月別キャパシティの保存に失敗しました: ${formatError(error)}`, 'error');
+    } finally {
+        setBusyState(false);
+    }
+}
+
 export async function initMemberView() {
     const state = loadViewState();
     startMonth = state.startMonth;
@@ -130,7 +173,7 @@ export async function refreshMemberView() {
         lastWarnings = warnings;
         lastVisibleMonths = months;
         renderSummary(memberLoads, warnings);
-        renderTable(months, memberLoads, warnings, allocationsList);
+        renderTable(months, memberLoads, allocationsList);
     } catch (error) {
         console.error('Failed to load member view:', error);
         showToast(`メンバー負荷の読み込みに失敗しました: ${formatError(error)}`, 'error');
@@ -200,7 +243,7 @@ function setupControls() {
                 // The view remains usable when browser storage is unavailable.
             }
             applyMemberDensity();
-            if (lastVisibleMonths.length > 0) renderTable(lastVisibleMonths, lastMemberLoads, lastWarnings, lastAllocations);
+            if (lastVisibleMonths.length > 0) renderTable(lastVisibleMonths, lastMemberLoads, lastAllocations);
         });
     }
     applyMemberDensity();
@@ -268,15 +311,13 @@ function renderSummary(memberLoads, warnings) {
     let averageLoad = 0;
 
     allMembers.forEach((member) => {
-        const loads = Object.values(memberLoads[member.member_id] || {});
-        const maxLoad = loads.length ? Math.max(...loads) : 0;
-        const avg = loads.length ? Math.round(loads.reduce((sum, value) => sum + value, 0) / loads.length) : 0;
-        averageLoad += avg;
+        const stats = getMemberPeriodStats(member, memberLoads[member.member_id] || {});
+        averageLoad += stats.averageLoad;
 
-        if (maxLoad > member.capacity) overloadedMembers += 1;
-        if (maxLoad === 0) {
+        if (stats.overloaded) overloadedMembers += 1;
+        if (!stats.hasLoad) {
             unassignedMembers += 1;
-        } else if (maxLoad < Math.round(member.capacity * 0.5)) {
+        } else if (stats.maxUtilization < 0.5) {
             slackMembers += 1;
         }
     });
@@ -315,17 +356,16 @@ function renderSummary(memberLoads, warnings) {
             const next = button.dataset.memberFilter;
             memberDecisionFilter = memberDecisionFilter === next ? 'all' : next;
             renderSummary(lastMemberLoads, lastWarnings);
-            renderTable(lastVisibleMonths, lastMemberLoads, lastWarnings, lastAllocations);
+            renderTable(lastVisibleMonths, lastMemberLoads, lastAllocations);
         });
     });
 }
 
-function renderTable(months, memberLoads, warnings, allocationsList) {
+function renderTable(months, memberLoads, allocationsList) {
     renderHeader(months);
 
     const tbody = document.getElementById('member-load-tbody');
     const current = currentMonth();
-    const warningSet = new Set(warnings.map((warning) => `${warning.member_id}-${warning.month}`));
     const memberThemeLoads = buildMemberThemeLoads(allocationsList);
 
     const filteredMembers = allMembers.filter((member) => (
@@ -346,24 +386,26 @@ function renderTable(months, memberLoads, warnings, allocationsList) {
         html += `<td><div class="member-row-header">`;
         html += hasThemes ? `<button class="toggle-btn${isExpanded ? ' expanded' : ''}" data-toggle="${member.member_id}" type="button" aria-expanded="${isExpanded}" aria-label="${escapeHtml(member.display_name)}のテーマ内訳を展開"></button>` : '<span class="toggle-placeholder" aria-hidden="true"></span>';
         html += `<div class="member-identity"><strong>${escapeHtml(member.display_name)}</strong><span class="member-department${member.department ? '' : ' missing'}">${escapeHtml(member.department || '部署未設定')}</span></div>`;
-        html += `<span class="member-capacity" title="月間稼働上限">上限 ${member.capacity}%</span>`;
+        html += `<span class="member-capacity" title="月別指定がない月に適用">通常 ${member.capacity}%</span>`;
         html += `</div></td>`;
 
         months.forEach((month) => {
             const load = aggregateRate(loads, month, scale);
-            const isOver = warningSet.has(`${member.member_id}-${month}`);
-            const className = getLoadClass(load, member.capacity, isOver);
-            const { barHtml, details } = buildStackedBar(month, memberThemes, member.capacity);
+            const capacity = getAggregatedMemberCapacity(member, month, scale);
+            const isOver = load > capacity;
+            const className = getLoadClass(load, capacity, isOver);
+            const { barHtml, details } = buildStackedBar(month, memberThemes, capacity);
             const detailsJson = details.length > 0 ? encodeURIComponent(JSON.stringify(details)) : '';
 
-            const excess = Math.max(0, load - member.capacity);
-            const stateLabel = load === 0 ? '未割当' : (isOver ? `上限超過 ${excess}%` : `上限 ${member.capacity}%`);
+            const excess = Math.max(0, load - capacity);
+            const stateLabel = load === 0 ? '未割当' : (isOver ? `上限超過 ${excess}%` : `上限 ${capacity}%`);
             html += `<td class="${month === current ? 'month-current' : ''}${load === 0 ? ' member-cell-empty' : ''}" data-member-month="${month}" data-member-cell="${member.member_id}-${month}" data-member-id="${member.member_id}" data-month="${month}" data-details="${detailsJson}">`;
             if (load > 0) {
                 html += renderMemberSummaryButton(member, month, load, stateLabel, className, barHtml, isOver, excess);
             } else {
                 html += '<span class="member-empty-mark" aria-hidden="true">—</span>';
             }
+            html += renderCapacityButton(member, month, capacity);
             html += `</td>`;
         });
 
@@ -465,12 +507,27 @@ function matchesMemberSearch(member, memberThemes) {
 
 function matchesMemberDecisionFilter(member, loadsByMonth) {
     if (memberDecisionFilter === 'all') return true;
-    const loads = Object.values(loadsByMonth || {});
-    const maxLoad = loads.length ? Math.max(...loads) : 0;
-    if (memberDecisionFilter === 'overloaded') return maxLoad > member.capacity;
-    if (memberDecisionFilter === 'unassigned') return maxLoad === 0;
-    if (memberDecisionFilter === 'slack') return maxLoad > 0 && maxLoad < Math.round(member.capacity * 0.5);
+    const stats = getMemberPeriodStats(member, loadsByMonth);
+    if (memberDecisionFilter === 'overloaded') return stats.overloaded;
+    if (memberDecisionFilter === 'unassigned') return !stats.hasLoad;
+    if (memberDecisionFilter === 'slack') return stats.hasLoad && stats.maxUtilization < 0.5;
     return true;
+}
+
+function getMemberPeriodStats(member, loadsByMonth) {
+    const periods = lastVisibleMonths.length > 0 ? lastVisibleMonths : Object.keys(loadsByMonth || {});
+    const rows = periods.map((month) => {
+        const load = aggregateRate(loadsByMonth || {}, month, scale);
+        const capacity = getAggregatedMemberCapacity(member, month, scale);
+        return { load, capacity, utilization: capacity > 0 ? load / capacity : 0 };
+    });
+    const loads = rows.map((row) => row.load);
+    return {
+        hasLoad: loads.some((load) => load > 0),
+        overloaded: rows.some((row) => row.load > row.capacity),
+        maxUtilization: Math.max(0, ...rows.map((row) => row.utilization)),
+        averageLoad: loads.length ? Math.round(loads.reduce((sum, load) => sum + load, 0) / loads.length) : 0,
+    };
 }
 
 function syncMemberSearchControls(filteredCount = allMembers.length) {
@@ -567,6 +624,14 @@ function bindTableInteractions(tbody) {
         });
     });
 
+    tbody.querySelectorAll('[data-edit-member-capacity]').forEach((button) => {
+        button.addEventListener('click', (event) => {
+            event.stopPropagation();
+            const member = allMembers.find((item) => item.member_id === Number.parseInt(button.dataset.editMemberCapacity, 10));
+            if (member) editMonthlyCapacity(member, button.dataset.month);
+        });
+    });
+
     tbody.querySelectorAll('.member-theme-cell').forEach((cell) => {
         cell.addEventListener('click', () => {
             if (scale !== 1) return;
@@ -660,19 +725,30 @@ function updateMemberSummaryCell(memberId, month) {
     const total = Object.keys(memberThemes).reduce((sum, themeId) => {
         return sum + aggregateRate(memberThemes[Number.parseInt(themeId, 10)], month, 1);
     }, 0);
-    const className = getLoadClass(total, member.capacity, total > member.capacity);
-    const { barHtml, details } = buildStackedBar(month, memberThemes, member.capacity);
+    const capacity = getMemberCapacity(member, month);
+    const isOver = total > capacity;
+    const className = getLoadClass(total, capacity, isOver);
+    const { barHtml, details } = buildStackedBar(month, memberThemes, capacity);
 
     cell.dataset.details = details.length > 0 ? encodeURIComponent(JSON.stringify(details)) : '';
-    cell.innerHTML = total > 0
-        ? renderMemberSummaryButton(member, month, total, total > member.capacity ? `上限超過 ${total - member.capacity}%` : `上限 ${member.capacity}%`, className, barHtml, total > member.capacity, Math.max(0, total - member.capacity))
-        : '<span class="member-empty-mark" aria-hidden="true">—</span>';
+    cell.innerHTML = `${total > 0
+        ? renderMemberSummaryButton(member, month, total, isOver ? `上限超過 ${total - capacity}%` : `上限 ${capacity}%`, className, barHtml, isOver, Math.max(0, total - capacity))
+        : '<span class="member-empty-mark" aria-hidden="true">—</span>'}${renderCapacityButton(member, month, capacity)}`;
     bindMemberDetailCell(cell);
 }
 
 function renderMemberSummaryButton(member, month, load, stateLabel, className, barHtml, isOver, excess) {
     const label = `${member.display_name} ${shortenMonth(month)} ${load}% ${stateLabel}。テーマ別内訳を表示`;
     return `<button class="member-detail-button" type="button" aria-label="${escapeHtml(label)}" aria-haspopup="dialog" aria-expanded="false" data-overloaded="${isOver}" data-member-cell-key="${member.member_id}-${month}"><span class="member-cell-inner"><span class="load-cell ${className}">${load}%${isOver ? `<small>超過 +${excess}%</small>` : ''}</span>${barHtml}<span class="member-detail-button-label">内訳</span></span></button>`;
+}
+
+function renderCapacityButton(member, month, capacity) {
+    const overridden = scale === 1 && hasMonthlyCapacityOverride(member, month);
+    const label = scale === 1 ? `上限 ${capacity}%${overridden ? '・月別' : ''}` : `平均上限 ${capacity}%`;
+    const title = scale === 1
+        ? `${shortenMonth(month)}のキャパシティを編集${overridden ? '（月別指定あり）' : ''}`
+        : '月別キャパシティの編集は1M表示で行えます';
+    return `<button class="member-capacity-button${overridden ? ' is-overridden' : ''}" type="button" data-edit-member-capacity="${member.member_id}" data-month="${month}" aria-label="${escapeHtml(`${member.display_name} ${title}`)}" title="${escapeHtml(title)}"${scale === 1 ? '' : ' disabled'}>${label}</button>`;
 }
 
 function moveEditorFocus(currentCell, direction) {
@@ -810,8 +886,16 @@ async function exportCSV() {
         const themes = memberThemeLoads[member.member_id] || {};
         const themeIds = Object.keys(themes).map((id) => Number.parseInt(id, 10));
 
+        csvContent += [
+            member.display_name,
+            member.department || '',
+            'キャパシティ',
+            '',
+            '',
+            ...months.map((month) => getAggregatedMemberCapacity(member, month, scale)),
+        ].join(',') + '\n';
+
         if (themeIds.length === 0) {
-            csvContent += [member.display_name, member.department || '', '', '', '', ...months.map(() => '')].join(',') + '\n';
             return;
         }
 
@@ -866,7 +950,8 @@ function showDetailPopup(event, member, month, details, options = {}) {
     closeMemberDetailPopups();
 
     const total = details.reduce((sum, detail) => sum + detail.rate, 0);
-    const isOver = total > member.capacity;
+    const capacity = getAggregatedMemberCapacity(member, month, scale);
+    const isOver = total > capacity;
     const pinned = Boolean(options.pinned);
     const anchor = options.anchor || null;
 
@@ -887,7 +972,7 @@ function showDetailPopup(event, member, month, details, options = {}) {
         `).join('')}
         <div class="detail-total ${isOver ? 'over' : ''}">
             <span>合計</span>
-            <span>${total}%${isOver ? ` (+${total - member.capacity}% 超過)` : ''}</span>
+            <span>${total}% / 上限 ${capacity}%${isOver ? ` (+${total - capacity}% 超過)` : ''}</span>
         </div>
     `;
     if (anchor) {

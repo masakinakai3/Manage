@@ -73,17 +73,20 @@ def _member_maps(members):
 
 
 def _build_capacity_maps(members, months):
-    total_capacity = sum(member.capacity for member in members if member.is_active)
-    monthly_capacity = {month: total_capacity for month in months}
+    monthly_capacity = {
+        month: sum(member.capacity_for_month(month) for member in members if member.is_active)
+        for month in months
+    }
     department_capacity = defaultdict(dict)
 
     departments = sorted({(member.department or "未設定") for member in members if member.is_active})
     for department in departments:
-        department_total = sum(
-            member.capacity for member in members if member.is_active and (member.department or "未設定") == department
-        )
         for month in months:
-            department_capacity[department][month] = department_total
+            department_capacity[department][month] = sum(
+                member.capacity_for_month(month)
+                for member in members
+                if member.is_active and (member.department or "未設定") == department
+            )
 
     return monthly_capacity, dict(department_capacity)
 
@@ -315,14 +318,17 @@ def _build_gap_summary(themes, members, allocations, forecast_context):
     total_shortage = sum(item["excess"] for item in warnings)
     total_spare = 0
     underutilized_members = 0
+    forecast_months = [item["month"] for item in monthly_forecast]
     for member in active_members:
         loads = member_loads.get(member.member_id, {})
-        max_load = max(loads.values(), default=0)
-        if max_load <= max(30, round(member.capacity * 0.5)):
+        if all(
+            loads.get(month, 0) <= max(30, round(member.capacity_for_month(month) * 0.5))
+            for month in forecast_months
+        ):
             underutilized_members += 1
-        for month in [item["month"] for item in monthly_forecast]:
+        for month in forecast_months:
             load = loads.get(month, 0)
-            total_spare += max(member.capacity - load, 0)
+            total_spare += max(member.capacity_for_month(month) - load, 0)
 
     bottleneck_departments = 0
     for _, rows in forecast_context["department_monthly"].items():
@@ -362,15 +368,27 @@ def _build_department_load(members, forecast_context):
 
     for member in active_members:
         department = member.department or "未設定"
-        loads = list((member_loads.get(member.member_id) or {}).values())
+        loads_by_month = member_loads.get(member.member_id) or {}
+        loads = list(loads_by_month.values())
         avg_load = round(sum(loads) / len(loads)) if loads else 0
         peak_load = max(loads, default=0)
+        peak_month = max(loads_by_month, key=loads_by_month.get) if loads_by_month else None
+        peak_capacity = member.capacity_for_month(peak_month) if peak_month else member.capacity
+        forecast_months = [row["month"] for row in forecast_context["monthly"]]
         by_department[department].append({
             "member_id": member.member_id,
             "display_name": member.display_name,
-            "capacity": member.capacity,
+            "capacity": peak_capacity,
             "avg_load": avg_load,
             "peak_load": peak_load,
+            "overloaded": any(
+                loads_by_month.get(month, 0) > member.capacity_for_month(month)
+                for month in forecast_months
+            ),
+            "underutilized": all(
+                loads_by_month.get(month, 0) <= max(30, round(member.capacity_for_month(month) * 0.5))
+                for month in forecast_months
+            ),
         })
 
     results = []
@@ -381,10 +399,8 @@ def _build_department_load(members, forecast_context):
         avg_department_load = round(sum(avg_loads) / len(avg_loads)) if avg_loads else 0
         peak_department_load = max(peak_loads, default=0)
         spread = peak_department_load - min(peak_loads, default=0)
-        overloaded_count = len([item for item in members_in_department if item["peak_load"] > item["capacity"]])
-        underutilized_count = len([
-            item for item in members_in_department if item["peak_load"] <= max(30, round(item["capacity"] * 0.5))
-        ])
+        overloaded_count = len([item for item in members_in_department if item["overloaded"]])
+        underutilized_count = len([item for item in members_in_department if item["underutilized"]])
         shortage_total = sum(row["shortage"] for row in forecast_context["department_monthly"].get(department, []))
         spare_total = sum(row["spare"] for row in forecast_context["department_monthly"].get(department, []))
         results.append({
@@ -423,7 +439,7 @@ def _build_impact_themes(themes, members, allocations, forecast_context):
             if not member or not member.is_active:
                 continue
             month_load = (member_loads.get(row.member_id) or {}).get(row.month, 0)
-            member_excess = max(month_load - member.capacity, 0)
+            member_excess = max(month_load - member.capacity_for_month(row.month), 0)
             if month_load > 0 and member_excess > 0:
                 overload_contribution += round((row.allocation_rate / month_load) * member_excess)
 
@@ -605,7 +621,8 @@ def _build_recommendations(themes, members, allocations, forecast_context):
                 if member.member_id == member_id:
                     continue
                 current_load = (member_loads.get(member.member_id) or {}).get(month, 0)
-                spare = member.capacity - current_load
+                capacity = member.capacity_for_month(month)
+                spare = capacity - current_load
                 if spare <= 0:
                     continue
                 feasible_shift = min(proposed_shift, spare)
@@ -617,7 +634,7 @@ def _build_recommendations(themes, members, allocations, forecast_context):
                     "member_id": member.member_id,
                     "display_name": member.display_name,
                     "department": member.department or "",
-                    "capacity": member.capacity,
+                    "capacity": capacity,
                     "current_load": current_load,
                     "spare_capacity": spare,
                     "feasible_shift": feasible_shift,
@@ -717,7 +734,7 @@ def _build_assignment_candidate(
 
         for member in active_members:
             current_load = (member_loads.get(member.member_id) or {}).get(month, 0)
-            spare = max(member.capacity - current_load, 0)
+            spare = max(member.capacity_for_month(month) - current_load, 0)
             if spare <= 0:
                 continue
             same_department = bool(preferred_department and member.department == preferred_department)
@@ -824,7 +841,7 @@ def _build_shift_candidate(
                 continue
 
             next_load = (member_loads.get(member.member_id) or {}).get(next_month, 0)
-            movable_points = max(member.capacity - next_load, 0)
+            movable_points = max(member.capacity_for_month(next_month) - next_load, 0)
             feasible_shift = min(allocation.allocation_rate, movable_points)
             if feasible_shift <= 0:
                 continue

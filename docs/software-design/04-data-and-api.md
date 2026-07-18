@@ -14,6 +14,7 @@
 
 | モデル | 用途 |
 |---|---|
+| `MemberCapacity` | `member_id + month` ごとのキャパシティ上書き |
 | `ThemeMilestone` | テーマ内の節目管理。`is_completed` で完了状態を保持 |
 | `SavedView` | 表示状態の保存。`view` で対象画面を識別、`created_at` および `updated_at` で日時を追跡 |
 | `Snapshot` | 比較用状態保存 |
@@ -35,6 +36,7 @@
 | `/api/themes/{id}/members/{member_id}` | DELETE | テーマからメンバー解除 |
 | `/api/members` | GET/POST | メンバー一覧・作成 |
 | `/api/members/{id}` | PUT/DELETE | メンバー更新・削除 |
+| `/api/members/{id}/capacities/{month}` | PUT/DELETE | 月別キャパシティの設定・通常値への復帰 |
 | `/api/allocations` | GET | 配員一覧 |
 | `/api/allocations/bulk` | PUT | 配員一括更新 |
 | `/api/allocations/single` | PUT | セル単位更新 |
@@ -91,7 +93,7 @@
 | `exported_at` | エクスポート日時 |
 | `users` | ユーザー一覧（ID、ユーザー名、権限、パスワードハッシュ。平文パスワードは含まない） |
 | `themes` | テーマ一覧（`milestones` 配列と `dev_complete_months` を含む） |
-| `members` | メンバー一覧 |
+| `members` | メンバー一覧（通常値 `capacity` と月別上書き `monthly_capacities` を含む） |
 | `allocations` | 配員一覧 |
 | `theme_members` | テーマ-メンバー紐付け |
 
@@ -100,7 +102,7 @@
 - `export/json` 形式の JSON が前提
 - 復元は全置換
 - 既存データは削除される
-- version 3の `users` がある場合はユーザーもIDを維持して全置換し、管理者が1人以上必要。完了後は実行中セッションをログアウトする
+- version 3以降の `users` がある場合はユーザーもIDを維持して全置換し、管理者が1人以上必要。完了後は実行中セッションをログアウトする
 - `users` がない旧形式では既存ユーザーを保持する
 - 孤立した allocation はスキップされる
 
@@ -110,5 +112,6 @@
 |---|---|
 | `Allocation` の一意性 | 1 テーマ × 1 メンバー × 1 月 は 1 行のみ |
 | 月表現 | `YYYY-MM` 文字列で統一 |
-| capacity | 基本は 100 をフル稼働基準として扱う |
+| capacity | `Member.capacity` は通常月の値で既定100%。`MemberCapacity` がある月はその値を優先する |
+| `MemberCapacity` の一意性 | 1 メンバー × 1 月 は 1 行のみ |
 | inactive member | 一部集計や警告では除外される |

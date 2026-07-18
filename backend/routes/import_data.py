@@ -9,7 +9,16 @@
 import json
 from flask import Blueprint, request, jsonify
 from flask_login import current_user, logout_user
-from models import db, User, Theme, ThemeMilestone, Member, Allocation, theme_members as theme_members_table
+from models import (
+    db,
+    User,
+    Theme,
+    ThemeMilestone,
+    Member,
+    MemberCapacity,
+    Allocation,
+    theme_members as theme_members_table,
+)
 from authz import admin_required
 from routes.themes import _normalize_dev_rank
 
@@ -123,6 +132,7 @@ def import_json():
         # --- Delete existing data inside a transaction ---
         db.session.execute(theme_members_table.delete())
         Allocation.query.delete()
+        MemberCapacity.query.delete()
         ThemeMilestone.query.delete()
         Theme.query.delete()
         Member.query.delete()
@@ -148,6 +158,23 @@ def import_json():
             )
             db.session.add(new_member)
             db.session.flush()  # get new PK
+            monthly_capacities = m.get('monthly_capacities') or {}
+            if not isinstance(monthly_capacities, dict):
+                raise ValueError('monthly_capacities must be an object')
+            for month, capacity in monthly_capacities.items():
+                if (
+                    not isinstance(month, str)
+                    or len(month) != 7
+                    or month[4] != '-'
+                    or not month[:4].isdigit()
+                    or not month[5:].isdigit()
+                    or int(month[5:]) < 1
+                    or int(month[5:]) > 12
+                ):
+                    raise ValueError(f'Invalid member capacity month: {month}')
+                if isinstance(capacity, bool) or not isinstance(capacity, int) or capacity < 1 or capacity > 200:
+                    raise ValueError(f'Invalid capacity for {month}: {capacity}')
+                new_member.capacity_overrides.append(MemberCapacity(month=month, capacity=capacity))
             member_map[m['member_id']] = new_member
 
         # --- Re-create themes, track old_id -> new Theme object ---

@@ -107,6 +107,12 @@ export const members = {
     update: (id, data) => request(`/members/${id}`, {
         method: 'PUT', body: JSON.stringify(data),
     }),
+    updateMonthlyCapacity: (id, month, capacity) => request(`/members/${id}/capacities/${month}`, {
+        method: 'PUT', body: JSON.stringify({ capacity }),
+    }),
+    deleteMonthlyCapacity: (id, month) => request(`/members/${id}/capacities/${month}`, {
+        method: 'DELETE',
+    }),
     delete: (id) => request(`/members/${id}`, { method: 'DELETE' }),
 };
 

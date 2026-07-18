@@ -318,7 +318,7 @@ def export_json():
             theme_members.append({'theme_id': theme.theme_id, 'member_id': member.member_id})
 
     payload = {
-        'version': 3,
+        'version': 4,
         'exported_at': db.session.execute(db.select(db.func.datetime('now'))).scalar(),
         'users': users,
         'themes': themes,

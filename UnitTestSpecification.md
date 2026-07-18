@@ -49,7 +49,7 @@ npm run build
 | ファイル | 保護する主な動作 |
 |---|---|
 | `tests/conftest.py` | test app、in-memory DB、admin/user client、test isolation |
-| `tests/test_models.py` | password hash、Member/Theme default、Allocation unique constraint |
+| `tests/test_models.py` | password hash、Member/Theme default、月別capacity fallback、Allocation unique constraint |
 | `tests/test_priority.py` | Theme priorityの明示値とdefault |
 | `tests/test_api.py` | login、protected/admin-only API、user管理、Theme・milestone、Allocation、Insights、SavedView、Import |
 
@@ -60,6 +60,7 @@ npm run build
 - Themeの `dev_rank` 空値、複数の `dev_complete_months`、milestone配列を保持する。
 - JSON Importは `dev_rank` と完了状態つき `dev_complete_months` を保持する。
 - JSON Export / ImportはユーザーID・ユーザー名・権限・パスワードハッシュを往復し、平文パスワードを出力せず、管理者不在のバックアップをデータ置換前に拒否する。
+- 月別キャパシティはAPIで設定・解除でき、警告、Insights、JSON Export / Importへ同じ値が反映される。
 - ユーザーを含むJSON Importは実行中セッションをログアウトし、ユーザーを含まない旧形式では既存ユーザーとセッションを保持する。
 - bulk/single Allocationは0を実レコードとして保持し、`null` で削除する。
 - Insightsはsummary、health checks、recommendations、dashboard、project ribbonを返す。
@@ -72,7 +73,7 @@ npm run build
 | ファイル | 保護する主な動作 |
 |---|---|
 | `frontend/tests/api.test.js` | GET no-storeとwrite requestのcache挙動 |
-| `frontend/tests/ui.test.js` | APIエラー日本語化、データ／保存状態の分離、toast表示とclose名、入力中Escape |
+| `frontend/tests/ui.test.js` | APIエラー日本語化、データ／保存状態の分離、toast表示とclose名、prompt値保持、入力中Escape |
 | `frontend/tests/sidebar.test.js` | 狭幅ドロワーのARIA、Escape、背景click、focus trap、幅変更 |
 | `frontend/tests/shared-state.test.js` | 四半期、6/12/24か月プリセット |
 | `frontend/tests/date-utils.test.js` | 月範囲、加減算、scale見出し、配賦集約 |
@@ -82,7 +83,7 @@ npm run build
 | `frontend/tests/gantt-dnd.test.js` | 同一Theme内移動と異Theme拒否 |
 | `frontend/tests/gantt-theme-reorder.test.js` | Theme行のdrop位置と自己drop拒否 |
 | `frontend/tests/gantt-renderer.test.js` | history、selection、期間移動、export、milestone、filter、完了／中止表示、nested row、狭幅の単一編集面とtheme navigator |
-| `frontend/tests/member-view.test.js` | 集約、milestone、月highlight、summary filter、expand、edit/history、内訳dialog |
+| `frontend/tests/member-view.test.js` | 集約、milestone、月highlight、summary filter、expand、edit/history、内訳dialog、月別capacity編集 |
 | `frontend/tests/insights-view.test.js` | Project Ribbonのlabel・月button・欠損と明示0の区別 |
 
 重要なUI回帰:
@@ -94,6 +95,7 @@ npm run build
 - 720px境界を越えるresizeでGanttのモバイルtheme navigatorを生成・破棄する。
 - CSV/XLSX datasetはvisible period、filter、label、row shapeを守る。
 - Member Loadのexpand controlとセル内訳buttonはaccessibleで、不要な上部click detail panelを生成しない。
+- Member Loadの1M表示は月別capacityを編集でき、上書き値を負荷超過判定へ使う。
 - Member Loadの狭幅表示条件は`aria-expanded`と表示状態を同期する。
 - データ取得状態と保存状態を分離し、500/offline時に`fresh`を表示せず、読込失敗で保存状態を上書きしない。
 - CSSの色リテラルと13px未満の文字はlintで拒否する。

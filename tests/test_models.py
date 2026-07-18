@@ -4,7 +4,7 @@
 # https://opensource.org/licenses/mit-license.php
 #
 
-from models import User, Member, Theme, Allocation
+from models import User, Member, MemberCapacity, Theme, Allocation
 
 def test_password_hashing():
     """Test User password hashing and verification."""
@@ -25,6 +25,20 @@ def test_member_creation(app):
         assert m.department == 'Dev'
         assert m.capacity == 80
         assert m.is_active is True  # Default value
+
+
+def test_member_monthly_capacity_falls_back_to_normal_capacity(app):
+    with app.app_context():
+        from models import db
+
+        member = Member(display_name='Capacity Member', capacity=100)
+        member.capacity_overrides.append(MemberCapacity(month='2026-08', capacity=60))
+        db.session.add(member)
+        db.session.commit()
+
+        assert member.capacity_for_month('2026-07') == 100
+        assert member.capacity_for_month('2026-08') == 60
+        assert member.to_dict()['monthly_capacities'] == {'2026-08': 60}
 
 def test_theme_creation(app):
     """Test Theme creation."""
