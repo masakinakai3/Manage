@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const openCellEditor = vi.fn();
 const closeCellEditor = vi.fn();
@@ -146,11 +148,22 @@ function renderBaseDom() {
             <button class="scale-btn" data-scale="3" type="button">3</button>
         </div>
         <div id="view-gantt" class="view active"></div>
+        <div id="gantt-controls-body">
+            <div class="gantt-export-controls">
+                <button id="gantt-export-csv" type="button"></button>
+                <button id="gantt-export-image" type="button">画像出力</button>
+            </div>
+        </div>
         <div class="gantt-floating-actions">
+            <label class="gantt-period-control" for="shared-period-preset">
+                <span>表示範囲</span>
+                <select id="shared-period-preset">
+                    <option value="rolling-6" selected>rolling-6</option>
+                    <option value="rolling-12">rolling-12</option>
+                </select>
+            </label>
             <button id="gantt-expand-all" type="button"></button>
             <button id="gantt-collapse-all" type="button"></button>
-            <button id="gantt-export-csv" type="button"></button>
-            <button id="gantt-export-image" type="button">画像出力</button>
         </div>
         <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-category-filter"><option value="">all categories</option></select>
@@ -166,10 +179,6 @@ function renderBaseDom() {
                 <button id="gantt-today" type="button"></button>
             </div>
         </div>
-        <select id="shared-period-preset">
-            <option value="rolling-6" selected>rolling-6</option>
-            <option value="rolling-12">rolling-12</option>
-        </select>
         <button id="snapshot-save-btn" type="button"></button>
         <select id="snapshot-select"></select>
         <div id="gantt-summary"></div>
@@ -842,13 +851,27 @@ describe('gantt-renderer regressions', () => {
         ].join('\r\n'));
     });
 
-    it('keeps the CSV export button in the visible floating gantt actions', async () => {
+    it('keeps the period selector visible and low-use exports inside the collapsible controls', () => {
+        const source = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
+        const page = new DOMParser().parseFromString(source, 'text/html');
+        const toolbar = page.querySelector('.gantt-floating-actions');
+        const controls = page.getElementById('gantt-controls-body');
+
+        expect(toolbar?.querySelector('#shared-period-preset')).not.toBeNull();
+        expect(toolbar?.querySelector('#gantt-export-csv')).toBeNull();
+        expect(toolbar?.querySelector('#gantt-export-image')).toBeNull();
+        expect(controls?.querySelector('#shared-period-preset')).toBeNull();
+        expect(controls?.querySelector('#gantt-export-csv')).not.toBeNull();
+        expect(controls?.querySelector('#gantt-export-image')).not.toBeNull();
+    });
+
+    it('keeps the CSV export button in the collapsible gantt controls', async () => {
         const { initGantt } = await import('../js/gantt/gantt-renderer.js');
 
         await initGantt();
 
-        const actions = document.querySelector('.gantt-floating-actions');
-        const button = actions?.querySelector('#gantt-export-csv');
+        const controls = document.getElementById('gantt-controls-body');
+        const button = controls?.querySelector('#gantt-export-csv');
 
         expect(button).not.toBeNull();
     });
@@ -881,13 +904,14 @@ describe('gantt-renderer regressions', () => {
         await refreshGantt();
 
         const toolbar = document.querySelector('.gantt-floating-actions');
+        const controls = document.getElementById('gantt-controls-body');
         expect(document.getElementById('gantt-inline-period-controls')).toBeNull();
         expect(document.getElementById('gantt-table-actions')).toBeNull();
         expect(document.getElementById('gantt-table-tools')).toBeNull();
         expect(document.getElementById('scale-switcher')?.parentElement).toBe(document.body);
-        expect(document.getElementById('shared-period-preset')?.parentElement).toBe(document.body);
-        expect(document.getElementById('gantt-export-csv')?.parentElement).toBe(toolbar);
-        expect(document.getElementById('gantt-export-image')?.parentElement).toBe(toolbar);
+        expect(toolbar?.contains(document.getElementById('shared-period-preset'))).toBe(true);
+        expect(controls?.contains(document.getElementById('gantt-export-csv'))).toBe(true);
+        expect(controls?.contains(document.getElementById('gantt-export-image'))).toBe(true);
     });
 
     it('handles the static bucket control without taking ownership of the shared preset', async () => {

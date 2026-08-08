@@ -144,13 +144,6 @@
                                     <button class="scale-btn" data-scale="6" type="button">6M</button>
                                     <button class="scale-btn" data-scale="12" type="button">1Y</button>
                                 </div>
-                                <select id="shared-period-preset" class="view-select">
-                                    <option value="rolling-6">前月～6か月先</option>
-                                    <option value="rolling-12">前月～12か月先</option>
-                                    <option value="rolling-24">前月～24か月先</option>
-                                    <option value="current-quarter">現在四半期</option>
-                                    <option value="current-year">今年</option>
-                                </select>
                                 <select id="gantt-density" class="view-select" aria-label="ガント表の密度">
                                     <option value="standard">標準表示</option>
                                     <option value="compact">コンパクト表示</option>
@@ -238,6 +231,11 @@
                                     <button id="snapshot-save-btn" class="btn btn-primary btn-sm" type="button">現在の状態を保存</button>
                                 </div>
 
+                                <div class="gantt-export-controls" role="group" aria-label="ガントチャートの書き出し">
+                                    <button id="gantt-export-csv" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをCSV出力">CSV出力</button>
+                                    <button id="gantt-export-image" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをPNG画像で出力">画像出力</button>
+                                </div>
+
                             </div>
                         </section>
                     </div>
@@ -266,10 +264,18 @@
                             </div>
                         </details>
                         <div class="gantt-floating-actions">
+                            <label class="gantt-period-control" for="shared-period-preset">
+                                <span>表示範囲</span>
+                                <select id="shared-period-preset" class="view-select">
+                                    <option value="rolling-6">前月～6か月先</option>
+                                    <option value="rolling-12">前月～12か月先</option>
+                                    <option value="rolling-24">前月～24か月先</option>
+                                    <option value="current-quarter">現在四半期</option>
+                                    <option value="current-year">今年</option>
+                                </select>
+                            </label>
                             <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
                             <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたむ</button>
-                            <button id="gantt-export-csv" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをCSV出力">CSV出力</button>
-                            <button id="gantt-export-image" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをPNG画像で出力">画像出力</button>
                         </div>
                         <div id="gantt-data-status" class="data-freshness" role="status" aria-live="polite" hidden></div>
                         <div id="gantt-mobile-theme-list" class="gantt-mobile-theme-list" hidden></div>

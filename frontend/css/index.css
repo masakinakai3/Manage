@@ -1187,6 +1187,19 @@ summary:focus-visible,
     align-items: stretch;
 }
 
+.gantt-export-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    grid-column: 1 / -1;
+    width: min(320px, 100%);
+}
+
+.gantt-export-controls .btn {
+    width: 100%;
+    justify-content: center;
+}
+
 #view-member-load .view-controls {
     display: flex;
     flex-wrap: nowrap;

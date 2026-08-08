@@ -45,6 +45,24 @@
     margin: 8px auto 0 8px;
 }
 
+.gantt-period-control {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-text-secondary);
+    font-size: var(--text-sm);
+    font-weight: 700;
+}
+
+.gantt-period-control > span {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+.gantt-period-control #shared-period-preset {
+    min-width: 220px;
+}
+
 .gantt-floating-actions .btn {
     min-height: var(--control-height-compact);
     box-shadow: var(--shadow-sm);
@@ -1492,7 +1510,16 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
     }
 
     .gantt-floating-actions {
-        display: block;
+        display: flex;
+    }
+
+    .gantt-period-control {
+        flex: 1 1 100%;
+    }
+
+    .gantt-period-control #shared-period-preset {
+        flex: 1 1 auto;
+        min-width: 0;
     }
 
     .gantt-table-tools {
