@@ -856,8 +856,14 @@ describe('gantt-renderer regressions', () => {
         const page = new DOMParser().parseFromString(source, 'text/html');
         const toolbar = page.querySelector('.gantt-floating-actions');
         const controls = page.getElementById('gantt-controls-body');
+        const expandButton = toolbar?.querySelector('#gantt-expand-all');
+        const collapseButton = toolbar?.querySelector('#gantt-collapse-all');
 
         expect(toolbar?.querySelector('#shared-period-preset')).not.toBeNull();
+        expect(expandButton?.getAttribute('aria-label')).toBe('すべて展開');
+        expect(collapseButton?.getAttribute('aria-label')).toBe('すべて折りたたみ');
+        expect(expandButton?.querySelector('.ui-icon')).not.toBeNull();
+        expect(collapseButton?.querySelector('.ui-icon')).not.toBeNull();
         expect(toolbar?.querySelector('#gantt-export-csv')).toBeNull();
         expect(toolbar?.querySelector('#gantt-export-image')).toBeNull();
         expect(controls?.querySelector('#shared-period-preset')).toBeNull();
@@ -874,6 +880,22 @@ describe('gantt-renderer regressions', () => {
         const button = controls?.querySelector('#gantt-export-csv');
 
         expect(button).not.toBeNull();
+    });
+
+    it('honors collapse-all when it is pressed before gantt data finishes loading', async () => {
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        const initialization = initGantt();
+        document.getElementById('gantt-collapse-all')?.click();
+        await initialization;
+
+        expect(document.querySelectorAll('.gantt-row-member')).toHaveLength(1);
+        expect(document.querySelectorAll('.gantt-row-member.hidden-row')).toHaveLength(1);
+        expect(document.querySelector('.theme-toggle')?.getAttribute('aria-expanded')).toBe('false');
+
+        document.getElementById('gantt-expand-all')?.click();
+        expect(document.querySelectorAll('.gantt-row-member.hidden-row')).toHaveLength(0);
+        expect(document.querySelector('.theme-toggle')?.getAttribute('aria-expanded')).toBe('true');
     });
 
     it('exports the visible gantt table as a PNG image', async () => {

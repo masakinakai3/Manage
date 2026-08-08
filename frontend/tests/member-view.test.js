@@ -132,7 +132,7 @@ function renderBaseDom() {
         <select id="member-density"><option value="standard">standard</option><option value="compact">compact</option></select>
         <select id="member-sort"><option value="risk">risk</option><option value="name">name</option><option value="department">department</option></select>
         <select id="member-group"><option value="none">none</option><option value="department">department</option></select>
-        <button id="member-controls-toggle" type="button" aria-expanded="false" aria-controls="member-load-controls">表示条件を開く</button>
+        <button id="member-controls-toggle" type="button" aria-expanded="true" aria-controls="member-load-controls">コントロール画面を閉じる</button>
         <div id="member-load-controls"></div>
         <button id="member-export-csv" type="button"></button>
         <select id="member-export-scope"><option value="visible">visible</option><option value="all">all</option></select>
@@ -222,13 +222,14 @@ describe('member-view milestones', () => {
         const controls = document.getElementById('member-load-controls');
 
         toggle?.click();
-        expect(toggle?.getAttribute('aria-expanded')).toBe('true');
-        expect(toggle?.textContent).toBe('表示条件を閉じる');
-        expect(controls?.classList.contains('is-open')).toBe(true);
+        expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+        expect(toggle?.textContent).toBe('コントロール画面を開く');
+        expect(controls?.classList.contains('is-collapsed')).toBe(true);
 
         toggle?.click();
-        expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-        expect(controls?.classList.contains('is-open')).toBe(false);
+        expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+        expect(toggle?.textContent).toBe('コントロール画面を閉じる');
+        expect(controls?.classList.contains('is-collapsed')).toBe(false);
     });
 
     it('keeps read failures out of the save-state channel', async () => {
@@ -475,8 +476,10 @@ describe('member-view milestones', () => {
         const collapseButton = firstHeader?.querySelector('#member-collapse-all');
 
         expect(firstHeader?.querySelector('.member-header-actions')?.textContent).toContain('メンバー');
-        expect(expandButton?.textContent).toBe('すべて展開');
-        expect(collapseButton?.textContent).toBe('すべて折りたたみ');
+        expect(expandButton?.getAttribute('aria-label')).toBe('すべて展開');
+        expect(collapseButton?.getAttribute('aria-label')).toBe('すべて折りたたみ');
+        expect(expandButton?.querySelector('.ui-icon')).not.toBeNull();
+        expect(collapseButton?.querySelector('.ui-icon')).not.toBeNull();
 
         document.querySelector('.toggle-btn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         expect(document.querySelector('.theme-row')?.classList.contains('hidden')).toBe(false);

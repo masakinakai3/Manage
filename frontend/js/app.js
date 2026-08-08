@@ -385,8 +385,7 @@ function initUiConfig() {
         }
     };
     const storedGanttControlsState = localStorage.getItem('gantt_controls_collapsed');
-    const ganttControlsCollapsed = window.matchMedia('(max-width: 959px)').matches
-        && storedGanttControlsState !== 'false';
+    const ganttControlsCollapsed = storedGanttControlsState !== 'false';
     applyGanttControlsCollapsed(ganttControlsCollapsed);
     ganttControlsToggle?.addEventListener('click', () => {
         const collapsed = !ganttControls?.classList.contains('is-collapsed');

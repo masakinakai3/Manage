@@ -89,14 +89,15 @@ npm run build
 重要なUI回帰:
 
 - 未設定配賦と明示0を区別する。
-- Gantt編集、copy/paste、Undo/Redo、端を越える月移動を維持する。
+- Gantt編集、copy/paste、Undo/Redo、端を越える月移動を維持し、データ読込前の一括折りたたみ要求を読込後の行へ反映する。
 - 月highlightは単一で、再clickにより解除できる。
 - 完了・中止状態はsummaryとnested rowの表示全体へ非アクティブ表示として反映する。
 - 720px境界を越えるresizeでGanttのモバイルtheme navigatorを生成・破棄する。
 - CSV/XLSX datasetはvisible period、filter、label、row shapeを守る。
 - Member Loadのexpand controlとセル内訳buttonはaccessibleで、不要な上部click detail panelを生成しない。
 - Member Loadの1M表示は月別capacityを編集でき、上書き値を負荷超過判定へ使う。
-- Member Loadの狭幅表示条件は`aria-expanded`と表示状態を同期する。
+- GanttとMember Loadの一括展開／折りたたみアイコンはaccessible nameを持つ。
+- Member Loadの上部コントロールは通常幅／狭幅とも`aria-expanded`と表示状態を同期する。
 - データ取得状態と保存状態を分離し、500/offline時に`fresh`を表示せず、読込失敗で保存状態を上書きしない。
 - CSSの色リテラルと13px未満の文字はlintで拒否する。
 - 60か月の観測窓と1000行の一覧fixtureを回帰対象にする。

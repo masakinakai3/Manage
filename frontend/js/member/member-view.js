@@ -232,11 +232,16 @@ function setupControls() {
 
     const controlsToggle = document.getElementById('member-controls-toggle');
     const controls = document.getElementById('member-load-controls');
+    const applyControlsCollapsed = (collapsed) => {
+        controlsToggle?.setAttribute('aria-expanded', String(!collapsed));
+        if (controlsToggle) {
+            controlsToggle.textContent = collapsed ? 'コントロール画面を開く' : 'コントロール画面を閉じる';
+        }
+        controls?.classList.toggle('is-collapsed', collapsed);
+    };
+    applyControlsCollapsed(window.matchMedia?.('(max-width: 820px)').matches || false);
     controlsToggle?.addEventListener('click', () => {
-        const expanded = controlsToggle.getAttribute('aria-expanded') === 'true';
-        controlsToggle.setAttribute('aria-expanded', String(!expanded));
-        controlsToggle.textContent = expanded ? '表示条件を開く' : '表示条件を閉じる';
-        controls?.classList.toggle('is-open', !expanded);
+        applyControlsCollapsed(controlsToggle.getAttribute('aria-expanded') === 'true');
     });
 
     document.querySelectorAll('#member-scale-switcher .scale-btn').forEach((button) => {
@@ -564,8 +569,8 @@ function renderHeader(months) {
         <div class="member-header-actions">
             <span>メンバー</span>
             <span class="member-header-buttons">
-                <button class="btn btn-ghost btn-sm" id="member-expand-all" type="button">すべて展開</button>
-                <button class="btn btn-ghost btn-sm" id="member-collapse-all" type="button">すべて折りたたみ</button>
+                <button class="btn btn-ghost btn-sm icon-only" id="member-expand-all" type="button" title="すべて展開" aria-label="すべて展開"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 6 5 5 5-5"></path><path d="m7 13 5 5 5-5"></path></svg></button>
+                <button class="btn btn-ghost btn-sm icon-only" id="member-collapse-all" type="button" title="すべて折りたたみ" aria-label="すべて折りたたみ"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 11 5-5 5 5"></path><path d="m7 18 5-5 5 5"></path></svg></button>
             </span>
         </div>
     </th>`;

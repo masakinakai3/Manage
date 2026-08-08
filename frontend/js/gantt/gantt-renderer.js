@@ -151,6 +151,7 @@ let priorityFilter = 'all';
 let groupBy = 'none';
 let selectedMonth = null;
 let collapsedThemes = new Set();
+let collapseAllRequested = false;
 let selectedCell = null;
 let selectionAnchor = null;
 let selectedRange = null;
@@ -382,6 +383,10 @@ export async function refreshGantt({ useCache = false } = {}) {
             allocations.memberLoads(from, toEnd),
         ]);
         if (requestId !== ganttRefreshRequestId) return;
+        if (collapseAllRequested) {
+            allThemes.forEach((theme) => collapsedThemes.add(theme.theme_id));
+            persistCollapsed();
+        }
         ganttDataDirty = false;
         lastSuccessfulRefreshAt = new Date();
         rebuildGanttIndexes();
@@ -579,8 +584,8 @@ function bindControls() {
         const config = getPresetConfig(preset);
         updateViewState({ ...config, bucketMonths: scale, preset }, { source: 'gantt-period' });
     });
-    document.getElementById('gantt-expand-all')?.addEventListener('click', () => { collapsedThemes.clear(); persistCollapsed(); rerenderGanttView(); });
-    document.getElementById('gantt-collapse-all')?.addEventListener('click', () => { allThemes.forEach((theme) => collapsedThemes.add(theme.theme_id)); persistCollapsed(); rerenderGanttView(); });
+    document.getElementById('gantt-expand-all')?.addEventListener('click', () => setAllThemesCollapsed(false));
+    document.getElementById('gantt-collapse-all')?.addEventListener('click', () => setAllThemesCollapsed(true));
     document.getElementById('gantt-export-csv')?.addEventListener('click', exportCsv);
     document.getElementById('gantt-export-image')?.addEventListener('click', exportGanttImage);
     document.getElementById('snapshot-save-btn')?.addEventListener('click', saveSnapshot);
@@ -598,6 +603,27 @@ function bindControls() {
 
 function applyGanttDensity() {
     document.getElementById('gantt-container')?.classList.toggle('density-compact', ganttDensity === 'compact');
+}
+
+function setAllThemesCollapsed(collapsed) {
+    collapseAllRequested = collapsed;
+    if (collapsed) {
+        allThemes.forEach((theme) => collapsedThemes.add(theme.theme_id));
+    } else {
+        collapsedThemes.clear();
+    }
+    persistCollapsed();
+
+    document.querySelectorAll('.gantt-row-member[data-theme-id]').forEach((row) => {
+        const themeId = Number.parseInt(row.dataset.themeId, 10);
+        row.classList.toggle('hidden-row', collapsedThemes.has(themeId));
+    });
+    document.querySelectorAll('.theme-toggle[data-theme-id]').forEach((button) => {
+        const themeId = Number.parseInt(button.dataset.themeId, 10);
+        const isExpanded = !collapsedThemes.has(themeId);
+        button.querySelector('.theme-toggle-icon')?.classList.toggle('expanded', isExpanded);
+        button.setAttribute('aria-expanded', String(isExpanded));
+    });
 }
 
 let historyInputsBound = false;
@@ -814,7 +840,7 @@ function bindRows() {
         const month = element.dataset.ganttMonth || null;
         setSelectedMonth(selectedMonth === month ? null : month);
     }));
-    document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); rerenderGanttView(); }));
+    document.querySelectorAll('.theme-toggle').forEach((button) => button.addEventListener('click', () => { const id = Number.parseInt(button.dataset.themeId, 10); collapseAllRequested = false; collapsedThemes.has(id) ? collapsedThemes.delete(id) : collapsedThemes.add(id); persistCollapsed(); rerenderGanttView(); }));
     document.querySelectorAll('.theme-drag-handle').forEach((handle) => handle.addEventListener('keydown', async (event) => {
         if (!event.altKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
         event.preventDefault();
@@ -2830,7 +2856,7 @@ function renderTable(months) {
             const dragHandle = groupBy === 'none'
                 ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg></span>`
                 : '';
-            rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button" aria-expanded="${!collapsedThemes.has(theme.theme_id)}"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">通常 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });

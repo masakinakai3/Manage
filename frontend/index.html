@@ -274,8 +274,12 @@
                                     <option value="current-year">今年</option>
                                 </select>
                             </label>
-                            <button id="gantt-expand-all" class="btn btn-ghost btn-sm" type="button">すべて展開</button>
-                            <button id="gantt-collapse-all" class="btn btn-ghost btn-sm" type="button">すべて折りたたむ</button>
+                            <button id="gantt-expand-all" class="btn btn-ghost btn-sm icon-only" type="button" title="すべて展開" aria-label="すべて展開">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 6 5 5 5-5"></path><path d="m7 13 5 5 5-5"></path></svg>
+                            </button>
+                            <button id="gantt-collapse-all" class="btn btn-ghost btn-sm icon-only" type="button" title="すべて折りたたみ" aria-label="すべて折りたたみ">
+                                <svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 11 5-5 5 5"></path><path d="m7 18 5-5 5 5"></path></svg>
+                            </button>
                         </div>
                         <div id="gantt-data-status" class="data-freshness" role="status" aria-live="polite" hidden></div>
                         <div id="gantt-mobile-theme-list" class="gantt-mobile-theme-list" hidden></div>
@@ -354,7 +358,7 @@
                         <h2>メンバー負荷</h2>
                         <p>メンバーごとの負荷、余力、過負荷の原因を月別に確認できます。</p>
                     </div>
-                    <button id="member-controls-toggle" class="btn btn-ghost btn-sm member-controls-toggle" type="button" aria-expanded="false" aria-controls="member-load-controls">表示条件を開く</button>
+                    <button id="member-controls-toggle" class="btn btn-ghost btn-sm member-controls-toggle" type="button" aria-expanded="true" aria-controls="member-load-controls">コントロール画面を閉じる</button>
                     <div id="member-load-controls" class="view-controls planning-toolbar member-load-controls" aria-label="メンバー負荷の表示設定">
                         <div class="member-control-group member-control-period" aria-label="集計期間">
                         <div class="scale-switcher" id="member-scale-switcher">

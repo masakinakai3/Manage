@@ -361,7 +361,8 @@ td[data-member-cell]:focus-within .member-capacity-button,
 }
 
 .member-controls-toggle {
-    display: none;
+    display: inline-flex;
+    justify-content: center;
 }
 
 .member-summary-action:hover,
@@ -391,11 +392,13 @@ td[data-member-cell]:focus-within .member-capacity-button,
 }
 
 .member-load-header {
-    display: block !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto;
     align-items: flex-start !important;
 }
 
 .member-load-header .member-load-controls {
+    grid-column: 1 / -1;
     margin-top: var(--space-3);
 }
 
@@ -417,6 +420,10 @@ td[data-member-cell]:focus-within .member-capacity-button,
     align-items: center;
     gap: var(--space-2);
     width: 100% !important;
+}
+
+.member-load-controls.is-collapsed {
+    display: none !important;
 }
 
 .member-control-group {
@@ -574,7 +581,7 @@ td[data-member-cell]:focus-within .member-capacity-button,
 }
 
 .member-header-buttons .btn {
-    padding-inline: var(--space-2);
+    padding-inline: var(--space-1);
     white-space: nowrap;
 }
 
@@ -1238,20 +1245,19 @@ td[data-member-cell]:hover .stacked-bar-segment {
     }
 
     .member-controls-toggle {
-        display: inline-flex;
         width: 100%;
         justify-content: center;
         margin-bottom: var(--space-2);
+        grid-column: 1 / -1;
     }
 
     .member-load-controls {
-        display: none !important;
         grid-template-columns: 1fr !important;
         width: 100% !important;
     }
 
-    .member-load-controls.is-open {
-        display: grid !important;
+    .member-load-controls.is-collapsed {
+        display: none !important;
     }
 
     .member-control-group,
