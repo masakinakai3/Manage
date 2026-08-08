@@ -704,6 +704,10 @@
     background: var(--color-warning-subtle);
 }
 
+.gantt-cell.capacity-warning {
+    box-shadow: inset 0 0 0 2px var(--color-utilization-over-text);
+}
+
 /* D&D visual feedback */
 .gantt-row-member .gantt-cell {
     cursor: grab;
@@ -1497,5 +1501,38 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
 
     .gantt-table-tools summary {
         min-height: 44px;
+    }
+}
+
+/* Allocation is volume, not capacity risk. Theme totals stay on a blue scale. */
+.gantt-summary-cell.allocation-low { background: var(--color-allocation-low-bg); color: var(--color-allocation-low-text); }
+.gantt-summary-cell.allocation-mid { background: var(--color-allocation-mid-bg); color: var(--color-allocation-mid-text); }
+.gantt-summary-cell.allocation-high { background: var(--color-allocation-high-bg); color: var(--color-allocation-high-text); }
+.gantt-summary-cell.allocation-full { background: var(--color-allocation-full-bg); color: var(--color-allocation-full-text); }
+.gantt-summary-cell.allocation-volume { background: var(--color-allocation-volume-bg); color: var(--color-allocation-volume-text); font-weight: 800; }
+
+.gantt-cell:focus-visible {
+    outline: 3px solid var(--color-interaction-focus);
+    outline-offset: -3px;
+    box-shadow: none;
+}
+
+.gantt-table tbody td.month-current {
+    background: var(--color-interaction-current);
+}
+
+.gantt-table tbody td.month-selected {
+    box-shadow: inset 2px 0 var(--color-interaction-selected), inset -2px 0 var(--color-interaction-selected);
+}
+
+@media (min-width: 960px) {
+    .theme-label-actions {
+        opacity: 0;
+        transition: opacity var(--transition-fast);
+    }
+
+    .gantt-row-summary:hover .theme-label-actions,
+    .gantt-row-summary:focus-within .theme-label-actions {
+        opacity: 1;
     }
 }

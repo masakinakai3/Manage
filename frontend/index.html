@@ -131,11 +131,11 @@
                         </div>
                     </div>
 
-                    <div id="gantt-controls-body" class="view-controls gantt-view-controls is-collapsed">
+                    <div id="gantt-controls-body" class="view-controls planning-toolbar gantt-view-controls is-collapsed">
                         <section class="gantt-control-section">
                             <div class="gantt-section-heading">
-                                <span class="gantt-section-eyebrow">期間操作</span>
-                                <span class="gantt-section-note">表示範囲とグループ化を切り替えます。</span>
+                                <span class="gantt-section-eyebrow">プランニング</span>
+                                <span class="gantt-section-note">実期間と集計単位を分けて切り替えます。</span>
                             </div>
                             <div class="gantt-control-row gantt-control-row-primary">
                                 <div class="scale-switcher" id="scale-switcher">
@@ -145,9 +145,9 @@
                                     <button class="scale-btn" data-scale="12" type="button">1Y</button>
                                 </div>
                                 <select id="shared-period-preset" class="view-select">
-                                    <option value="rolling-6">直近6か月</option>
-                                    <option value="rolling-12">直近12か月</option>
-                                    <option value="rolling-24">直近24か月</option>
+                                    <option value="rolling-6">前月～6か月先</option>
+                                    <option value="rolling-12">前月～12か月先</option>
+                                    <option value="rolling-24">前月～24か月先</option>
                                     <option value="current-quarter">現在四半期</option>
                                     <option value="current-year">今年</option>
                                 </select>
@@ -168,6 +168,10 @@
                                         <option value="priority">優先度</option>
                                         <option value="dev-rank">開発ランク</option>
                                     </select>
+                                </div>
+                                <div class="planning-context" aria-live="polite">
+                                    <span id="gantt-current-view-name" class="planning-context-chip">現在の表示</span>
+                                    <span id="gantt-comparison-state" class="planning-context-chip" hidden>比較中</span>
                                 </div>
                             </div>
                         </section>
@@ -267,6 +271,7 @@
                             <button id="gantt-export-csv" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをCSV出力">CSV出力</button>
                             <button id="gantt-export-image" class="btn btn-secondary btn-sm" type="button" aria-label="現在表示中のガントチャートをPNG画像で出力">画像出力</button>
                         </div>
+                        <div id="gantt-data-status" class="data-freshness" role="status" aria-live="polite" hidden></div>
                         <div id="gantt-mobile-theme-list" class="gantt-mobile-theme-list" hidden></div>
                         <table class="gantt-table" id="gantt-table">
                             <thead id="gantt-thead"></thead>
@@ -311,8 +316,17 @@
                                 <textarea id="detail-memo" rows="5" class="dialog-input"></textarea>
                             </div>
                             <div class="form-field">
-                                <label for="detail-bulk-rate">選択中の月へ一括反映</label>
+                                <label for="detail-bulk-rate">一括更新値 (%)</label>
                                 <input id="detail-bulk-rate" type="number" min="0" max="100" step="1">
+                            </div>
+                            <div class="form-field">
+                                <label for="detail-bulk-scope">更新範囲</label>
+                                <select id="detail-bulk-scope" class="view-select">
+                                    <option value="selected">選択セル</option>
+                                    <option value="following">選択月以降</option>
+                                    <option value="visible">表示期間全体</option>
+                                </select>
+                                <div id="detail-bulk-summary" class="summary-subtext" aria-live="polite">1セルを更新します。</div>
                             </div>
                             <div class="detail-actions">
                                 <button id="detail-prev" class="btn btn-ghost btn-sm" type="button">前のセル</button>
@@ -335,7 +349,7 @@
                         <p>メンバーごとの負荷、余力、過負荷の原因を月別に確認できます。</p>
                     </div>
                     <button id="member-controls-toggle" class="btn btn-ghost btn-sm member-controls-toggle" type="button" aria-expanded="false" aria-controls="member-load-controls">表示条件を開く</button>
-                    <div id="member-load-controls" class="view-controls member-load-controls" aria-label="メンバー負荷の表示設定">
+                    <div id="member-load-controls" class="view-controls planning-toolbar member-load-controls" aria-label="メンバー負荷の表示設定">
                         <div class="member-control-group member-control-period" aria-label="集計期間">
                         <div class="scale-switcher" id="member-scale-switcher">
                             <button class="scale-btn active" data-scale="1" type="button">1M</button>
@@ -344,9 +358,9 @@
                             <button class="scale-btn" data-scale="12" type="button">1Y</button>
                         </div>
                         <select id="member-period-preset" class="view-select">
-                            <option value="rolling-6">直近6か月</option>
-                            <option value="rolling-12">直近12か月</option>
-                            <option value="rolling-24">直近24か月</option>
+                            <option value="rolling-6">前月～6か月先</option>
+                            <option value="rolling-12">前月～12か月先</option>
+                            <option value="rolling-24">前月～24か月先</option>
                             <option value="current-quarter">現在四半期</option>
                             <option value="current-year">今年</option>
                         </select>
@@ -360,6 +374,21 @@
                             <label class="sr-only" for="member-search">メンバー、部署、テーマを検索</label>
                             <input type="text" id="member-search" class="view-input" placeholder="メンバー名、部署、テーマ名で検索" autocomplete="off">
                         </div>
+                        <div class="member-control-group member-control-decision">
+                            <label class="sr-only" for="member-sort">並び順</label>
+                            <select id="member-sort" class="view-select" aria-label="メンバーの並び順">
+                                <option value="risk">リスク順</option>
+                                <option value="max-utilization">最大利用率</option>
+                                <option value="average-utilization">平均利用率</option>
+                                <option value="name">名前</option>
+                                <option value="department">部署</option>
+                            </select>
+                            <label class="sr-only" for="member-group">グループ化</label>
+                            <select id="member-group" class="view-select" aria-label="メンバーのグループ化">
+                                <option value="none">グループ化なし</option>
+                                <option value="department">部署</option>
+                            </select>
+                        </div>
                         <div class="member-control-group member-control-actions">
                         <div class="month-nav">
                             <button id="member-prev" class="btn btn-icon" type="button">前へ</button>
@@ -367,6 +396,10 @@
                             <button id="member-next" class="btn btn-icon" type="button">次へ</button>
                         </div>
                             <button class="btn btn-ghost btn-sm" id="member-jump-overload" type="button">次の過負荷へ</button>
+                            <select id="member-export-scope" class="view-select" aria-label="CSV出力範囲">
+                                <option value="visible">現在の表示</option>
+                                <option value="all">全メンバー</option>
+                            </select>
                             <button class="btn btn-ghost btn-sm" id="member-export-csv" type="button">CSV 出力</button>
                         </div>
                     </div>
@@ -375,14 +408,20 @@
                 <details class="member-load-guide" aria-label="負荷表示の凡例">
                     <summary>負荷の見方と操作</summary>
                     <div class="member-load-legend">
-                        <span><i class="member-legend-swatch load-low"></i>余力大 1〜30%</span>
-                        <span><i class="member-legend-swatch load-mid"></i>余力あり 31〜60%</span>
-                        <span><i class="member-legend-swatch load-full"></i>上限付近 61〜100%</span>
-                        <span><i class="member-legend-swatch load-over"></i>上限超過</span>
+                        <span><i class="member-legend-swatch load-low"></i>余力 1〜69%</span>
+                        <span><i class="member-legend-swatch load-mid"></i>適正 70〜89%</span>
+                        <span><i class="member-legend-swatch load-near"></i>上限付近 90〜100%</span>
+                        <span><i class="member-legend-swatch load-over"></i>超過 101〜119%</span>
+                        <span><i class="member-legend-swatch load-critical"></i>重大超過 120%以上</span>
                         <span><i class="member-legend-empty"></i>未割当</span>
                     </div>
                     <p>負荷セルの詳細ボタンを選ぶと内訳を確認できます。1M表示では各セルの上限ボタンから月別キャパシティを調整できます。月見出しをもう一度選ぶと強調を解除します。</p>
                 </details>
+                <div class="member-mobile-view-controls">
+                    <span id="member-mobile-focus-label">フォーカス月</span>
+                    <button id="member-view-mode-toggle" class="btn btn-ghost btn-sm" type="button">表表示</button>
+                </div>
+                <section id="member-mobile-list" class="member-mobile-list" aria-label="フォーカス月のメンバー負荷"></section>
                 <div class="member-load-container" id="member-load-container">
                     <table class="member-load-table" id="member-load-table">
                         <thead id="member-load-thead"></thead>

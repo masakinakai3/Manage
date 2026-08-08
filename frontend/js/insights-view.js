@@ -20,15 +20,18 @@ const GRAPH_PALETTE = ['#0072b2', '#e69f00', '#009e73', '#cc79a7', '#56b4e9', '#
 export async function initInsightsView() {
     initRibbonFullscreen();
     initScenarioPlanner();
-    subscribeViewState((nextState) => {
+    subscribeViewState((nextState, meta = {}) => {
         currentState = nextState;
-        refreshInsightsView();
+        const changedKeys = new Set(meta.changedKeys || []);
+        const periodChanged = ['startMonth', 'rangeMonths', 'bucketMonths', 'scale', 'visibleCount']
+            .some((key) => changedKeys.has(key));
+        if (nextState.activeView === 'insights' && periodChanged) refreshInsightsView();
     });
     await refreshInsightsView();
 }
 
 export async function refreshInsightsView() {
-    const months = getVisibleMonths(currentState.startMonth, 14, currentState.scale);
+    const months = getVisibleMonths(currentState.startMonth, currentState.visibleCount || 14, currentState.scale);
     const from = months[0];
     const to = months[months.length - 1];
     const toEnd = currentState.scale > 1 ? addMonths(to, currentState.scale - 1) : to;

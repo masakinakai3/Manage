@@ -69,17 +69,10 @@ export function formatMonthHeader(monthStr, scale = 1) {
         return month === 1 ? `${year}\n${month}月` : `${month}月`;
     }
 
-    if (scale === 3) {
-        const quarter = Math.ceil(month / 3);
-        return quarter === 1 ? `${year}\nQ${quarter}` : `Q${quarter}`;
-    }
-
-    if (scale === 6) {
-        const half = month <= 6 ? 'H1' : 'H2';
-        return half === 'H1' ? `${year}\n${half}` : half;
-    }
-
-    return `${year}年`;
+    const end = addMonths(monthStr, scale - 1);
+    const [endYear, endMonth] = end.split('-').map(Number);
+    if (year === endYear) return `${year}/${String(month).padStart(2, '0')}–${String(endMonth).padStart(2, '0')}`;
+    return `${year}/${String(month).padStart(2, '0')}–${endYear}/${String(endMonth).padStart(2, '0')}`;
 }
 
 export function getVisibleMonths(startMonth, visibleCount, scale = 1) {

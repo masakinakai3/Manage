@@ -44,8 +44,11 @@ sequenceDiagram
 |---|---|
 | `preset` | 表示期間プリセット |
 | `startMonth` | 表示開始月 |
-| `scale` | 1/3/6/12 か月スケール |
-| `visibleCount` | 表示する月バケット数 |
+| `rangeMonths` | 実際に対象とする月数 |
+| `bucketMonths` | 1/3/6/12 か月の集計単位 |
+| `focusMonth` | Gantt / Member Load が共有する判断月 |
+| `activeView` | API再取得とlazy refreshを判断する表示画面 |
+| `scale`, `visibleCount` | v1互換エイリアス。v2値から導出 |
 | `ganttSearch` | Gantt 検索条件 |
 | `ganttCategory` | カテゴリフィルタ |
 | `ganttOwner` | 担当者フィルタ |
@@ -53,14 +56,18 @@ sequenceDiagram
 | `ganttPriority` | 優先度フィルタ |
 | `memberSearch` | メンバー検索 |
 | `groupBy` | Gantt のグループ単位 |
+| `ganttDensity`, `memberDensity` | 画面別の表密度 |
+| `memberSort`, `memberGroup`, `memberDecisionFilter` | Member Load の判断条件 |
 
 ### 4.2 方式
 
 | 仕組み | 使い方 |
 |---|---|
 | `localStorage` | 永続化 |
-| `CustomEvent` | 画面横断通知 |
+| `CustomEvent` | `{ state, changedKeys, source }` による画面横断通知 |
 | `subscribeViewState()` | 各画面で購読 |
+
+検索、sort、group、展開、密度、フォーカス月は取得済みデータを再描画する。期間変更時だけ表示画面を再取得し、非表示画面は次回表示までdirtyとして扱う。
 
 ## 5. Gantt 画面
 

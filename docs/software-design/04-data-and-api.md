@@ -67,6 +67,8 @@
 }
 ```
 
+`allocation_rate: 0` は明示的な0%として保存する。配賦の削除は `allocation_rate: null` で要求し、同一キー `(theme_id, member_id, month)` の一意性を維持する。
+
 ### 3.2 保存ビュー
 
 ```json

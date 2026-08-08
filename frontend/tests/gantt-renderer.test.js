@@ -189,6 +189,8 @@ function renderBaseDom() {
                 <input id="detail-rate">
                 <textarea id="detail-memo"></textarea>
                 <input id="detail-bulk-rate">
+                <select id="detail-bulk-scope"><option value="selected">selected</option><option value="following">following</option><option value="visible">visible</option></select>
+                <div id="detail-bulk-summary"></div>
                 <div id="detail-message"></div>
             </form>
             <button id="detail-save" type="button"></button>
@@ -482,6 +484,33 @@ describe('gantt-renderer regressions', () => {
         expect(bulkUpdate).toHaveBeenCalledWith([
             { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 10 },
             { theme_id: 1, member_id: 10, month: '2026-06', allocation_rate: 20 },
+        ]);
+    });
+
+    it('bulk-updates only the selected month and following visible months', async () => {
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 10, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 20, memo: '' },
+        ];
+        showConfirmDialog.mockResolvedValue(true);
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        document.querySelector('.gantt-cell[data-theme][data-month="2026-05"]')?.click();
+        document.getElementById('detail-bulk-rate').value = '40';
+        document.getElementById('detail-bulk-scope').value = 'following';
+        document.getElementById('detail-preview-bulk').click();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(showConfirmDialog).toHaveBeenCalledWith(expect.objectContaining({
+            title: '一括更新の確認（2件）',
+            message: expect.stringContaining('2026-05: 20% → 40%'),
+        }));
+        expect(bulkUpdate).toHaveBeenCalledWith([
+            { theme_id: 1, member_id: 10, month: '2026-05', allocation_rate: 40, memo: '' },
+            { theme_id: 1, member_id: 10, month: '2026-06', allocation_rate: 40, memo: '' },
         ]);
     });
 
@@ -845,32 +874,23 @@ describe('gantt-renderer regressions', () => {
         clickSpy.mockRestore();
     });
 
-    it('mounts toolbar controls into interactive surfaces across gantt refreshes', async () => {
+    it('keeps planning controls in their static DOM locations across gantt refreshes', async () => {
         const { initGantt, refreshGantt } = await import('../js/gantt/gantt-renderer.js');
 
         await initGantt();
         await refreshGantt();
 
         const toolbar = document.querySelector('.gantt-floating-actions');
-        const inlineControls = document.getElementById('gantt-inline-period-controls');
-        const tableActions = document.getElementById('gantt-table-actions');
-        const tableTools = document.getElementById('gantt-table-tools');
-        expect(toolbar?.classList.contains('pointer-shield')).toBe(true);
-        expect(inlineControls?.getAttribute('data-interactive-surface')).toBe('true');
-        expect(tableActions?.getAttribute('data-interactive-surface')).toBe('true');
-        expect(tableTools?.tagName).toBe('DETAILS');
-        expect(tableTools?.hasAttribute('open')).toBe(false);
-        expect(tableTools?.querySelector('summary')?.textContent).toBe('表の操作・出力');
-        expect(tableActions?.parentElement).toBe(tableTools);
-        expect(inlineControls?.querySelector('#scale-switcher')).not.toBeNull();
-        expect(inlineControls?.querySelector('#shared-period-preset')).not.toBeNull();
-        expect(inlineControls?.querySelector('.month-nav #gantt-prev')).not.toBeNull();
-        expect(document.getElementById('scale-switcher')?.parentElement?.id).toBe('gantt-inline-period-controls');
-        expect(document.getElementById('gantt-export-csv')?.parentElement?.id).toBe('gantt-table-actions');
-        expect(document.getElementById('gantt-export-image')?.parentElement?.id).toBe('gantt-table-actions');
+        expect(document.getElementById('gantt-inline-period-controls')).toBeNull();
+        expect(document.getElementById('gantt-table-actions')).toBeNull();
+        expect(document.getElementById('gantt-table-tools')).toBeNull();
+        expect(document.getElementById('scale-switcher')?.parentElement).toBe(document.body);
+        expect(document.getElementById('shared-period-preset')?.parentElement).toBe(document.body);
+        expect(document.getElementById('gantt-export-csv')?.parentElement).toBe(toolbar);
+        expect(document.getElementById('gantt-export-image')?.parentElement).toBe(toolbar);
     });
 
-    it('handles moved scale and preset controls from the inline toolbar', async () => {
+    it('handles the static bucket control without taking ownership of the shared preset', async () => {
         const { initGantt } = await import('../js/gantt/gantt-renderer.js');
         const { updateViewState } = await import('../js/shared-state.js');
 
@@ -879,17 +899,14 @@ describe('gantt-renderer regressions', () => {
         document.querySelector('#scale-switcher .scale-btn[data-scale="3"]')
             ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
 
-        expect(updateViewState).toHaveBeenCalledWith({ scale: 3 });
+        expect(updateViewState).toHaveBeenCalledWith({ bucketMonths: 3 }, { source: 'gantt-period' });
 
+        updateViewState.mockClear();
         const preset = document.getElementById('shared-period-preset');
         preset.value = 'rolling-12';
         preset.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
 
-        expect(updateViewState).toHaveBeenCalledWith({
-            preset: 'rolling-12',
-            startMonth: '2026-04',
-            scale: 1,
-        });
+        expect(updateViewState).not.toHaveBeenCalled();
     });
 
     it('renders milestone markers on the matching theme month', async () => {
@@ -981,7 +998,7 @@ describe('gantt-renderer regressions', () => {
         document.getElementById('gantt-status-filter').value = 'completed';
         document.getElementById('gantt-status-filter').dispatchEvent(new Event('change', { bubbles: true }));
 
-        expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttStatus: 'completed' });
+        expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttStatus: 'completed' }, { source: 'gantt-filter' });
     });
 
     it('renders a P0 badge for zero-priority themes', async () => {
@@ -1059,23 +1076,19 @@ describe('gantt-renderer regressions', () => {
         const { initGantt } = await import('../js/gantt/gantt-renderer.js');
         await initGantt();
         const mobileList = document.getElementById('gantt-mobile-theme-list');
-        const inlineControls = document.getElementById('gantt-inline-period-controls');
 
         expect(mobileList?.hidden).toBe(true);
         expect(mobileList?.children).toHaveLength(0);
-        expect(inlineControls?.parentElement).toBe(document.querySelector('.gantt-floating-actions'));
 
         window.innerWidth = 390;
         window.dispatchEvent(new Event('resize'));
         expect(mobileList?.hidden).toBe(false);
         expect(mobileList?.querySelectorAll('[data-mobile-theme-id]')).toHaveLength(1);
-        expect(inlineControls?.parentElement).toBe(document.getElementById('gantt-table-tools'));
 
         window.innerWidth = 1024;
         window.dispatchEvent(new Event('resize'));
         expect(mobileList?.hidden).toBe(true);
         expect(mobileList?.children).toHaveLength(0);
-        expect(inlineControls?.parentElement).toBe(document.querySelector('.gantt-floating-actions'));
     });
 
     it('supports grouping by development rank', async () => {

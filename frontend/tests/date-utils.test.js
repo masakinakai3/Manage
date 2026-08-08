@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { shortenMonth, monthRange, addMonths, formatMonth, aggregateRate, getVisibleMonths } from '../js/utils/date-utils.js';
+import { shortenMonth, monthRange, addMonths, formatMonth, formatMonthHeader, aggregateRate, getVisibleMonths } from '../js/utils/date-utils.js';
 
 describe('Date Utilities', () => {
     describe('shortenMonth', () => {
@@ -75,6 +75,13 @@ describe('Date Utilities', () => {
         it('should return 0 if all zero or missing', () => {
             const rates = { '2024-01': 0 };
             expect(aggregateRate(rates, '2024-01', 3)).toBe(0);
+        });
+    });
+
+    describe('formatMonthHeader', () => {
+        it('shows the real aggregated month range even when it is not aligned to a quarter', () => {
+            expect(formatMonthHeader('2026-04', 3)).toBe('2026/04–06');
+            expect(formatMonthHeader('2026-10', 6)).toBe('2026/10–2027/03');
         });
     });
 

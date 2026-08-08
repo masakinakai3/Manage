@@ -51,6 +51,118 @@
     --cell-width: 56px;
 }
 
+/* Planning workspace v2 -------------------------------------------------- */
+.planning-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 24;
+    border-block: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-bg) 94%, transparent);
+    backdrop-filter: blur(12px);
+}
+
+.planning-toolbar .gantt-control-section {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.planning-context {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-inline-start: auto;
+}
+
+.planning-context-chip {
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+}
+
+.data-freshness {
+    position: sticky;
+    left: 0;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-block: 1px solid var(--color-warning);
+    background: var(--color-warning-subtle);
+    color: var(--color-warning);
+}
+
+.data-freshness span {
+    color: var(--color-text-secondary);
+}
+
+.gantt-table,
+.member-load-table,
+.summary-value,
+.load-cell,
+.member-utilization,
+.member-capacity-button,
+.member-capacity-readonly {
+    font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 1280px) {
+    .planning-toolbar .gantt-section-heading {
+        display: flex;
+    }
+
+    .planning-toolbar.gantt-view-controls {
+        grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    }
+}
+
+@media (min-width: 960px) and (max-width: 1279px) {
+    .planning-toolbar .gantt-control-section:nth-child(3) {
+        grid-column: 1 / -1;
+    }
+
+    .planning-toolbar .gantt-section-heading {
+        display: none;
+    }
+}
+
+@media (max-width: 959px) {
+    .planning-toolbar {
+        position: static;
+        backdrop-filter: none;
+    }
+
+    .planning-context {
+        margin-inline-start: 0;
+    }
+}
+
+@media (min-width: 1280px) {
+    .planning-toolbar.gantt-view-controls {
+        grid-template-columns: 1fr;
+    }
+
+    .planning-toolbar.gantt-view-controls .gantt-control-section {
+        grid-column: 1;
+    }
+
+    .planning-toolbar .gantt-control-row-primary {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .planning-toolbar .gantt-grouping-controls {
+        flex: 1 1 180px;
+        grid-column: auto;
+    }
+
+    .planning-toolbar .gantt-control-row-actions {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+    }
+}
+
 :root, [data-theme="dark"] {
     /* Colors */
     --color-bg: #101216;
@@ -68,6 +180,9 @@
     --color-text: #f2f4f7;
     --color-text-secondary: #b4bbc7;
     --color-text-muted: #949eac;
+    --color-bg-app: var(--color-bg);
+    --color-text-primary: var(--color-text);
+    --color-primary-light: var(--color-primary-subtle);
 
     --color-primary: #6267df;
     --color-primary-strong: #4b50be;
@@ -96,6 +211,30 @@
     --color-selection: #5eead4;
     --color-current-period: #818cf8;
     --color-cell-focus: #67e8f9;
+    --color-interaction-focus: #67e8f9;
+    --color-interaction-selected: #5eead4;
+    --color-interaction-current: rgba(129, 140, 248, 0.12);
+    --color-allocation-low-bg: #182634;
+    --color-allocation-low-text: #b8d3ea;
+    --color-allocation-mid-bg: #1e324a;
+    --color-allocation-mid-text: #c6dcf4;
+    --color-allocation-high-bg: #25466b;
+    --color-allocation-high-text: #d8ebff;
+    --color-allocation-full-bg: #285880;
+    --color-allocation-full-text: #eff8ff;
+    --color-allocation-volume-bg: #315f8d;
+    --color-allocation-volume-text: #ffffff;
+    --color-utilization-empty-bg: #0f1016;
+    --color-utilization-low-bg: #153533;
+    --color-utilization-low-text: #8edbd2;
+    --color-utilization-target-bg: #203c5c;
+    --color-utilization-target-text: #b9d9ff;
+    --color-utilization-near-bg: #4b3916;
+    --color-utilization-near-text: #ffd57a;
+    --color-utilization-over-bg: #552f19;
+    --color-utilization-over-text: #ffb16e;
+    --color-utilization-critical-bg: #5d2228;
+    --color-utilization-critical-text: #ff9ea7;
     --color-load-empty-bg: #0f1016;
     --color-load-zero-bg: #161a22;
     --color-load-zero-text: #aeb9ce;
@@ -139,6 +278,9 @@
     --color-text: #0f172a;
     --color-text-secondary: #475569;
     --color-text-muted: #526176;
+    --color-bg-app: var(--color-bg);
+    --color-text-primary: var(--color-text);
+    --color-primary-light: var(--color-primary-subtle);
 
     --color-primary: #5054c8;
     --color-primary-strong: #343897;
@@ -166,6 +308,30 @@
     --color-selection: #0f766e;
     --color-current-period: #4f46e5;
     --color-cell-focus: #0369a1;
+    --color-interaction-focus: #0369a1;
+    --color-interaction-selected: #0f766e;
+    --color-interaction-current: rgba(79, 70, 229, 0.08);
+    --color-allocation-low-bg: #eff6ff;
+    --color-allocation-low-text: #315b82;
+    --color-allocation-mid-bg: #dbeafe;
+    --color-allocation-mid-text: #1e4f80;
+    --color-allocation-high-bg: #bfdbfe;
+    --color-allocation-high-text: #173f6b;
+    --color-allocation-full-bg: #93c5fd;
+    --color-allocation-full-text: #15385d;
+    --color-allocation-volume-bg: #60a5fa;
+    --color-allocation-volume-text: #102a43;
+    --color-utilization-empty-bg: #f8fafc;
+    --color-utilization-low-bg: #dff5f0;
+    --color-utilization-low-text: #176b61;
+    --color-utilization-target-bg: #dbeafe;
+    --color-utilization-target-text: #1e4f80;
+    --color-utilization-near-bg: #fef3c7;
+    --color-utilization-near-text: #8a4b08;
+    --color-utilization-over-bg: #ffedd5;
+    --color-utilization-over-text: #9a3412;
+    --color-utilization-critical-bg: #fee2e2;
+    --color-utilization-critical-text: #991b1b;
     --color-load-empty-bg: #f8fafc;
     --color-load-zero-bg: #f1f5f9;
     --color-load-zero-text: #64748b;
@@ -906,8 +1072,11 @@ summary:focus-visible,
     grid-row: 1;
 }
 
-.gantt-control-section:nth-child(3),
-#snapshot-diff-summary {
+.gantt-control-section:nth-child(3) {
+    grid-column: 1 / -1;
+}
+
+#snapshot-diff-summary:empty {
     display: none;
 }
 
@@ -3989,5 +4158,74 @@ kbd {
     .gantt-cell,
     .status-badge {
         border: 1px solid CanvasText;
+    }
+}
+
+/* Static sticky planning toolbar wins over the legacy collapsible layout. */
+@media (min-width: 960px) {
+    .planning-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 24;
+        border-block: 1px solid var(--color-border);
+        background: color-mix(in srgb, var(--color-bg) 94%, transparent);
+        backdrop-filter: blur(12px);
+    }
+}
+
+@media (min-width: 1440px) {
+    .gantt-workspace { flex-direction: row; }
+    .detail-panel { width: 320px; min-width: 320px; }
+    .detail-panel.detail-collapsed { width: 44px; min-width: 44px; max-width: 44px; }
+}
+
+@media (min-width: 960px) and (max-width: 1439px) {
+    .gantt-workspace { flex-direction: column; }
+    .detail-panel:not(.detail-empty-state),
+    .detail-panel.detail-collapsed {
+        position: static;
+        order: 2;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+        max-height: 340px;
+    }
+}
+
+@media (max-width: 959px) {
+    .detail-panel:not(.detail-empty-state):not(.detail-collapsed) {
+        position: fixed;
+        inset: 0;
+        z-index: 1500;
+        width: 100%;
+        max-height: none;
+        border: 0;
+        border-radius: 0;
+    }
+}
+
+@media (min-width: 1280px) {
+    .planning-toolbar.gantt-view-controls { grid-template-columns: 1fr; }
+    .planning-toolbar.gantt-view-controls .gantt-control-section { grid-column: 1; }
+    .planning-toolbar.gantt-view-controls .gantt-control-section:nth-child(1) { grid-row: 1; }
+    .planning-toolbar.gantt-view-controls .gantt-control-section:nth-child(2) { grid-row: 2; }
+    .planning-toolbar.gantt-view-controls .gantt-control-section:nth-child(3) { grid-row: 3; }
+    .planning-toolbar .gantt-control-row-primary {
+        display: flex;
+        flex-wrap: nowrap;
+        align-items: center;
+    }
+    .planning-toolbar #scale-switcher { flex: 0 0 auto; }
+    .planning-toolbar #shared-period-preset { flex: 0 1 260px; width: 260px; min-width: 210px; }
+    .planning-toolbar #gantt-density { flex: 0 0 150px; width: 150px; }
+    .planning-toolbar .month-nav { flex: 0 0 auto; }
+    .planning-toolbar .gantt-grouping-controls {
+        flex: 1 1 180px;
+        grid-column: auto;
+    }
+    .planning-toolbar .gantt-grouping-controls .view-select { width: 100%; }
+    .planning-toolbar .gantt-control-row-actions {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
     }
 }

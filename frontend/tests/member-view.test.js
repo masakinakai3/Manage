@@ -129,14 +129,19 @@ function renderBaseDom() {
             <button class="scale-btn" data-scale="3" type="button">3</button>
         </div>
         <input id="member-search" type="text">
+        <select id="member-density"><option value="standard">standard</option><option value="compact">compact</option></select>
+        <select id="member-sort"><option value="risk">risk</option><option value="name">name</option><option value="department">department</option></select>
+        <select id="member-group"><option value="none">none</option><option value="department">department</option></select>
         <button id="member-controls-toggle" type="button" aria-expanded="false" aria-controls="member-load-controls">表示条件を開く</button>
         <div id="member-load-controls"></div>
         <button id="member-export-csv" type="button"></button>
+        <select id="member-export-scope"><option value="visible">visible</option><option value="all">all</option></select>
         <button id="member-prev" type="button"></button>
         <button id="member-next" type="button"></button>
         <button id="member-today" type="button"></button>
         <select id="member-period-preset"><option value="rolling-6" selected>rolling-6</option></select>
         <section id="member-load-summary"></section>
+        <div id="member-load-container"></div>
         <table>
             <thead id="member-load-thead"></thead>
             <tbody id="member-load-tbody"></tbody>
@@ -358,10 +363,10 @@ describe('member-view milestones', () => {
 
         expect(summary?.querySelectorAll('.summary-card')).toHaveLength(4);
         expect(summary?.querySelectorAll('.member-load-summary-card')).toHaveLength(4);
-        expect(summary?.querySelectorAll('.member-summary-action')).toHaveLength(3);
-        expect(labels).toEqual(['平均負荷', '過負荷', '余力あり', '未割当']);
-        expect(summary?.textContent).toContain('全1名の月平均');
-        expect(summary?.textContent).toContain('警告セル 0件を表示');
+        expect(summary?.querySelectorAll('.member-summary-action')).toHaveLength(4);
+        expect(labels).toEqual(['平均キャパ利用率', '超過', '上限付近', '未割当']);
+        expect(summary?.textContent).toContain('全1名');
+        expect(summary?.textContent).toContain('警告セル 0件');
     });
 
     it('uses a monthly capacity override for overload state and shows it as editable', async () => {
@@ -377,7 +382,7 @@ describe('member-view milestones', () => {
         const { refreshMemberView } = await import('../js/member/member-view.js');
         await refreshMemberView();
 
-        expect(document.querySelector('.load-cell')?.classList.contains('load-over')).toBe(true);
+        expect(document.querySelector('.load-cell')?.classList.contains('load-critical')).toBe(true);
         expect(document.querySelector('.member-capacity-button')?.textContent).toContain('上限 60%');
         expect(document.querySelector('.member-capacity-button')?.classList.contains('is-overridden')).toBe(true);
         expect(document.querySelector('.member-detail-button')?.getAttribute('aria-label')).toContain('上限超過 20%');
@@ -521,7 +526,7 @@ describe('member-view milestones', () => {
         document.getElementById('member-search-clear')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
         expect(document.getElementById('member-search')?.value).toBe('');
-        expect(sharedState.updateViewState).toHaveBeenCalledWith({ memberSearch: '' });
+        expect(sharedState.updateViewState).toHaveBeenCalledWith({ memberSearch: '' }, { source: 'member-search' });
     });
 
     it('passes undo-aware commit handlers into member-load cell editing', async () => {
@@ -579,5 +584,98 @@ describe('member-view milestones', () => {
         expect(toggle?.getAttribute('aria-expanded')).toBe('true');
         expect(toggle?.classList.contains('expanded')).toBe(true);
         expect(document.querySelector('.theme-row')?.classList.contains('hidden')).toBe(false);
+    });
+
+    it('classifies load by monthly capacity utilization boundaries', async () => {
+        const { getLoadClass } = await import('../js/member/member-view.js');
+
+        expect(getLoadClass(0, 100)).toBe('load-none');
+        expect(getLoadClass(69, 100)).toBe('load-low');
+        expect(getLoadClass(70, 100)).toBe('load-mid');
+        expect(getLoadClass(90, 100)).toBe('load-near');
+        expect(getLoadClass(101, 100)).toBe('load-over');
+        expect(getLoadClass(120, 100)).toBe('load-critical');
+        expect(getLoadClass(60, 60)).toBe('load-near');
+    });
+
+    it('filters locally without issuing another API request', async () => {
+        membersList.mockResolvedValue([
+            { member_id: 10, display_name: 'Alice', department: 'Dev', capacity: 100 },
+            { member_id: 20, display_name: 'Bob', department: 'Ops', capacity: 100 },
+        ]);
+        allocationsList = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 1, member_id: 20, month: '2026-04', allocation_rate: 10, memo: '' },
+        ];
+        memberLoads.mockResolvedValue({ 10: { '2026-04': 20 }, 20: { '2026-04': 10 } });
+        const { initMemberView } = await import('../js/member/member-view.js');
+        await initMemberView();
+        const counts = [membersList, themesList, memberLoads, warnings, allocationsApiList].map((mock) => mock.mock.calls.length);
+
+        const search = document.getElementById('member-search');
+        search.value = 'Bob';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+
+        expect(document.querySelectorAll('tr.member-row')).toHaveLength(1);
+        expect(document.querySelector('tr.member-row')?.textContent).toContain('Bob');
+        expect([membersList, themesList, memberLoads, warnings, allocationsApiList].map((mock) => mock.mock.calls.length)).toEqual(counts);
+    });
+
+    it('filters a cached 1000-member by 24-month fixture within 150ms without API calls', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-01', scale: 1, bucketMonths: 1, rangeMonths: 24,
+            visibleCount: 24, memberSearch: 'Member 999', preset: 'rolling-24',
+        });
+        visibleMonths = Array.from({ length: 24 }, (_, index) => {
+            const month = new Date(2026, index, 1);
+            return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+        });
+        const fixtureMembers = Array.from({ length: 1000 }, (_, index) => ({
+            member_id: index + 1,
+            display_name: `Member ${String(index + 1).padStart(4, '0')}`,
+            department: `Department ${index % 10}`,
+            capacity: 100,
+        }));
+        const fixtureLoads = Object.fromEntries(fixtureMembers.map((member) => [
+            member.member_id,
+            Object.fromEntries(visibleMonths.map((month, monthIndex) => [month, (member.member_id + monthIndex) % 121])),
+        ]));
+        membersList.mockResolvedValue(fixtureMembers);
+        memberLoads.mockResolvedValue(fixtureLoads);
+        allocationsList = [];
+
+        const { initMemberView } = await import('../js/member/member-view.js');
+        await initMemberView();
+        const counts = [membersList, themesList, memberLoads, warnings, allocationsApiList].map((mock) => mock.mock.calls.length);
+
+        const search = document.getElementById('member-search');
+        const startedAt = performance.now();
+        search.value = 'Member 0500';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        const elapsedMs = performance.now() - startedAt;
+
+        expect(document.querySelectorAll('tr.member-row')).toHaveLength(1);
+        expect(document.querySelector('tr.member-row')?.textContent).toContain('Member 0500');
+        expect([membersList, themesList, memberLoads, warnings, allocationsApiList].map((mock) => mock.mock.calls.length)).toEqual(counts);
+        expect(elapsedMs).toBeLessThan(150);
+    });
+
+    it('renders aggregate theme cells as readonly without disabled edit buttons', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-04', scale: 3, bucketMonths: 3, rangeMonths: 3,
+            visibleCount: 1, memberSearch: '', preset: 'rolling-6',
+        });
+        visibleMonths = ['2026-04'];
+        const { initMemberView } = await import('../js/member/member-view.js');
+        await initMemberView();
+
+        const themeCell = document.querySelector('.member-theme-cell');
+        expect(themeCell?.classList.contains('is-readonly')).toBe(true);
+        expect(themeCell?.hasAttribute('tabindex')).toBe(false);
+        expect(themeCell?.hasAttribute('role')).toBe(false);
+        expect(document.querySelector('.member-capacity-button')).toBeNull();
+        expect(document.querySelector('.member-capacity-readonly')).not.toBeNull();
     });
 });

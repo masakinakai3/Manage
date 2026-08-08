@@ -365,7 +365,8 @@ function initUiConfig() {
 
     const updatePreset = (preset) => {
         const config = getPresetConfig(preset);
-        updateViewState({ preset, ...config });
+        const currentState = loadViewState();
+        updateViewState({ ...config, bucketMonths: currentState.bucketMonths, preset }, { source: 'shared-period' });
         document.getElementById('shared-period-preset').value = preset;
         document.getElementById('member-period-preset').value = preset;
         showToast(`表示期間を「${presetLabel(preset)}」に切り替えました。`, 'info');
@@ -384,8 +385,8 @@ function initUiConfig() {
         }
     };
     const storedGanttControlsState = localStorage.getItem('gantt_controls_collapsed');
-    const ganttControlsCollapsed = window.matchMedia('(max-width: 1024px)').matches
-        || storedGanttControlsState !== 'false';
+    const ganttControlsCollapsed = window.matchMedia('(max-width: 959px)').matches
+        && storedGanttControlsState !== 'false';
     applyGanttControlsCollapsed(ganttControlsCollapsed);
     ganttControlsToggle?.addEventListener('click', () => {
         const collapsed = !ganttControls?.classList.contains('is-collapsed');
@@ -427,6 +428,7 @@ async function switchView(viewName) {
         return;
     }
     currentView = viewName;
+    updateViewState({ activeView: viewName }, { source: 'navigation' });
 
     document.querySelectorAll('.nav-item').forEach((item) => {
         item.classList.toggle('active', item.dataset.view === viewName);
@@ -443,8 +445,8 @@ async function switchView(viewName) {
     });
 
     if (viewName === 'insights') clearScenarioPreview();
-    if (viewName === 'gantt') refreshGantt();
-    if (viewName === 'member-load') refreshMemberView();
+    if (viewName === 'gantt') refreshGantt({ useCache: true });
+    if (viewName === 'member-load') refreshMemberView({ useCache: true });
     if (viewName === 'insights') refreshInsightsView();
     if (viewName === 'themes') loadThemeList();
     if (viewName === 'members') loadMemberList();
@@ -1386,6 +1388,9 @@ function refreshSavedViewOptions(selectedId = '') {
     if (selectedId && savedViewsCache.some((view) => view.id === selectedId)) {
         select.value = selectedId;
     }
+    const selectedView = savedViewsCache.find((view) => view.id === select.value);
+    const label = document.getElementById('gantt-current-view-name');
+    if (label) label.textContent = selectedView ? `表示: ${selectedView.name}` : '表示: 未保存';
 }
 
 async function saveCurrentView() {
@@ -1433,7 +1438,7 @@ function applySelectedSavedView() {
     const view = savedViewsCache.find((item) => item.id === select.value) || loadSavedViews().find((item) => item.id === select.value);
     if (!view) return;
 
-    updateViewState(view.state || {});
+    updateViewState(view.state || {}, { source: 'saved-view' });
     if (view.state?.groupBy) {
         const groupByInput = document.getElementById('gantt-group-by');
         if (groupByInput) groupByInput.value = view.state.groupBy;
