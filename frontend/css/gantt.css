@@ -9,6 +9,7 @@
    ========================================== */
 
 .gantt-container {
+    container-type: inline-size;
     flex: 1;
     overflow: auto;
     overscroll-behavior: contain;
@@ -125,10 +126,33 @@
 }
 
 .gantt-table {
+    --gantt-label-column-width: 420px;
+    --gantt-visible-month-count: 1;
     border-collapse: separate;
     border-spacing: 0;
-    width: max-content;
-    min-width: 100%;
+    table-layout: fixed;
+    width: max(
+        100cqw,
+        calc(
+            var(--gantt-label-column-width)
+            + var(--gantt-visible-month-count) * var(--cell-width, 56px)
+        )
+    );
+    min-width: 0;
+}
+
+.gantt-table col.gantt-label-column {
+    width: var(--gantt-label-column-width);
+}
+
+.gantt-table col.gantt-month-column {
+    width: max(
+        var(--cell-width, 56px),
+        calc(
+            (100cqw - var(--gantt-label-column-width))
+            / var(--gantt-visible-month-count)
+        )
+    );
 }
 
 /* Header */
@@ -153,9 +177,9 @@
     position: sticky;
     left: 0;
     z-index: 6;
-    min-width: 360px;
-    width: 360px;
-    max-width: 360px;
+    min-width: var(--gantt-label-column-width);
+    width: var(--gantt-label-column-width);
+    max-width: var(--gantt-label-column-width);
     text-align: left;
     padding-left: var(--space-5);
 }
@@ -204,9 +228,9 @@
     padding: 0 var(--space-4);
     white-space: nowrap;
     font-weight: 500;
-    min-width: 360px;
-    width: 360px;
-    max-width: 360px;
+    min-width: var(--gantt-label-column-width);
+    width: var(--gantt-label-column-width);
+    max-width: var(--gantt-label-column-width);
     border-right-color: var(--color-border-light);
 }
 
@@ -818,6 +842,7 @@
 
 /* Member assignment buttons */
 .theme-label-cell {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: flex-start;
@@ -929,7 +954,8 @@
 .theme-toggle {
     min-width: 0;
     overflow: hidden;
-    flex-shrink: 1;
+    flex: 1 1 auto;
+    max-width: 100%;
     padding: 7px 10px 7px 6px;
     border-radius: var(--radius-md);
     background: color-mix(in srgb, var(--color-bg-card) 82%, transparent);
@@ -943,7 +969,9 @@
 }
 
 .theme-name-text {
-    max-width: clamp(120px, 16vw, 200px);
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 auto;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1443,20 +1471,18 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
 }
 
 @media (max-width: 1024px) {
-    .gantt-table thead th:first-child,
-    .gantt-table tbody td:first-child {
-        min-width: 240px;
-        width: 240px;
-        max-width: 240px;
+    .gantt-table {
+        --gantt-label-column-width: 360px;
     }
 }
 
 @media (max-width: 720px) {
+    .gantt-table {
+        --gantt-label-column-width: 240px;
+    }
+
     .gantt-table thead th:first-child,
     .gantt-table tbody td:first-child {
-        min-width: 156px;
-        width: 156px;
-        max-width: 156px;
         padding-inline: var(--space-2);
     }
 
@@ -1552,14 +1578,23 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
     box-shadow: inset 2px 0 var(--color-interaction-selected), inset -2px 0 var(--color-interaction-selected);
 }
 
-@media (min-width: 960px) {
+@media (min-width: 721px) {
     .theme-label-actions {
+        position: absolute;
+        inset-inline-end: 0;
+        top: 50%;
+        z-index: 1;
+        padding-inline-start: var(--space-4);
+        background: linear-gradient(90deg, transparent, var(--color-bg-elevated) var(--space-4));
         opacity: 0;
+        pointer-events: none;
+        transform: translateY(-50%);
         transition: opacity var(--transition-fast);
     }
 
     .gantt-row-summary:hover .theme-label-actions,
     .gantt-row-summary:focus-within .theme-label-actions {
         opacity: 1;
+        pointer-events: auto;
     }
 }

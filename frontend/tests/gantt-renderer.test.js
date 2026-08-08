@@ -936,6 +936,40 @@ describe('gantt-renderer regressions', () => {
         expect(controls?.contains(document.getElementById('gantt-export-image'))).toBe(true);
     });
 
+    it('keeps the label column fixed while visible months consume the remaining width', async () => {
+        visibleMonths = ['2026-04', '2026-05', '2026-06'];
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const table = document.getElementById('gantt-table');
+        const columns = table?.querySelector('colgroup.gantt-columns');
+        expect(table?.style.getPropertyValue('--gantt-visible-month-count')).toBe('3');
+        expect(columns?.querySelectorAll('col')).toHaveLength(2);
+        expect(columns?.querySelector('.gantt-label-column')).not.toBeNull();
+        expect(columns?.querySelector('.gantt-month-column')?.getAttribute('span')).toBe('3');
+
+        visibleMonths = ['2026-04'];
+        await refreshGantt();
+
+        expect(table?.style.getPropertyValue('--gantt-visible-month-count')).toBe('1');
+        expect(columns?.querySelector('.gantt-month-column')?.getAttribute('span')).toBe('1');
+        expect(table?.querySelectorAll('colgroup.gantt-columns')).toHaveLength(1);
+    });
+
+    it('reserves theme-name space instead of letting hidden row actions consume it', () => {
+        const css = readFileSync(resolve(process.cwd(), 'css/gantt.css'), 'utf8');
+        const responsiveActions = css.slice(css.indexOf('@media (min-width: 721px)'));
+
+        expect(css).toContain('--gantt-label-column-width: 420px;');
+        expect(css).toContain('--gantt-label-column-width: 360px;');
+        expect(css).toContain('--gantt-label-column-width: 240px;');
+        expect(css).toMatch(/\.theme-toggle\s*\{[^}]*flex:\s*1 1 auto;/s);
+        expect(css).toMatch(/\.theme-name-text\s*\{[^}]*flex:\s*1 1 auto;/s);
+        expect(responsiveActions).toMatch(/\.theme-label-actions\s*\{[^}]*position:\s*absolute;/s);
+        expect(responsiveActions).toMatch(/\.theme-label-actions\s*\{[^}]*pointer-events:\s*none;/s);
+    });
+
     it('handles the static bucket control without taking ownership of the shared preset', async () => {
         const { initGantt } = await import('../js/gantt/gantt-renderer.js');
         const { updateViewState } = await import('../js/shared-state.js');

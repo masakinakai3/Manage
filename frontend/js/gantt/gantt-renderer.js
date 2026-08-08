@@ -2825,6 +2825,18 @@ function renderTable(months) {
     const current = currentMonth();
     scenarioPreviewContext = buildScenarioPreviewContext();
     renderFilterControls();
+    const table = document.getElementById('gantt-table');
+    if (table) {
+        const monthCount = Math.max(months.length, 1);
+        table.style.setProperty('--gantt-visible-month-count', String(monthCount));
+        let columns = table.querySelector('colgroup.gantt-columns');
+        if (!columns) {
+            columns = document.createElement('colgroup');
+            columns.className = 'gantt-columns';
+            table.prepend(columns);
+        }
+        columns.innerHTML = `<col class="gantt-label-column"><col class="gantt-month-column" span="${monthCount}">`;
+    }
     document.getElementById('gantt-thead').innerHTML = `<tr><th>テーマ / メンバー</th>${months.map((month) => `<th class="${month === current ? 'month-current' : ''}">${formatMonthHeader(month, getBucketSize(month)).replace('\n', '<br>')}</th>`).join('')}</tr>`;
     const rows = [];
     document.querySelectorAll('#gantt-thead th').forEach((header, index) => {
