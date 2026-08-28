@@ -12,15 +12,9 @@ import { initMemberView, refreshMemberView } from './member/member-view.js';
 import { getShortcutKey, shouldIgnoreShortcut } from './shortcut-utils.js';
 import { initSidebarNavigation } from './sidebar.js';
 import { filterAndSortThemes, getThemeCategoryTone, summarizeThemeStatuses } from './theme-list-utils.js';
+import { THEME_COLORS } from './theme-colors.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
-
-const THEME_COLORS = [
-    '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
-    '#f59e0b', '#eab308', '#84cc16', '#22c55e', '#10b981',
-    '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#2563eb',
-    '#64748b', '#6b7280', '#ef4444', '#dc2626', '#a855f7',
-];
 
 const STATUS_LABELS = {
     planning: '計画中',
