@@ -94,7 +94,7 @@ vi.mock('../js/shared-state.js', () => ({
         ganttSearch: '',
         ganttCategory: '',
         ganttOwner: '',
-        ganttStatus: 'all',
+        ganttStatus: ['all'],
         ganttPriority: 'all',
         groupBy: 'none',
     })),
@@ -168,10 +168,22 @@ function renderBaseDom() {
         <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-category-filter"><option value="">all categories</option></select>
         <select id="gantt-owner-filter"><option value="">all members</option></select>
-        <select id="gantt-status-filter"><option value="all">all statuses</option><option value="open">open</option><option value="stop">stop</option><option value="completed">completed</option></select>
+        <details id="gantt-status-filter">
+            <summary><span data-gantt-status-label>all statuses</span></summary>
+            <div role="group">
+                <label><input type="checkbox" value="open">open</label>
+                <label><input type="checkbox" value="planning">planning</label>
+                <label><input type="checkbox" value="active">active</label>
+                <label><input type="checkbox" value="stop">stop</label>
+                <label><input type="checkbox" value="completed">completed</label>
+                <label><input type="checkbox" value="cancelled">cancelled</label>
+                <button type="button" data-gantt-status-clear>clear</button>
+            </div>
+        </details>
         <select id="gantt-priority-filter"><option value="all">all priorities</option><option value="1">p1</option></select>
         <select id="gantt-group-by"><option value="none" selected>none</option></select>
         <button id="gantt-filter-reset" type="button"></button>
+        <div id="gantt-active-filters" hidden></div>
         <div class="gantt-control-row-primary">
             <div class="month-nav">
                 <button id="gantt-prev" type="button"></button>
@@ -1061,7 +1073,7 @@ describe('gantt-renderer regressions', () => {
             ganttSearch: 'alice',
             ganttCategory: 'Delivery',
             ganttOwner: 'alice',
-            ganttStatus: 'open',
+            ganttStatus: ['planning', 'active'],
             ganttPriority: '1',
             groupBy: 'status',
         });
@@ -1071,14 +1083,44 @@ describe('gantt-renderer regressions', () => {
 
         expect(document.getElementById('gantt-category-filter')).not.toBeNull();
         expect(document.getElementById('gantt-owner-filter')).not.toBeNull();
-        expect(document.getElementById('gantt-status-filter')?.value).toBe('open');
+        expect([...document.querySelectorAll('#gantt-status-filter input:checked')].map((input) => input.value)).toEqual(['planning', 'active']);
+        expect(document.querySelector('[data-gantt-status-label]')?.textContent).toBe('ステータス: 2件選択');
         expect(document.getElementById('gantt-priority-filter')?.value).toBe('1');
         expect(document.getElementById('gantt-owner-filter')?.value).toBe('Alice');
 
-        document.getElementById('gantt-status-filter').value = 'completed';
-        document.getElementById('gantt-status-filter').dispatchEvent(new Event('change', { bubbles: true }));
+        document.querySelector('#gantt-status-filter input[value="planning"]').checked = false;
+        document.querySelector('#gantt-status-filter input[value="completed"]').checked = true;
+        document.querySelector('#gantt-status-filter input[value="completed"]').dispatchEvent(new Event('change', { bubbles: true }));
 
-        expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttStatus: 'completed' }, { source: 'gantt-filter' });
+        expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttStatus: ['active', 'completed'] }, { source: 'gantt-filter' });
+    });
+
+    it('shows themes matching any selected status', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-04',
+            scale: 1,
+            ganttSearch: '',
+            ganttCategory: '',
+            ganttOwner: '',
+            ganttStatus: ['planning', 'active'],
+            ganttPriority: 'all',
+            groupBy: 'none',
+        });
+        themeList.mockResolvedValueOnce([
+            { theme_id: 1, name: 'Planning Theme', status: 'planning', color: '#00aaff', category: 'Delivery', milestones: [], member_ids: [] },
+            { theme_id: 2, name: 'Active Theme', status: 'active', color: '#00aaff', category: 'Delivery', milestones: [], member_ids: [] },
+            { theme_id: 3, name: 'Completed Theme', status: 'completed', color: '#00aaff', category: 'Delivery', milestones: [], member_ids: [] },
+        ]);
+
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        const visibleThemes = [...document.querySelectorAll('.gantt-row-summary .theme-name-text')]
+            .map((element) => element.textContent);
+        expect(visibleThemes).toEqual(['Planning Theme', 'Active Theme']);
+        expect(document.getElementById('gantt-active-filters')?.textContent).toContain('ステータス: 計画中');
+        expect(document.getElementById('gantt-active-filters')?.textContent).toContain('ステータス: 進行中');
     });
 
     it('renders a P0 badge for zero-priority themes', async () => {

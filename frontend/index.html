@@ -184,15 +184,21 @@
                                 <select id="gantt-owner-filter" class="view-select" aria-label="メンバー名で絞り込み">
                                     <option value="">担当者: すべて</option>
                                 </select>
-                                <select id="gantt-status-filter" class="view-select" aria-label="ステータスで絞り込み">
-                                    <option value="all">ステータス: すべて</option>
-                                    <option value="open">ステータス: 未完了のみ</option>
-                                    <option value="planning">計画中</option>
-                                    <option value="active">進行中</option>
-                                    <option value="stop">停止</option>
-                                    <option value="completed">完了</option>
-                                    <option value="cancelled">中止</option>
-                                </select>
+                                <details id="gantt-status-filter" class="gantt-status-filter">
+                                    <summary aria-label="ステータスで絞り込み">
+                                        <span data-gantt-status-label>ステータス: すべて</span>
+                                    </summary>
+                                    <div class="gantt-status-options" role="group" aria-label="表示するステータス（OR条件）">
+                                        <span class="gantt-status-options-note">いずれかに一致（OR）</span>
+                                        <label><input type="checkbox" value="open">未完了のみ</label>
+                                        <label><input type="checkbox" value="planning">計画中</label>
+                                        <label><input type="checkbox" value="active">進行中</label>
+                                        <label><input type="checkbox" value="stop">停止</label>
+                                        <label><input type="checkbox" value="completed">完了</label>
+                                        <label><input type="checkbox" value="cancelled">中止</label>
+                                        <button class="btn btn-ghost btn-sm" type="button" data-gantt-status-clear>すべて表示</button>
+                                    </div>
+                                </details>
                                 <select id="gantt-priority-filter" class="view-select" aria-label="優先度で絞り込み">
                                     <option value="all">優先度: すべて</option>
                                     <option value="0">優先度: P0以上</option>

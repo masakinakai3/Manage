@@ -1122,6 +1122,99 @@ summary:focus-visible,
     grid-column: auto;
 }
 
+.gantt-status-filter {
+    position: relative;
+    min-width: 0;
+    width: 100%;
+}
+
+.gantt-status-filter summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: var(--control-height);
+    padding: 7px var(--space-3);
+    background: var(--color-bg);
+    border: 1px solid var(--color-control-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+    font-size: var(--text-base);
+    cursor: pointer;
+    list-style: none;
+}
+
+.gantt-status-filter summary::-webkit-details-marker {
+    display: none;
+}
+
+.gantt-status-filter summary::after {
+    content: '';
+    width: 7px;
+    height: 7px;
+    flex: 0 0 auto;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg) translateY(-2px);
+}
+
+.gantt-status-filter[open] summary::after {
+    transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.gantt-status-filter summary:focus-visible {
+    border-color: var(--color-primary);
+    box-shadow: var(--focus-ring);
+    outline: 2px solid transparent;
+}
+
+.gantt-status-options {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    display: grid;
+    gap: var(--space-1);
+    width: max(100%, 240px);
+    padding: var(--space-3);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+}
+
+.gantt-status-options-note {
+    padding: 0 var(--space-1) var(--space-1);
+    color: var(--color-text-secondary);
+    font-size: var(--text-xs);
+}
+
+.gantt-status-options label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: var(--control-height-compact);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+
+.gantt-status-options label:hover {
+    background: var(--color-bg-hover);
+}
+
+.gantt-status-options input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--color-primary);
+}
+
+.gantt-status-options .btn {
+    justify-self: stretch;
+    margin-top: var(--space-1);
+}
+
 .gantt-grouping-controls {
     display: flex;
     justify-content: stretch;
@@ -2635,7 +2728,8 @@ td.out-period {
 }
 
 .gantt-filter-bar .view-select,
-.gantt-filter-bar .view-input {
+.gantt-filter-bar .view-input,
+.gantt-filter-bar .gantt-status-filter {
     min-width: 0;
     width: 100%;
 }
@@ -3967,6 +4061,10 @@ kbd {
     .dialog-input {
         min-height: 44px;
     }
+
+    .gantt-status-filter summary {
+        min-height: 44px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -4142,6 +4240,7 @@ kbd {
     .btn,
     .view-input,
     .view-select,
+    .gantt-status-filter summary,
     .dialog-input,
     .summary-card {
         border-width: 2px;
@@ -4154,6 +4253,7 @@ kbd {
     .scale-btn,
     .view-input,
     .view-select,
+    .gantt-status-filter summary,
     .dialog-input,
     .modal-close,
     [tabindex] {

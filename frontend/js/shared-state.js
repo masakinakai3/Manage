@@ -25,7 +25,7 @@ const defaultState = {
     ganttSearch: '',
     ganttCategory: '',
     ganttOwner: '',
-    ganttStatus: 'all',
+    ganttStatus: ['all'],
     ganttPriority: 'all',
     memberSearch: '',
     groupBy: 'none',
@@ -40,6 +40,17 @@ const defaultState = {
 function normalizePositiveInteger(value, fallback) {
     const parsed = Number.parseInt(String(value), 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeGanttStatus(value) {
+    const values = (Array.isArray(value) ? value : [value])
+        .filter((item) => typeof item === 'string' && item && item !== 'all');
+    return values.length > 0 ? [...new Set(values)] : ['all'];
+}
+
+function stateValuesEqual(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return Object.is(left, right);
+    return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 export function migrateViewState(rawState = {}) {
@@ -67,6 +78,7 @@ export function migrateViewState(rawState = {}) {
         scale: bucketMonths,
         visibleCount: Math.max(1, Math.ceil(rangeMonths / bucketMonths)),
         focusMonth: typeof raw.focusMonth === 'string' && raw.focusMonth ? raw.focusMonth : null,
+        ganttStatus: normalizeGanttStatus(raw.ganttStatus ?? defaultState.ganttStatus),
     };
 }
 
@@ -94,7 +106,7 @@ export function updateViewState(partial, { source = 'unknown' } = {}) {
     }
 
     const nextState = migrateViewState({ ...previousState, ...normalizedPartial });
-    const changedKeys = Object.keys(nextState).filter((key) => !Object.is(previousState[key], nextState[key]));
+    const changedKeys = Object.keys(nextState).filter((key) => !stateValuesEqual(previousState[key], nextState[key]));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState));
     window.dispatchEvent(new CustomEvent(EVENT_NAME, {
         detail: { state: nextState, changedKeys, source },

@@ -54,4 +54,13 @@ describe('shared view presets', () => {
         );
         unsubscribe();
     });
+
+    it('migrates a legacy single gantt status to the multi-select representation', () => {
+        expect(migrateViewState({ ganttStatus: 'active' })).toMatchObject({
+            ganttStatus: ['active'],
+        });
+        expect(migrateViewState({ ganttStatus: ['planning', 'active'] })).toMatchObject({
+            ganttStatus: ['planning', 'active'],
+        });
+    });
 });

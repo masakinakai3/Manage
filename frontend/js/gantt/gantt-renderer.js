@@ -10,6 +10,7 @@ import { getMemberCapacity } from '../member/member-capacity.js';
 import { toPng } from 'html-to-image';
 
 const STATUS_LABELS = { planning: '計画中', active: '進行中', stop: '停止', completed: '完了', cancelled: '中止' };
+const STATUS_FILTER_LABELS = { open: '未完了のみ', ...STATUS_LABELS };
 const DEV_RANK_LABELS = { '': '-', S: 'S', M: 'M', L: 'L' };
 const SCENARIO_RETURN_LABEL = '\u30A4\u30F3\u30B5\u30A4\u30C8\u306B\u623B\u308B';
 const SCENARIO_CLEAR_LABEL = '\u89E3\u9664';
@@ -146,7 +147,7 @@ let rangeMonths = 14;
 let searchQuery = '';
 let categoryFilter = '';
 let ownerFilter = '';
-let statusFilter = 'all';
+let statusFilters = ['all'];
 let priorityFilter = 'all';
 let groupBy = 'none';
 let selectedMonth = null;
@@ -303,7 +304,7 @@ export async function initGantt() {
     searchQuery = state.ganttSearch || '';
     categoryFilter = state.ganttCategory || '';
     ownerFilter = state.ganttOwner || '';
-    statusFilter = state.ganttStatus || 'all';
+    statusFilters = normalizeStatusFilters(state.ganttStatus);
     priorityFilter = state.ganttPriority || 'all';
     groupBy = state.groupBy || 'none';
     selectedMonth = state.focusMonth || null;
@@ -322,7 +323,7 @@ export async function initGantt() {
         searchQuery = next.ganttSearch || '';
         categoryFilter = next.ganttCategory || '';
         ownerFilter = next.ganttOwner || '';
-        statusFilter = next.ganttStatus || 'all';
+        statusFilters = normalizeStatusFilters(next.ganttStatus);
         priorityFilter = next.ganttPriority || 'all';
         groupBy = next.groupBy || 'none';
         selectedMonth = next.focusMonth || null;
@@ -563,7 +564,20 @@ function bindControls() {
     document.getElementById('gantt-theme-filter')?.addEventListener('change', (event) => updateViewState({ ganttSearch: event.target.value }, { source: 'gantt-filter' }));
     document.getElementById('gantt-category-filter')?.addEventListener('change', (event) => updateViewState({ ganttCategory: event.target.value }, { source: 'gantt-filter' }));
     document.getElementById('gantt-owner-filter')?.addEventListener('change', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }, { source: 'gantt-filter' }));
-    document.getElementById('gantt-status-filter')?.addEventListener('change', (event) => updateViewState({ ganttStatus: event.target.value }, { source: 'gantt-filter' }));
+    const statusFilterInput = document.getElementById('gantt-status-filter');
+    statusFilterInput?.addEventListener('change', (event) => {
+        if (!event.target.matches('input[type="checkbox"]')) return;
+        updateViewState({ ganttStatus: selectedStatusFilters(statusFilterInput) }, { source: 'gantt-filter' });
+    });
+    statusFilterInput?.querySelector('[data-gantt-status-clear]')?.addEventListener('click', () => {
+        updateViewState({ ganttStatus: ['all'] }, { source: 'gantt-filter' });
+        statusFilterInput.removeAttribute('open');
+    });
+    statusFilterInput?.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        statusFilterInput.removeAttribute('open');
+        statusFilterInput.querySelector('summary')?.focus();
+    });
     document.getElementById('gantt-priority-filter')?.addEventListener('change', (event) => updateViewState({ ganttPriority: event.target.value }, { source: 'gantt-filter' }));
     document.getElementById('gantt-group-by')?.addEventListener('change', (event) => updateViewState({ groupBy: event.target.value }, { source: 'gantt-filter' }));
     document.getElementById('gantt-density')?.addEventListener('change', (event) => {
@@ -574,7 +588,7 @@ function bindControls() {
         ganttSearch: '',
         ganttCategory: '',
         ganttOwner: '',
-        ganttStatus: 'all',
+        ganttStatus: ['all'],
         ganttPriority: 'all',
     }));
     document.getElementById('gantt-prev')?.addEventListener('click', () => updateViewState({ startMonth: addMonths(startMonth, -scale * 3) }, { source: 'gantt-period' }));
@@ -2460,7 +2474,27 @@ function syncFilterInputs() {
         if (owner.value !== nextOwnerValue) owner.value = nextOwnerValue;
     }
     const status = document.getElementById('gantt-status-filter');
-    if (status && status.value !== statusFilter) status.value = statusFilter;
+    if (status) {
+        const selected = new Set(statusFilters);
+        status.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+            input.checked = selected.has(input.value);
+        });
+        const labels = statusFilters
+            .filter((value) => value !== 'all')
+            .map((value) => STATUS_FILTER_LABELS[value] || value);
+        const summaryText = labels.length === 0
+            ? 'ステータス: すべて'
+            : (labels.length === 1 ? `ステータス: ${labels[0]}` : `ステータス: ${labels.length}件選択`);
+        const label = status.querySelector('[data-gantt-status-label]');
+        if (label) label.textContent = summaryText;
+        const summary = status.querySelector('summary');
+        if (summary) {
+            summary.title = labels.length > 1 ? `OR条件: ${labels.join('、')}` : '';
+            summary.setAttribute('aria-label', labels.length === 0
+                ? 'ステータスで絞り込み: すべて'
+                : `ステータスで絞り込み: ${labels.join('、')}（OR条件）`);
+        }
+    }
     const priority = document.getElementById('gantt-priority-filter');
     if (priority && priority.value !== priorityFilter) priority.value = priorityFilter;
     const groupByInput = document.getElementById('gantt-group-by');
@@ -2476,10 +2510,13 @@ function renderActiveFilterChips() {
     if (searchQuery) chips.push({ label: `テーマ: ${searchQuery}`, update: { ganttSearch: '' } });
     if (categoryFilter) chips.push({ label: `カテゴリ: ${categoryFilter}`, update: { ganttCategory: '' } });
     if (ownerFilter) chips.push({ label: `担当者: ${ownerFilter}`, update: { ganttOwner: '' } });
-    if (statusFilter !== 'all') {
-        const statusLabel = statusFilter === 'open' ? '未完了のみ' : STATUS_LABELS[statusFilter] || statusFilter;
-        chips.push({ label: `ステータス: ${statusLabel}`, update: { ganttStatus: 'all' } });
-    }
+    statusFilters.filter((value) => value !== 'all').forEach((value) => {
+        const nextStatuses = statusFilters.filter((item) => item !== value && item !== 'all');
+        chips.push({
+            label: `ステータス: ${STATUS_FILTER_LABELS[value] || value}`,
+            update: { ganttStatus: nextStatuses.length > 0 ? nextStatuses : ['all'] },
+        });
+    });
     if (priorityFilter !== 'all') chips.push({ label: `優先度: P${priorityFilter}以上`, update: { ganttPriority: 'all' } });
 
     if (chips.length === 0) {
@@ -2506,7 +2543,7 @@ function renderActiveFilterChips() {
         ganttSearch: '',
         ganttCategory: '',
         ganttOwner: '',
-        ganttStatus: 'all',
+        ganttStatus: ['all'],
         ganttPriority: 'all',
     }));
 }
@@ -2551,6 +2588,18 @@ function themeSearchText(theme) {
     return String(theme.name || '').trim();
 }
 
+function normalizeStatusFilters(value) {
+    const values = (Array.isArray(value) ? value : [value])
+        .filter((item) => typeof item === 'string' && item && item !== 'all');
+    return values.length > 0 ? [...new Set(values)] : ['all'];
+}
+
+function selectedStatusFilters(container) {
+    const selected = [...container.querySelectorAll('input[type="checkbox"]:checked')]
+        .map((input) => input.value);
+    return selected.length > 0 ? selected : ['all'];
+}
+
 function matchesThemeFilters(theme) {
     if (searchQuery && themeSearchText(theme) !== searchQuery) return false;
     if (categoryFilter && (theme.category || '') !== categoryFilter) return false;
@@ -2562,8 +2611,14 @@ function matchesThemeFilters(theme) {
         if (!hasOwnerMatch) return false;
     }
 
-    if (statusFilter === 'open' && ['completed', 'cancelled'].includes(theme.status)) return false;
-    if (!['all', 'open'].includes(statusFilter) && theme.status !== statusFilter) return false;
+    if (!statusFilters.includes('all')) {
+        const matchesStatus = statusFilters.some((value) => (
+            value === 'open'
+                ? !['completed', 'cancelled'].includes(theme.status)
+                : theme.status === value
+        ));
+        if (!matchesStatus) return false;
+    }
 
     if (priorityFilter !== 'all') {
         const minimumPriority = Number.parseInt(priorityFilter, 10);
