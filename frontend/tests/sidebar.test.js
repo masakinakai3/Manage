@@ -1,6 +1,22 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+describe('sidebar branding', () => {
+    it('uses an accessible Manage wordmark', () => {
+        const source = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
+        const page = new DOMParser().parseFromString(source, 'text/html');
+        const brand = page.querySelector('.sidebar-brand-wordmark');
+
+        expect(brand?.getAttribute('role')).toBe('img');
+        expect(brand?.getAttribute('aria-label')).toBe('Manage');
+        expect(brand?.textContent.trim()).toBe('Manage');
+        expect(page.querySelector('.sidebar-brand-icon')).toBeNull();
+        expect(page.querySelector('.sidebar-title')).toBeNull();
+    });
+});
 
 describe('responsive sidebar navigation', () => {
     let cleanup = () => {};

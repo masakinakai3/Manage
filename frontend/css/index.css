@@ -719,15 +719,37 @@ summary:focus-visible,
 .sidebar-header {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
     padding: var(--space-5) var(--space-4) var(--space-4);
     border-bottom: 1px solid var(--color-border);
 }
 
-.sidebar-title {
-    font-weight: 700;
-    font-size: var(--text-base);
-    letter-spacing: 0;
+.sidebar-brand-wordmark {
+    position: relative;
+    display: inline-block;
+    padding: var(--space-1) 0 var(--space-2);
+    background: linear-gradient(105deg, var(--color-primary-hover) 0%, var(--color-info) 54%, var(--color-selection) 100%);
+    background-clip: text;
+    color: var(--color-primary-hover);
+    filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--color-primary) 22%, transparent));
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 800;
+    letter-spacing: -0.055em;
+    line-height: 1;
+    user-select: none;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.sidebar-brand-wordmark::after {
+    position: absolute;
+    bottom: 0;
+    left: 0.08em;
+    width: 44%;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--color-primary-hover), var(--color-selection));
+    content: "";
 }
 
 .brand-mark {
