@@ -79,6 +79,7 @@ npm run build
 | `frontend/tests/date-utils.test.js` | 月範囲、加減算、scale見出し、配賦集約 |
 | `frontend/tests/shortcut-utils.test.js` | Undo/Redo、入力中shortcut、memo field |
 | `frontend/tests/theme-list-utils.test.js` | filter/sort、legacy status、category tone、1000行fixtureの処理budget |
+| `frontend/tests/theme-colors.test.js` | 32色の一意性、選択判定用の色正規化、同色テーマの使用件数集計 |
 | `frontend/tests/gantt-editor.test.js` | edit、保存、0と空欄、keyboard、optimistic state |
 | `frontend/tests/gantt-dnd.test.js` | 同一Theme内移動と異Theme拒否 |
 | `frontend/tests/gantt-theme-reorder.test.js` | Theme行のdrop位置と自己drop拒否 |
@@ -99,6 +100,7 @@ npm run build
 - GanttとMember Loadの一括展開／折りたたみアイコンはaccessible nameを持つ。
 - Member Loadの上部コントロールは通常幅／狭幅とも`aria-expanded`と表示状態を同期する。
 - データ取得状態と保存状態を分離し、500/offline時に`fresh`を表示せず、読込失敗で保存状態を上書きしない。
+- テーマ色は現在の選択状態を維持し、同色テーマを大文字・小文字の差なく集計する。
 - CSSの色リテラルと13px未満の文字はlintで拒否する。
 - 60か月の観測窓と1000行の一覧fixtureを回帰対象にする。
 

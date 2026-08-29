@@ -1767,7 +1767,7 @@ summary:focus-visible,
 
 #modal-color-picker {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
     gap: var(--space-2);
     padding: var(--space-2);
     background: var(--color-bg);
@@ -1777,6 +1777,7 @@ summary:focus-visible,
 
 .color-choice {
     min-height: 52px;
+    position: relative;
     display: grid;
     grid-template-columns: 24px 1fr;
     align-items: center;
@@ -1804,12 +1805,56 @@ summary:focus-visible,
     box-shadow: var(--focus-ring);
 }
 
+.color-choice.is-selected {
+    background: color-mix(in srgb, var(--color-primary) 12%, var(--color-bg-elevated));
+    color: var(--color-text);
+    font-weight: 700;
+}
+
 .color-choice-swatch {
     width: 24px;
     height: 24px;
+    position: relative;
+    display: grid;
+    place-items: center;
     border-radius: 50%;
     border: 2px solid color-mix(in srgb, var(--color-on-accent) 72%, transparent);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-text) 28%, transparent);
+}
+
+.color-choice-check {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: var(--color-on-accent);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0;
+    filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--color-text) 65%, transparent));
+}
+
+.color-choice.is-selected .color-choice-check {
+    opacity: 1;
+}
+
+.color-choice-count {
+    position: absolute;
+    inset-block-start: -9px;
+    inset-inline-end: -9px;
+    min-width: 18px;
+    height: 18px;
+    padding-inline: 4px;
+    display: inline-grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--color-on-accent) 42%, transparent);
+    border-radius: var(--radius-lg);
+    background: var(--color-warning);
+    color: var(--color-on-accent);
+    font-size: var(--text-xs);
+    font-weight: 800;
+    line-height: 1;
+    box-shadow: var(--shadow-sm);
 }
 
 .color-choice-state {

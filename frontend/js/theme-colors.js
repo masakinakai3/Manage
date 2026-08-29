@@ -13,3 +13,18 @@ export const THEME_COLORS = [
     '#ea580c', '#ca8a04', '#65a30d', '#16a34a', '#059669',
     '#0d9488', '#0891b2',
 ];
+
+export function normalizeThemeColor(value, fallback = THEME_COLORS[0]) {
+    const color = String(value || '').trim();
+    return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : fallback;
+}
+
+export function summarizeThemeColorUsage(themes = []) {
+    return themes.reduce((summary, theme) => {
+        const color = normalizeThemeColor(theme?.color, '');
+        if (!color) return summary;
+        if (!summary[color]) summary[color] = [];
+        summary[color].push(String(theme?.name || '').trim() || '名称未設定');
+        return summary;
+    }, {});
+}

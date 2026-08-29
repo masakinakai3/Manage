@@ -12,7 +12,7 @@ import { initMemberView, refreshMemberView } from './member/member-view.js';
 import { getShortcutKey, shouldIgnoreShortcut } from './shortcut-utils.js';
 import { initSidebarNavigation } from './sidebar.js';
 import { filterAndSortThemes, getThemeCategoryTone, summarizeThemeStatuses } from './theme-list-utils.js';
-import { THEME_COLORS } from './theme-colors.js';
+import { THEME_COLORS, normalizeThemeColor, summarizeThemeColorUsage } from './theme-colors.js';
 import { deleteSavedView, getPresetConfig, loadOnboardingState, loadSavedViews, loadViewState, updateOnboardingState, updateViewState, upsertSavedView } from './shared-state.js';
 import { formatError, initUi, setBusyState, setSaveState, showConfirmDialog, showPromptDialog, showToast } from './ui.js';
 
@@ -55,11 +55,6 @@ function escapeHtml(value) {
         .replaceAll('>', '&gt;')
         .replaceAll('"', '&quot;')
         .replaceAll("'", '&#39;');
-}
-
-function safeThemeColor(value) {
-    const color = String(value || '').trim();
-    return /^#[0-9a-f]{6}$/i.test(color) ? color : THEME_COLORS[0];
 }
 
 let currentUser = null;
@@ -530,7 +525,7 @@ function renderThemeList() {
     list.innerHTML = visibleThemes.map((theme) => {
         const isInactive = ['completed', 'done', 'cancelled'].includes(theme.status);
         const categoryTone = getThemeCategoryTone(theme.category);
-        const themeColor = safeThemeColor(theme.color);
+        const themeColor = normalizeThemeColor(theme.color);
         return `
             <article class="card theme-card management-row theme-card-category-${categoryTone}${isInactive ? ' theme-card-inactive' : ''}" data-theme-id="${theme.theme_id}" style="--theme-accent:${themeColor}">
                 <div class="card-header">
@@ -612,19 +607,18 @@ async function openThemeModal(theme = null) {
         console.warn('Failed to preload themes for color picker', error);
     }
 
-    const usedColorsMap = {};
-    existingThemes.forEach((item) => {
-        if (isEdit && item.theme_id === theme.theme_id) return;
-        if (!usedColorsMap[item.color]) usedColorsMap[item.color] = [];
-        usedColorsMap[item.color].push(item.name);
-    });
-
-    const selectedColor = safeThemeColor(theme?.color);
+    const usedColorsMap = summarizeThemeColorUsage(existingThemes);
+    const selectedColor = normalizeThemeColor(theme?.color);
     const colorOptions = THEME_COLORS.map((color, index) => {
         const usedBy = usedColorsMap[color] || [];
-        const title = usedBy.length > 0 ? `使用中: ${usedBy.join(', ')}` : '未使用';
+        const usageCount = usedBy.length;
+        const usageLabel = usageCount > 0 ? `${usageCount}件で使用中: ${usedBy.join(', ')}` : '未使用';
         const selected = color === selectedColor;
-        return `<button class="color-choice ${usedBy.length ? 'is-used' : ''}${selected ? ' is-selected' : ''}" type="button" data-color="${color}" aria-label="カラー ${index + 1}、${escapeHtml(title)}" aria-pressed="${selected}" title="${escapeHtml(title)}"><span class="color-choice-swatch" style="background:${color}"></span><span class="color-choice-state">${usedBy.length ? '使用中' : '未使用'}</span></button>`;
+        const accessibleLabel = `カラー ${index + 1}、${selected ? '選択中、' : ''}${usageLabel}`;
+        const duplicateBadge = usageCount > 1
+            ? `<span class="color-choice-count" aria-hidden="true">${usageCount}</span>`
+            : '';
+        return `<button class="color-choice ${usageCount ? 'is-used' : ''}${selected ? ' is-selected' : ''}" type="button" data-color="${color}" data-color-index="${index + 1}" data-usage-count="${usageCount}" data-usage-label="${escapeHtml(usageLabel)}" aria-label="${escapeHtml(accessibleLabel)}" aria-pressed="${selected}" title="${escapeHtml(usageLabel)}"><span class="color-choice-swatch" style="background:${color}"><svg class="color-choice-check" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"></path></svg>${duplicateBadge}</span><span class="color-choice-state">${selected ? '選択中' : (usageCount ? '使用中' : '未使用')}</span></button>`;
     }).join('');
     const compareMilestoneMonth = (left, right) => {
         const leftMonth = left?.month || '9999-99';
@@ -742,9 +736,13 @@ async function openThemeModal(theme = null) {
             document.querySelectorAll('#modal-color-picker .color-choice').forEach((item) => {
                 item.classList.remove('is-selected');
                 item.setAttribute('aria-pressed', 'false');
+                item.setAttribute('aria-label', `カラー ${item.dataset.colorIndex}、${item.dataset.usageLabel}`);
+                item.querySelector('.color-choice-state').textContent = Number(item.dataset.usageCount) > 0 ? '使用中' : '未使用';
             });
             choice.classList.add('is-selected');
             choice.setAttribute('aria-pressed', 'true');
+            choice.setAttribute('aria-label', `カラー ${choice.dataset.colorIndex}、選択中、${choice.dataset.usageLabel}`);
+            choice.querySelector('.color-choice-state').textContent = '選択中';
             document.getElementById('modal-theme-color').value = choice.dataset.color;
         });
     });
