@@ -91,6 +91,7 @@ npm run build
 
 - 未設定配賦と明示0を区別する。
 - Gantt編集、copy/paste、Undo/Redo、端を越える月移動を維持し、データ読込前の一括折りたたみ要求を読込後の行へ反映する。
+- Ganttのテーマサマリ行は、開発ランク、優先度、開発ステータスを常時表示し、行アクションとは別のメタ情報領域に保持する。
 - 月highlightは単一で、再clickにより解除できる。
 - 完了・中止状態はsummaryとnested rowの表示全体へ非アクティブ表示として反映する。
 - 720px境界を越えるresizeでGanttのモバイルtheme navigatorを生成・破棄する。

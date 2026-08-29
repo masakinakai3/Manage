@@ -816,23 +816,7 @@ function decorateThemeSummaryRows() {
     document.querySelectorAll('.gantt-row-summary').forEach((row) => {
         const themeId = Number.parseInt(row.dataset.themeId || '', 10);
         const theme = allThemes.find((item) => item.theme_id === themeId);
-        const labelCell = row.querySelector('.theme-label-cell');
-        if (!theme || !labelCell) return;
-
-        const devRank = getDevRankLabel(theme.dev_rank);
-        const existingBadge = labelCell.querySelector('.theme-dev-rank-badge');
-        if (!existingBadge) {
-            const priorityBadge = labelCell.querySelector('.theme-priority-badge');
-            const markup = `<span class="theme-dev-rank-badge" title="開発ランク ${devRank}">${devRank}</span>`;
-            if (priorityBadge) {
-                priorityBadge.insertAdjacentHTML('beforebegin', markup);
-            } else {
-                labelCell.insertAdjacentHTML('beforeend', markup);
-            }
-        } else {
-            existingBadge.textContent = devRank;
-            existingBadge.setAttribute('title', `開発ランク ${devRank}`);
-        }
+        if (!theme) return;
 
         row.querySelectorAll('td:not(:first-child) .gantt-cell').forEach((cell) => {
             const hasSummaryValue = cell.querySelector('.gantt-summary-value, .gantt-star-label');
@@ -2912,6 +2896,7 @@ function renderTable(months) {
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
+            const devRank = getDevRankLabel(theme.dev_rank);
             const inactive = ['completed', 'cancelled'].includes(theme.status);
             const rowStateClass = [
                 inactive ? 'theme-row-inactive' : '',
@@ -2920,10 +2905,11 @@ function renderTable(months) {
             ].filter(Boolean).join(' ');
             const rowStateClassName = rowStateClass ? ` ${rowStateClass}` : '';
             const priorityBadge = `<span class="theme-priority-badge" title="優先度 ${priorityValue}">P${priorityValue}</span>`;
+            const devRankBadge = `<span class="theme-dev-rank-badge" title="開発ランク ${devRank}">ランク ${devRank}</span>`;
             const dragHandle = groupBy === 'none'
                 ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg></span>`
                 : '';
-            rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button" aria-expanded="${!collapsedThemes.has(theme.theme_id)}"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-actions">${priorityBadge}${themeStatusSelect(theme)}${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<div class="theme-label-content"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button" aria-expanded="${!collapsedThemes.has(theme.theme_id)}"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-meta" aria-label="${escapeHtmlAttr(`${theme.name} の開発情報`)}">${devRankBadge}${priorityBadge}${themeStatusSelect(theme)}</div></div><div class="theme-label-actions">${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">通常 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });

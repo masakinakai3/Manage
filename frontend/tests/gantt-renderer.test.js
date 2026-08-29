@@ -982,6 +982,19 @@ describe('gantt-renderer regressions', () => {
         expect(responsiveActions).toMatch(/\.theme-label-actions\s*\{[^}]*pointer-events:\s*none;/s);
     });
 
+    it('keeps rank, priority, and development status visible in the theme label metadata', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const metadata = document.querySelector('.gantt-row-summary .theme-label-meta');
+        expect(metadata?.querySelector('.theme-dev-rank-badge')?.textContent).toBe('ランク S');
+        expect(metadata?.querySelector('.theme-priority-badge')?.textContent).toBe('P0');
+        expect(metadata?.querySelector('.theme-status-select')?.value).toBe('active');
+        expect(metadata?.querySelector('.theme-milestone-btn')).toBeNull();
+        expect(metadata?.querySelector('.theme-assign-btn')).toBeNull();
+    });
+
     it('handles the static bucket control without taking ownership of the shared preset', async () => {
         const { initGantt } = await import('../js/gantt/gantt-renderer.js');
         const { updateViewState } = await import('../js/shared-state.js');
@@ -1138,7 +1151,7 @@ describe('gantt-renderer regressions', () => {
         await refreshGantt();
 
         const badge = document.querySelector('.theme-dev-rank-badge');
-        expect(badge?.textContent).toBe('S');
+        expect(badge?.textContent).toBe('ランク S');
     });
 
     it('greys out completed theme rows', async () => {

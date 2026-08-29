@@ -239,7 +239,7 @@
     background: var(--color-bg-elevated) !important;
     font-weight: 600 !important;
     font-size: var(--text-sm) !important;
-    height: 56px !important;
+    height: 72px !important;
     border-top: 2px solid var(--color-border-light);
 }
 
@@ -852,6 +852,22 @@
     overflow: hidden;
 }
 
+.theme-label-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.theme-label-meta {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    padding-inline: 6px;
+}
+
 .theme-drag-handle {
     flex-shrink: 0;
     display: inline-flex;
@@ -1058,6 +1074,10 @@
     font-weight: 700;
     line-height: 1;
     flex-shrink: 0;
+}
+
+.theme-label-meta .theme-status-select {
+    max-width: 104px;
 }
 
 /* Period Editor Popover */
@@ -1495,7 +1515,7 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
     }
 
     .gantt-row-summary td {
-        height: 52px !important;
+        height: 72px !important;
     }
 
     .gantt-row-member td:first-child {
@@ -1512,8 +1532,17 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
         flex: 1 1 auto;
         width: 100%;
         max-width: 100%;
-        min-height: 40px;
+        min-height: 34px;
         padding: 6px;
+    }
+
+    .theme-label-meta {
+        gap: 4px;
+        padding-inline: 4px;
+    }
+
+    .theme-label-meta .theme-status-select {
+        max-width: 88px;
     }
 
     .theme-name-text {
@@ -1590,6 +1619,11 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
         pointer-events: none;
         transform: translateY(-50%);
         transition: opacity var(--transition-fast);
+    }
+
+    .theme-label-content + .theme-label-actions {
+        top: 8px;
+        transform: none;
     }
 
     .gantt-row-summary:hover .theme-label-actions,
