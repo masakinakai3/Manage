@@ -75,7 +75,7 @@ npm run build
 | `frontend/tests/api.test.js` | GET no-storeとwrite requestのcache挙動 |
 | `frontend/tests/ui.test.js` | APIエラー日本語化、データ／保存状態の分離、toast表示とclose名、prompt値保持、入力中Escape |
 | `frontend/tests/sidebar.test.js` | 狭幅ドロワーのARIA、Escape、背景click、focus trap、幅変更 |
-| `frontend/tests/shared-state.test.js` | 四半期、6/12/24か月プリセット |
+| `frontend/tests/shared-state.test.js` | 四半期、上期（3～8月）/下期（9～翌2月）、6/12/24か月プリセット |
 | `frontend/tests/date-utils.test.js` | 月範囲、加減算、scale見出し、配賦集約 |
 | `frontend/tests/shortcut-utils.test.js` | Undo/Redo、入力中shortcut、memo field |
 | `frontend/tests/theme-list-utils.test.js` | filter/sort、legacy status、category tone、1000行fixtureの処理budget |

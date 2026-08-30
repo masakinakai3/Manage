@@ -30,6 +30,30 @@ describe('shared view presets', () => {
         });
     });
 
+    it('provides March-based first-half and second-half windows', () => {
+        expect(getPresetConfig('first-half')).toEqual({
+            startMonth: '2026-03',
+            rangeMonths: 6,
+            bucketMonths: 1,
+            scale: 1,
+            visibleCount: 6,
+        });
+        expect(getPresetConfig('second-half')).toEqual({
+            startMonth: '2026-09',
+            rangeMonths: 6,
+            bucketMonths: 1,
+            scale: 1,
+            visibleCount: 6,
+        });
+    });
+
+    it('keeps January and February in the half-year cycle that began the previous March', () => {
+        vi.setSystemTime(new Date('2026-01-15T00:00:00Z'));
+
+        expect(getPresetConfig('first-half').startMonth).toBe('2025-03');
+        expect(getPresetConfig('second-half').startMonth).toBe('2025-09');
+    });
+
     it('migrates v1 state without expanding the real period', () => {
         expect(migrateViewState({ scale: 3, visibleCount: 8 })).toMatchObject({
             stateVersion: 2,

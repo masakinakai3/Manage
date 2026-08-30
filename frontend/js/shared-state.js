@@ -131,8 +131,13 @@ export function getPresetConfig(preset) {
     const month = currentMonth();
     const [year, monthNumber] = month.split('-').map(Number);
     const quarterStart = Math.floor((monthNumber - 1) / 3) * 3 + 1;
+    const halfYearCycleStart = monthNumber >= 3 ? year : year - 1;
 
     switch (preset) {
+        case 'first-half':
+            return periodConfig(`${halfYearCycleStart}-03`, 6);
+        case 'second-half':
+            return periodConfig(`${halfYearCycleStart}-09`, 6);
         case 'current-quarter':
             return periodConfig(`${year}-${String(quarterStart).padStart(2, '0')}`, 3);
         case 'current-year':

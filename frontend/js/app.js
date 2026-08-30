@@ -1326,6 +1326,8 @@ function presetLabel(value) {
         'rolling-6': '直近 6 か月',
         'rolling-12': '直近 12 か月',
         'rolling-24': '直近 24 か月',
+        'first-half': '上期（3月～8月）',
+        'second-half': '下期（9月～2月）',
         'current-quarter': '今四半期',
         'current-year': '今年',
     };

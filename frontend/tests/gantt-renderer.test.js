@@ -872,6 +872,10 @@ describe('gantt-renderer regressions', () => {
         const collapseButton = toolbar?.querySelector('#gantt-collapse-all');
 
         expect(toolbar?.querySelector('#shared-period-preset')).not.toBeNull();
+        expect(toolbar?.querySelector('option[value="first-half"]')?.textContent).toBe('上期（3月～8月）');
+        expect(toolbar?.querySelector('option[value="second-half"]')?.textContent).toBe('下期（9月～2月）');
+        expect(page.querySelector('#member-period-preset option[value="first-half"]')?.textContent).toBe('上期（3月～8月）');
+        expect(page.querySelector('#member-period-preset option[value="second-half"]')?.textContent).toBe('下期（9月～2月）');
         expect(expandButton?.getAttribute('aria-label')).toBe('すべて展開');
         expect(collapseButton?.getAttribute('aria-label')).toBe('すべて折りたたみ');
         expect(expandButton?.querySelector('.ui-icon')).not.toBeNull();

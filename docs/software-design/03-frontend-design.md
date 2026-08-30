@@ -59,6 +59,8 @@ sequenceDiagram
 | `ganttDensity`, `memberDensity` | 画面別の表密度 |
 | `memberSort`, `memberGroup`, `memberDecisionFilter` | Member Load の判断条件 |
 
+`getPresetConfig()` は、3 月を年度サイクルの起点として、上期を 3～8 月、下期を 9～翌 2 月の各 6 か月へ変換する。1～2 月に選択した場合は、前年 3 月に始まった同じ年度サイクルを使用する。
+
 ### 4.2 方式
 
 | 仕組み | 使い方 |

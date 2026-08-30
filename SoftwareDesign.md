@@ -186,6 +186,7 @@ flowchart LR
 - `Insights` から `Gantt` / `Member Load` にドリルダウンできる。
 - `Themes` / `Members` で登録した内容は `Gantt` と `Member Load` の表示元になる。
 - 共有表示条件は version 2 の `shared-state.js` で保持される。実期間 `rangeMonths`、集計単位 `bucketMonths`、画面横断の `focusMonth` を分離し、通知は `{ state, changedKeys, source }` を渡す。
+- 期間プリセットは相対期間、四半期、暦年に加え、3 月を年度サイクルの起点とする上期（3～8 月）と下期（9～翌 2 月）を `startMonth` と `rangeMonths` に変換する。
 - v1 の `visibleCount × scale` は移行時に実期間へ変換し、`scale` / `visibleCount` は互換エイリアスとして残す。
 
 ## 7. データモデル要約
