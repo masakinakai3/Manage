@@ -11,6 +11,7 @@ import { toPng } from 'html-to-image';
 
 const STATUS_LABELS = { planning: '計画中', active: '進行中', stop: '停止', completed: '完了', cancelled: '中止' };
 const STATUS_FILTER_LABELS = { open: '未完了のみ', ...STATUS_LABELS };
+const PLAN_CERTAINTY_LABELS = { tentative: '仮', confirmed: '確' };
 const DEV_RANK_LABELS = { '': '-', S: 'S', M: 'M', L: 'L' };
 const SCENARIO_RETURN_LABEL = '\u30A4\u30F3\u30B5\u30A4\u30C8\u306B\u623B\u308B';
 const SCENARIO_CLEAR_LABEL = '\u89E3\u9664';
@@ -883,6 +884,29 @@ function bindRows() {
             event.target.disabled = false;
         }
     }));
+    document.querySelectorAll('.theme-plan-certainty-select').forEach((select) => select.addEventListener('change', async (event) => {
+        const themeId = Number.parseInt(event.target.dataset.themeId, 10);
+        const planCertainty = event.target.value;
+        const theme = allThemes.find((item) => item.theme_id === themeId);
+        const previousPlanCertainty = PLAN_CERTAINTY_LABELS[theme?.plan_certainty] ? theme.plan_certainty : 'tentative';
+        if (!theme || previousPlanCertainty === planCertainty) return;
+
+        event.target.disabled = true;
+        try {
+            setSaveState('saving', '計画確度を保存しています...');
+            await themesApi.update(themeId, { plan_certainty: planCertainty });
+            theme.plan_certainty = planCertainty;
+            setSaveState('saved', '計画確度を保存しました');
+            showToast('計画確度を更新しました。', 'success');
+            await refreshGantt();
+        } catch (error) {
+            event.target.value = previousPlanCertainty;
+            setSaveState('error', '計画確度の更新に失敗しました');
+            showToast(`計画確度の更新に失敗しました: ${formatError(error)}`, 'error');
+        } finally {
+            event.target.disabled = false;
+        }
+    }));
     document.querySelectorAll('.gantt-cell[data-theme]').forEach((button) => button.addEventListener('click', (event) => {
         selectCellButton(button, { extend: event.shiftKey });
         openEditorForButton(button);
@@ -897,6 +921,14 @@ function themeStatusSelect(theme) {
         .map(([value, label]) => `<option value="${value}" ${theme.status === value ? 'selected' : ''}>${label}</option>`)
         .join('');
     return `<select class="theme-status theme-status-select status-${theme.status}" data-theme-id="${theme.theme_id}" aria-label="${escapeHtml(theme.name)} のステータス">${options}</select>`;
+}
+
+function themePlanCertaintySelect(theme) {
+    const planCertainty = PLAN_CERTAINTY_LABELS[theme.plan_certainty] ? theme.plan_certainty : 'tentative';
+    const options = Object.entries(PLAN_CERTAINTY_LABELS)
+        .map(([value, label]) => `<option value="${value}" ${planCertainty === value ? 'selected' : ''}>${label}</option>`)
+        .join('');
+    return `<select class="theme-plan-certainty-select certainty-${planCertainty}" data-theme-id="${theme.theme_id}" aria-label="${escapeHtml(theme.name)} の計画確度" title="計画確度">${options}</select>`;
 }
 
 function themeActionButton(theme, action) {
@@ -2821,7 +2853,7 @@ function renderMobileThemeList(themes, months) {
                     <span class="theme-color-bar" style="background:${theme.color}"></span>
                     <span>${escapeHtml(theme.name)}</span>
                 </span>
-                <span class="gantt-mobile-theme-meta">担当 ${members.length}名 / 今月 ${currentTotal}% / ${STATUS_LABELS[theme.status] || theme.status}</span>
+                <span class="gantt-mobile-theme-meta">担当 ${members.length}名 / 今月 ${currentTotal}% / ${STATUS_LABELS[theme.status] || theme.status} / ${PLAN_CERTAINTY_LABELS[theme.plan_certainty] || PLAN_CERTAINTY_LABELS.tentative}</span>
             </button>
         `;
     }).join('');
@@ -2909,7 +2941,7 @@ function renderTable(months) {
             const dragHandle = groupBy === 'none'
                 ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg></span>`
                 : '';
-            rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<div class="theme-label-content"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button" aria-expanded="${!collapsedThemes.has(theme.theme_id)}"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-meta" aria-label="${escapeHtmlAttr(`${theme.name} の開発情報`)}">${devRankBadge}${priorityBadge}${themeStatusSelect(theme)}</div></div><div class="theme-label-actions">${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
+            rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<div class="theme-label-content"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button" aria-expanded="${!collapsedThemes.has(theme.theme_id)}"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-meta" aria-label="${escapeHtmlAttr(`${theme.name} の開発情報`)}">${devRankBadge}${priorityBadge}${themeStatusSelect(theme)}${themePlanCertaintySelect(theme)}</div></div><div class="theme-label-actions">${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
             members.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">通常 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });

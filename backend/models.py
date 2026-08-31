@@ -110,6 +110,7 @@ class Theme(db.Model):
     name = db.Column(db.String(200), nullable=False)
     category = db.Column(db.String(100), default='')
     status = db.Column(db.String(20), nullable=False, default='planning')
+    plan_certainty = db.Column(db.String(20), nullable=False, default='tentative')
     color = db.Column(db.String(7), default='#6366f1')
     priority = db.Column(db.Integer, nullable=False, default=0)
     sort_order = db.Column(db.Integer, nullable=False, default=0)
@@ -163,6 +164,7 @@ class Theme(db.Model):
             'name': self.name,
             'category': self.category,
             'status': self.status,
+            'plan_certainty': self.plan_certainty,
             'color': self.color,
             'priority': self.priority,
             'sort_order': self.sort_order,

@@ -120,7 +120,7 @@ def test_json_backup_round_trip_restores_users_and_requires_login(auth_client, a
     export_response = auth_client.get('/api/export/json')
     assert export_response.status_code == 200
     backup = export_response.json
-    assert backup['version'] == 4
+    assert backup['version'] == 5
     exported_member = next(member for member in backup['members'] if member['display_name'] == 'Capacity Planner')
     assert exported_member['capacity'] == 100
     assert exported_member['monthly_capacities'] == {'2026-08': 60}
@@ -266,6 +266,7 @@ def test_create_theme(auth_client):
         'name': 'New Theme',
         'category': 'Test',
         'status': 'planning',
+        'plan_certainty': 'confirmed',
         'dev_rank': 'L',
         'milestones': [
             {'month': '2026-06', 'label': 'Release'},
@@ -278,6 +279,7 @@ def test_create_theme(auth_client):
     })
     assert response.status_code == 201
     assert response.json['name'] == 'New Theme'
+    assert response.json['plan_certainty'] == 'confirmed'
     assert response.json['dev_rank'] == 'L'
     assert response.json['milestone_month'] == '2026-06'
     assert response.json['milestone_label'] == 'Release'
@@ -298,6 +300,7 @@ def test_update_theme_milestone(auth_client, app):
 
     response = auth_client.put(f'/api/themes/{theme_id}', json={
         'status': 'stop',
+        'plan_certainty': 'confirmed',
         'dev_rank': 'S',
         'milestones': [
             {'month': '2026-09', 'label': 'Go Live'},
@@ -306,6 +309,7 @@ def test_update_theme_milestone(auth_client, app):
     })
     assert response.status_code == 200
     assert response.json['status'] == 'stop'
+    assert response.json['plan_certainty'] == 'confirmed'
     assert response.json['dev_rank'] == 'S'
     assert response.json['milestone_month'] == '2026-09'
     assert response.json['milestone_label'] == 'Go Live'
@@ -342,6 +346,7 @@ def test_import_json_preserves_dev_rank(auth_client, app):
             'name': 'Imported Theme',
             'category': 'Platform',
             'status': 'active',
+            'plan_certainty': 'confirmed',
             'color': '#123456',
             'priority': 2,
             'dev_rank': 'S',
@@ -390,6 +395,7 @@ def test_import_json_preserves_dev_rank(auth_client, app):
     assert response.status_code == 200
     assert response.json[0]['name'] == 'Imported Theme'
     assert response.json[0]['dev_rank'] == 'S'
+    assert response.json[0]['plan_certainty'] == 'confirmed'
     assert response.json[0]['dev_complete_month'] == '2026-06'
     assert response.json[0]['dev_complete_months'] == [
         {'month': '2026-06', 'is_completed': False},

@@ -158,6 +158,7 @@ def create_app(test_config=None):
         db.create_all()
         _migrate_allocations_unique_index()
         _migrate_theme_sort_order()
+        _migrate_theme_plan_certainty()
         _migrate_theme_milestones()
         _seed_admin(app)
         _reset_admin_password_if_requested(app)
@@ -296,6 +297,24 @@ def _migrate_theme_sort_order():
     db.session.execute(text("UPDATE themes SET sort_order = theme_id"))
     db.session.commit()
     print("[Migration] Added sort_order column to themes table.")
+
+
+def _migrate_theme_plan_certainty():
+    """Add plan certainty to databases created before the field existed."""
+    from sqlalchemy import text
+
+    existing_columns = {
+        row[1]
+        for row in db.session.execute(text("PRAGMA table_info(themes)")).fetchall()
+    }
+    if 'plan_certainty' in existing_columns:
+        return
+
+    db.session.execute(text(
+        "ALTER TABLE themes ADD COLUMN plan_certainty VARCHAR(20) NOT NULL DEFAULT 'tentative'"
+    ))
+    db.session.commit()
+    print("[Migration] Added plan_certainty column to themes table.")
 
 
 def _seed_admin(app):

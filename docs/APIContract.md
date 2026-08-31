@@ -22,12 +22,13 @@
 ## Themes
 
 - `GET /themes`
-  - Returns: `theme_id`, `name`, `category`, `status`, `color`, `priority`, `dev_rank`, `start_month`, `end_month`, `dev_complete_month`, `dev_complete_months`, `milestones`, `milestone_month`, `milestone_label`, `member_ids`, `member_count`
+  - Returns: `theme_id`, `name`, `category`, `status`, `plan_certainty`, `color`, `priority`, `dev_rank`, `start_month`, `end_month`, `dev_complete_month`, `dev_complete_months`, `milestones`, `milestone_month`, `milestone_label`, `member_ids`, `member_count`
+  - `plan_certainty` is `tentative`（仮）or `confirmed`（確）。未指定および旧データは `tentative`
   - `dev_complete_months` is an array of `{ month, is_completed }`
   - `milestones` is an array of `{ id, month, label, position, is_completed }`
   - `milestone_month`, `milestone_label`: **deprecated** — 後方互換のために保持。実体は `milestones[]` を使用すること
 - `POST /themes`
-  - Body: `name`, optional `category`, `status`, `color`, `priority`, `dev_rank`, `start_month`, `end_month`, `milestones`, `dev_complete_months`
+  - Body: `name`, optional `category`, `status`, `plan_certainty`, `color`, `priority`, `dev_rank`, `start_month`, `end_month`, `milestones`, `dev_complete_months`
 - `PUT /themes/{theme_id}`
   - Body: any updatable theme field, optional `member_ids`, `milestones`, `dev_complete_months`
 - `DELETE /themes/{theme_id}`

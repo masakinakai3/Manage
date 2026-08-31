@@ -50,6 +50,7 @@ def test_theme_creation(app):
         
         assert t.name == 'Test Theme'
         assert t.status == 'active'
+        assert t.plan_certainty == 'tentative'
         assert t.dev_rank == 'S'
         assert t.color == '#6366f1'  # Default value
 

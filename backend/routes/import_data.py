@@ -20,7 +20,7 @@ from models import (
     theme_members as theme_members_table,
 )
 from authz import admin_required
-from routes.themes import _normalize_dev_rank
+from routes.themes import _normalize_dev_rank, _normalize_plan_certainty
 
 import_data_bp = Blueprint('import_data', __name__)
 
@@ -184,6 +184,7 @@ def import_json():
                 name=t['name'],
                 category=t.get('category', ''),
                 status=t.get('status', 'planning'),
+                plan_certainty=_normalize_plan_certainty(t.get('plan_certainty')),
                 color=t.get('color', '#6366f1'),
                 priority=t.get('priority', 0),
                 dev_rank=_normalize_dev_rank(t.get('dev_rank')),

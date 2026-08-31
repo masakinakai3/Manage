@@ -15,10 +15,17 @@ from sqlalchemy import func
 
 themes_bp = Blueprint('themes', __name__)
 
+PLAN_CERTAINTIES = {'tentative', 'confirmed'}
+
 
 def _normalize_dev_rank(value):
     normalized = (value or '').strip()
     return normalized or ''
+
+
+def _normalize_plan_certainty(value):
+    normalized = str(value or '').strip().lower()
+    return normalized if normalized in PLAN_CERTAINTIES else 'tentative'
 
 
 def _normalize_milestones(data):
@@ -143,6 +150,9 @@ def create_theme():
               status:
                 type: string
                 enum: [planning, active, completed, on_hold]
+              plan_certainty:
+                type: string
+                enum: [tentative, confirmed]
               color:
                 type: string
               priority:
@@ -177,6 +187,7 @@ def create_theme():
         name=data['name'],
         category=data.get('category', ''),
         status=data.get('status', 'planning'),
+        plan_certainty=_normalize_plan_certainty(data.get('plan_certainty')),
         color=data.get('color', '#6366f1'),
         priority=data.get('priority', 0),
         sort_order=(max_sort_order or 0) + 1,
@@ -277,6 +288,9 @@ def update_theme(theme_id):
                 type: string
               status:
                 type: string
+              plan_certainty:
+                type: string
+                enum: [tentative, confirmed]
               color:
                 type: string
               priority:
@@ -309,10 +323,12 @@ def update_theme(theme_id):
     if not theme:
         return jsonify({'error': 'Not found'}), 404
     data = request.get_json()
-    for field in ('name', 'category', 'status', 'color', 'priority', 'dev_rank', 'start_month', 'end_month'):
+    for field in ('name', 'category', 'status', 'plan_certainty', 'color', 'priority', 'dev_rank', 'start_month', 'end_month'):
         if field in data:
             if field == 'dev_rank':
                 setattr(theme, field, _normalize_dev_rank(data[field]))
+            elif field == 'plan_certainty':
+                setattr(theme, field, _normalize_plan_certainty(data[field]))
             else:
                 setattr(theme, field, data[field])
 

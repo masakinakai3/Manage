@@ -47,6 +47,7 @@ const themeList = vi.fn(async () => ([{
     theme_id: 1,
     name: 'Theme A',
     status: 'active',
+    plan_certainty: 'confirmed',
     dev_rank: 'S',
     color: '#00aaff',
     category: 'Delivery',
@@ -986,7 +987,7 @@ describe('gantt-renderer regressions', () => {
         expect(responsiveActions).toMatch(/\.theme-label-actions\s*\{[^}]*pointer-events:\s*none;/s);
     });
 
-    it('keeps rank, priority, and development status visible in the theme label metadata', async () => {
+    it('keeps rank, priority, development status, and plan certainty visible in the theme label metadata', async () => {
         const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
 
         await refreshGantt();
@@ -995,8 +996,25 @@ describe('gantt-renderer regressions', () => {
         expect(metadata?.querySelector('.theme-dev-rank-badge')?.textContent).toBe('ランク S');
         expect(metadata?.querySelector('.theme-priority-badge')?.textContent).toBe('P0');
         expect(metadata?.querySelector('.theme-status-select')?.value).toBe('active');
+        expect(metadata?.querySelector('.theme-plan-certainty-select')?.value).toBe('confirmed');
+        expect(metadata?.querySelector('.theme-plan-certainty-select')?.textContent).toContain('確');
         expect(metadata?.querySelector('.theme-milestone-btn')).toBeNull();
         expect(metadata?.querySelector('.theme-assign-btn')).toBeNull();
+    });
+
+    it('saves plan certainty from the control beside the development status', async () => {
+        const { refreshGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await refreshGantt();
+
+        const select = document.querySelector('.theme-plan-certainty-select');
+        select.value = 'tentative';
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(themeUpdate).toHaveBeenCalledWith(1, { plan_certainty: 'tentative' });
+        expect(setSaveState).toHaveBeenCalledWith('saved', '計画確度を保存しました');
     });
 
     it('handles the static bucket control without taking ownership of the shared preset', async () => {

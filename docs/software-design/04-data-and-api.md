@@ -6,7 +6,7 @@
 
 | モデル | 主キー | 主な属性 |
 |---|---|---|
-| `Theme` | `theme_id` | `name`, `category`, `status`, `priority`, `dev_rank`, `start_month`, `end_month`, `dev_complete_month`, `dev_complete_months` |
+| `Theme` | `theme_id` | `name`, `category`, `status`, `plan_certainty`, `priority`, `dev_rank`, `start_month`, `end_month`, `dev_complete_month`, `dev_complete_months` |
 | `Member` | `member_id` | `display_name`, `department`, `capacity`, `is_active` |
 | `Allocation` | `id` | `theme_id`, `member_id`, `month`, `allocation_rate`, `memo` |
 
