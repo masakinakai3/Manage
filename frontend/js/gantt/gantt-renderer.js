@@ -240,6 +240,7 @@ function ensureToolbar() {
     const toolbar = document.querySelector('.gantt-floating-actions');
     if (!toolbar) return null;
     toolbar.classList.add('pointer-shield');
+    toolbar.querySelectorAll('.gantt-period-control, #gantt-expand-all, #gantt-collapse-all').forEach(markInteractiveSurface);
     return toolbar;
 }
 

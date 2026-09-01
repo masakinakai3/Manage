@@ -915,6 +915,29 @@ describe('gantt-renderer regressions', () => {
         expect(document.querySelector('.theme-toggle')?.getAttribute('aria-expanded')).toBe('true');
     });
 
+    it('keeps bulk expand and collapse interactive after a local rerender', async () => {
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+
+        await initGantt();
+        document.querySelector('.theme-toggle')?.click();
+
+        const toolbar = document.querySelector('.gantt-floating-actions');
+        const expandButton = document.getElementById('gantt-expand-all');
+        const collapseButton = document.getElementById('gantt-collapse-all');
+
+        expect(toolbar?.classList.contains('pointer-shield')).toBe(true);
+        expect(expandButton?.getAttribute('data-interactive-surface')).toBe('true');
+        expect(collapseButton?.getAttribute('data-interactive-surface')).toBe('true');
+
+        collapseButton?.click();
+        expect(document.querySelectorAll('.gantt-row-member.hidden-row')).toHaveLength(1);
+        expect(document.querySelector('.theme-toggle')?.getAttribute('aria-expanded')).toBe('false');
+
+        expandButton?.click();
+        expect(document.querySelectorAll('.gantt-row-member.hidden-row')).toHaveLength(0);
+        expect(document.querySelector('.theme-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    });
+
     it('exports the visible gantt table as a PNG image', async () => {
         const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
         const { initGantt } = await import('../js/gantt/gantt-renderer.js');
