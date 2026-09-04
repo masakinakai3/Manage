@@ -25,6 +25,7 @@ const defaultState = {
     ganttSearch: '',
     ganttCategory: '',
     ganttOwner: '',
+    ganttShowOtherMembers: true,
     ganttStatus: ['all'],
     ganttPriority: 'all',
     memberSearch: '',

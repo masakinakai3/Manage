@@ -169,6 +169,7 @@ function renderBaseDom() {
         <select id="gantt-theme-filter"><option value="">all</option></select>
         <select id="gantt-category-filter"><option value="">all categories</option></select>
         <select id="gantt-owner-filter"><option value="">all members</option></select>
+        <select id="gantt-show-other-members" disabled><option value="all">all members</option><option value="selected">selected member</option></select>
         <details id="gantt-status-filter">
             <summary><span data-gantt-status-label>all statuses</span></summary>
             <div role="group">
@@ -1131,6 +1132,7 @@ describe('gantt-renderer regressions', () => {
             ganttSearch: 'alice',
             ganttCategory: 'Delivery',
             ganttOwner: 'alice',
+            ganttShowOtherMembers: false,
             ganttStatus: ['planning', 'active'],
             ganttPriority: '1',
             groupBy: 'status',
@@ -1145,12 +1147,60 @@ describe('gantt-renderer regressions', () => {
         expect(document.querySelector('[data-gantt-status-label]')?.textContent).toBe('ステータス: 2件選択');
         expect(document.getElementById('gantt-priority-filter')?.value).toBe('1');
         expect(document.getElementById('gantt-owner-filter')?.value).toBe('Alice');
+        expect(document.getElementById('gantt-show-other-members')?.value).toBe('selected');
+        expect(document.getElementById('gantt-show-other-members')?.disabled).toBe(false);
 
         document.querySelector('#gantt-status-filter input[value="planning"]').checked = false;
         document.querySelector('#gantt-status-filter input[value="completed"]').checked = true;
         document.querySelector('#gantt-status-filter input[value="completed"]').dispatchEvent(new Event('change', { bubbles: true }));
 
         expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttStatus: ['active', 'completed'] }, { source: 'gantt-filter' });
+
+        document.getElementById('gantt-show-other-members').value = 'all';
+        document.getElementById('gantt-show-other-members').dispatchEvent(new Event('change', { bubbles: true }));
+        expect(sharedState.updateViewState).toHaveBeenCalledWith({ ganttShowOtherMembers: true }, { source: 'gantt-filter' });
+    });
+
+    it('can hide other member rows while keeping matching projects and project totals visible', async () => {
+        const sharedState = await import('../js/shared-state.js');
+        sharedState.loadViewState.mockReturnValue({
+            startMonth: '2026-04',
+            scale: 1,
+            ganttSearch: '',
+            ganttCategory: '',
+            ganttOwner: 'alice',
+            ganttShowOtherMembers: false,
+            ganttStatus: ['all'],
+            ganttPriority: 'all',
+            groupBy: 'none',
+        });
+        themeList.mockResolvedValueOnce([{
+            theme_id: 1,
+            name: 'Shared Project',
+            status: 'active',
+            plan_certainty: 'tentative',
+            dev_rank: 'M',
+            color: '#00aaff',
+            category: 'Delivery',
+            milestones: [],
+            member_ids: [10, 20],
+        }]);
+        memberList.mockResolvedValueOnce([
+            { member_id: 10, display_name: 'Alice', department: 'Dev', capacity: 100, is_active: true },
+            { member_id: 20, display_name: 'Bob', department: 'QA', capacity: 100, is_active: true },
+        ]);
+        allocationRows = [
+            { theme_id: 1, member_id: 10, month: '2026-04', allocation_rate: 20, memo: '' },
+            { theme_id: 1, member_id: 20, month: '2026-04', allocation_rate: 30, memo: '' },
+        ];
+
+        const { initGantt } = await import('../js/gantt/gantt-renderer.js');
+        await initGantt();
+
+        expect(document.querySelector('.gantt-row-summary .theme-name-text')?.textContent).toBe('Shared Project');
+        expect(document.querySelector('.gantt-row-summary .gantt-summary-cell')?.textContent).toContain('50%');
+        expect([...document.querySelectorAll('.gantt-row-member .member-name')].map((element) => element.textContent)).toEqual(['Alice']);
+        expect(document.getElementById('gantt-active-filters')?.textContent).toContain('担当者行: 選択した人のみ');
     });
 
     it('shows themes matching any selected status', async () => {

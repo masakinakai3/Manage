@@ -52,6 +52,7 @@ sequenceDiagram
 | `ganttSearch` | Gantt 検索条件 |
 | `ganttCategory` | カテゴリフィルタ |
 | `ganttOwner` | 担当者フィルタ |
+| `ganttShowOtherMembers` | 担当者フィルタ時に関連プロジェクト内の他担当者行を表示するか。既定は `true` |
 | `ganttStatus` | ステータスフィルタ（配列。複数選択時はOR条件。旧文字列値も移行時に配列化） |
 | `ganttPriority` | 優先度フィルタ |
 | `memberSearch` | メンバー検索 |

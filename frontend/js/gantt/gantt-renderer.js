@@ -148,6 +148,7 @@ let rangeMonths = 14;
 let searchQuery = '';
 let categoryFilter = '';
 let ownerFilter = '';
+let showOtherMembers = true;
 let statusFilters = ['all'];
 let priorityFilter = 'all';
 let groupBy = 'none';
@@ -171,7 +172,7 @@ let ganttDataDirty = true;
 
 const GANTT_REMOTE_STATE_KEYS = new Set(['startMonth', 'rangeMonths', 'bucketMonths', 'scale', 'visibleCount']);
 const GANTT_LOCAL_STATE_KEYS = new Set([
-    'ganttSearch', 'ganttCategory', 'ganttOwner', 'ganttStatus', 'ganttPriority',
+    'ganttSearch', 'ganttCategory', 'ganttOwner', 'ganttShowOtherMembers', 'ganttStatus', 'ganttPriority',
     'groupBy', 'ganttDensity', 'focusMonth',
 ]);
 
@@ -306,6 +307,7 @@ export async function initGantt() {
     searchQuery = state.ganttSearch || '';
     categoryFilter = state.ganttCategory || '';
     ownerFilter = state.ganttOwner || '';
+    showOtherMembers = state.ganttShowOtherMembers !== false;
     statusFilters = normalizeStatusFilters(state.ganttStatus);
     priorityFilter = state.ganttPriority || 'all';
     groupBy = state.groupBy || 'none';
@@ -325,6 +327,7 @@ export async function initGantt() {
         searchQuery = next.ganttSearch || '';
         categoryFilter = next.ganttCategory || '';
         ownerFilter = next.ganttOwner || '';
+        showOtherMembers = next.ganttShowOtherMembers !== false;
         statusFilters = normalizeStatusFilters(next.ganttStatus);
         priorityFilter = next.ganttPriority || 'all';
         groupBy = next.groupBy || 'none';
@@ -565,7 +568,16 @@ function bindControls() {
     });
     document.getElementById('gantt-theme-filter')?.addEventListener('change', (event) => updateViewState({ ganttSearch: event.target.value }, { source: 'gantt-filter' }));
     document.getElementById('gantt-category-filter')?.addEventListener('change', (event) => updateViewState({ ganttCategory: event.target.value }, { source: 'gantt-filter' }));
-    document.getElementById('gantt-owner-filter')?.addEventListener('change', (event) => updateViewState({ ganttOwner: event.target.value.trim().toLowerCase() }, { source: 'gantt-filter' }));
+    document.getElementById('gantt-owner-filter')?.addEventListener('change', (event) => {
+        const ganttOwner = event.target.value.trim().toLowerCase();
+        updateViewState({
+            ganttOwner,
+            ...(ganttOwner ? {} : { ganttShowOtherMembers: true }),
+        }, { source: 'gantt-filter' });
+    });
+    document.getElementById('gantt-show-other-members')?.addEventListener('change', (event) => updateViewState({
+        ganttShowOtherMembers: event.target.value !== 'selected',
+    }, { source: 'gantt-filter' }));
     const statusFilterInput = document.getElementById('gantt-status-filter');
     statusFilterInput?.addEventListener('change', (event) => {
         if (!event.target.matches('input[type="checkbox"]')) return;
@@ -590,6 +602,7 @@ function bindControls() {
         ganttSearch: '',
         ganttCategory: '',
         ganttOwner: '',
+        ganttShowOtherMembers: true,
         ganttStatus: ['all'],
         ganttPriority: 'all',
     }));
@@ -2361,6 +2374,16 @@ function themeMembers(themeId) {
         .filter((member) => assigned.has(member.member_id))
         .sort((a, b) => a.display_name.localeCompare(b.display_name, 'ja'));
 }
+
+function memberMatchesOwnerFilter(member) {
+    return (member.display_name || '').toLowerCase().includes(ownerFilter.toLowerCase());
+}
+
+function displayedThemeMembers(themeId) {
+    const members = themeMembers(themeId);
+    if (!ownerFilter || showOtherMembers) return members;
+    return members.filter((member) => memberMatchesOwnerFilter(member));
+}
 function memberMonthTotal(memberId, month) { return allAllocations.filter((item) => item.member_id === memberId && item.month === month).reduce((sum, item) => sum + item.allocation_rate, 0); }
 function sumThemeRate(themeId, month, members) { return members.reduce((sum, member) => sum + lookupBucketRate(allAllocations, themeId, member.member_id, month), 0); }
 function lookupRate(source, themeId, memberId, month) {
@@ -2490,6 +2513,13 @@ function syncFilterInputs() {
         const nextOwnerValue = matchingOption?.value || '';
         if (owner.value !== nextOwnerValue) owner.value = nextOwnerValue;
     }
+    const showOtherMembersInput = document.getElementById('gantt-show-other-members');
+    if (showOtherMembersInput) {
+        const nextValue = showOtherMembers ? 'all' : 'selected';
+        if (showOtherMembersInput.value !== nextValue) showOtherMembersInput.value = nextValue;
+        showOtherMembersInput.disabled = !ownerFilter;
+        showOtherMembersInput.title = ownerFilter ? '' : '担当者を選択すると切り替えられます';
+    }
     const status = document.getElementById('gantt-status-filter');
     if (status) {
         const selected = new Set(statusFilters);
@@ -2526,7 +2556,14 @@ function renderActiveFilterChips() {
     const chips = [];
     if (searchQuery) chips.push({ label: `テーマ: ${searchQuery}`, update: { ganttSearch: '' } });
     if (categoryFilter) chips.push({ label: `カテゴリ: ${categoryFilter}`, update: { ganttCategory: '' } });
-    if (ownerFilter) chips.push({ label: `担当者: ${ownerFilter}`, update: { ganttOwner: '' } });
+    if (ownerFilter) chips.push({
+        label: `担当者: ${ownerFilter}`,
+        update: { ganttOwner: '', ganttShowOtherMembers: true },
+    });
+    if (ownerFilter && !showOtherMembers) chips.push({
+        label: '担当者行: 選択した人のみ',
+        update: { ganttShowOtherMembers: true },
+    });
     statusFilters.filter((value) => value !== 'all').forEach((value) => {
         const nextStatuses = statusFilters.filter((item) => item !== value && item !== 'all');
         chips.push({
@@ -2560,6 +2597,7 @@ function renderActiveFilterChips() {
         ganttSearch: '',
         ganttCategory: '',
         ganttOwner: '',
+        ganttShowOtherMembers: true,
         ganttStatus: ['all'],
         ganttPriority: 'all',
     }));
@@ -2622,9 +2660,8 @@ function matchesThemeFilters(theme) {
     if (categoryFilter && (theme.category || '') !== categoryFilter) return false;
 
     if (ownerFilter) {
-        const normalizedOwner = ownerFilter.toLowerCase();
         const hasOwnerMatch = themeMembers(theme.theme_id)
-            .some((member) => (member.display_name || '').toLowerCase().includes(normalizedOwner));
+            .some((member) => memberMatchesOwnerFilter(member));
         if (!hasOwnerMatch) return false;
     }
 
@@ -2698,6 +2735,7 @@ export function getGanttGridExportDataset() {
 
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
+            const displayedMembers = displayedThemeMembers(theme.theme_id);
             rows.push({
                 type: 'summary',
                 label: formatThemeExportLabel(theme),
@@ -2706,7 +2744,7 @@ export function getGanttGridExportDataset() {
             });
 
             if (collapsedThemes.has(theme.theme_id)) return;
-            members.forEach((member) => {
+            displayedMembers.forEach((member) => {
                 rows.push({
                     type: 'member',
                     label: formatMemberExportLabel(member),
@@ -2928,6 +2966,7 @@ function renderTable(months) {
         }
         group.themes.forEach((theme) => {
             const members = themeMembers(theme.theme_id);
+            const displayedMembers = displayedThemeMembers(theme.theme_id);
             const priorityValue = Number.isFinite(Number(theme.priority)) ? Number(theme.priority) : 0;
             const devRank = getDevRankLabel(theme.dev_rank);
             const inactive = ['completed', 'cancelled'].includes(theme.status);
@@ -2943,7 +2982,7 @@ function renderTable(months) {
                 ? `<span class="theme-drag-handle" draggable="true" role="button" tabindex="0" title="ドラッグして並び替え" aria-label="${escapeHtmlAttr(`${theme.name} の並び順を変更`)}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="18" r="1"></circle></svg></span>`
                 : '';
             rows.push(`<tr class="gantt-row-summary${rowStateClassName}" data-theme-id="${theme.theme_id}"><td><div class="theme-label-cell">${dragHandle}<div class="theme-label-content"><button class="theme-toggle" data-theme-id="${theme.theme_id}" type="button" aria-expanded="${!collapsedThemes.has(theme.theme_id)}"><span class="theme-toggle-icon ${collapsedThemes.has(theme.theme_id) ? '' : 'expanded'}"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></span><span class="theme-color-bar" style="background:${theme.color}"></span><span class="theme-name-text">${escapeHtml(theme.name)}</span></button><div class="theme-label-meta" aria-label="${escapeHtmlAttr(`${theme.name} の開発情報`)}">${devRankBadge}${priorityBadge}${themeStatusSelect(theme)}${themePlanCertaintySelect(theme)}</div></div><div class="theme-label-actions">${themeActionButton(theme, 'milestone')}${themeActionButton(theme, 'assign')}</div></div></td>${months.map((month) => renderThemeSummaryCellMarkup(theme, month, current, members)).join('')}</tr>`);
-            members.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">通常 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
+            displayedMembers.forEach((member) => rows.push(`<tr class="gantt-row-member${rowStateClassName} ${collapsedThemes.has(theme.theme_id) ? 'hidden-row' : ''}" data-theme-id="${theme.theme_id}" data-member-id="${member.member_id}"><td><div class="member-label-cell"><span class="member-name">${escapeHtml(member.display_name)}</span><span class="member-meta"><span class="member-department">${escapeHtml(member.department || '所属なし')}</span><span class="member-capacity-badge">通常 ${member.capacity}%</span></span></div></td>${months.map((month) => memberCell(theme, member, month, current)).join('')}</tr>`));
         });
     });
 

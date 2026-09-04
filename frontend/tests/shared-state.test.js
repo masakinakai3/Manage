@@ -87,4 +87,9 @@ describe('shared view presets', () => {
             ganttStatus: ['planning', 'active'],
         });
     });
+
+    it('shows other project members by default while preserving an explicit hidden setting', () => {
+        expect(migrateViewState({})).toMatchObject({ ganttShowOtherMembers: true });
+        expect(migrateViewState({ ganttShowOtherMembers: false })).toMatchObject({ ganttShowOtherMembers: false });
+    });
 });

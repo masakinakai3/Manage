@@ -1163,6 +1163,7 @@ summary:focus-visible,
     border-radius: var(--radius-md);
     color: var(--color-text);
     font-size: var(--text-base);
+    white-space: nowrap;
     cursor: pointer;
     list-style: none;
 }
